@@ -25,19 +25,26 @@ echo "  Authelia Domain: $AUTHELIA_DOMAIN"
 echo "  Target Environment: production"
 echo "=========================================================="
 
-DART_DEFINES=(
-  "--dart-define=APP_ENV=production"
-  "--dart-define=APP_DOMAIN=$APP_DOMAIN"
-  "--dart-define=HTTP_PORT=443"
-  "--dart-define=USE_SECURE_SCHEMES=true"
-  "--dart-define=AUTHELIA_DOMAIN=$AUTHELIA_DOMAIN"
-  "--dart-define=AUTHELIA_ISSUER_URL=$AUTHELIA_ISSUER"
-  "--dart-define=AUTHELIA_CLIENT_ID=$AUTHELIA_CLIENT_ID"
-  "--dart-define=API_BASE_URL=https://$APP_DOMAIN"
-  "--dart-define=WS_BASE_URL=wss://$APP_DOMAIN/ws"
-  "--dart-define=SYNC_ENDPOINT=/api/messages/sync"
-  "--dart-define=HEALTH_ENDPOINT=/healthz"
-)
+if [ -f "$CLIENT_DIR/config/production.json" ]; then
+  echo "Using configuration file: client/config/production.json"
+  DART_DEFINES=(
+    "--dart-define-from-file=config/production.json"
+  )
+else
+  DART_DEFINES=(
+    "--dart-define=APP_ENV=production"
+    "--dart-define=APP_DOMAIN=$APP_DOMAIN"
+    "--dart-define=HTTP_PORT=443"
+    "--dart-define=USE_SECURE_SCHEMES=true"
+    "--dart-define=AUTHELIA_DOMAIN=$AUTHELIA_DOMAIN"
+    "--dart-define=AUTHELIA_ISSUER_URL=$AUTHELIA_ISSUER"
+    "--dart-define=AUTHELIA_CLIENT_ID=$AUTHELIA_CLIENT_ID"
+    "--dart-define=API_BASE_URL=https://$APP_DOMAIN"
+    "--dart-define=WS_BASE_URL=wss://$APP_DOMAIN/ws"
+    "--dart-define=SYNC_ENDPOINT=/api/messages/sync"
+    "--dart-define=HEALTH_ENDPOINT=/healthz"
+  )
+fi
 
 cd "$CLIENT_DIR"
 
