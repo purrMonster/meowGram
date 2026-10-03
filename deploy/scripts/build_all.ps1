@@ -5,6 +5,7 @@
 param (
     [string]$Target = "all",
     [string]$AppDomain = "meowgram.purrbrews.cc",
+    [string]$AutheliaDomain = "auth.purrbrews.cc",
     [string]$AutheliaIssuer = "https://auth.purrbrews.cc",
     [string]$AutheliaClientId = "meowgram-client",
     [string]$Version = "1.0.0+1"
@@ -30,6 +31,7 @@ if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  meowGram Production Build Pipeline: Release 1.0.0" -ForegroundColor Cyan
 Write-Host "  Target Domain: $AppDomain" -ForegroundColor Cyan
+Write-Host "  Authelia Domain: $AutheliaDomain" -ForegroundColor Cyan
 Write-Host "  Target Environment: production" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
@@ -39,10 +41,13 @@ $DartDefines = @(
     "--dart-define=APP_DOMAIN=$AppDomain",
     "--dart-define=HTTP_PORT=443",
     "--dart-define=USE_SECURE_SCHEMES=true",
+    "--dart-define=AUTHELIA_DOMAIN=$AutheliaDomain",
     "--dart-define=AUTHELIA_ISSUER_URL=$AutheliaIssuer",
     "--dart-define=AUTHELIA_CLIENT_ID=$AutheliaClientId",
     "--dart-define=API_BASE_URL=https://$AppDomain",
-    "--dart-define=WS_BASE_URL=wss://$AppDomain/ws"
+    "--dart-define=WS_BASE_URL=wss://$AppDomain/ws",
+    "--dart-define=SYNC_ENDPOINT=/api/messages/sync",
+    "--dart-define=HEALTH_ENDPOINT=/healthz"
 )
 
 Set-Location $ClientDir

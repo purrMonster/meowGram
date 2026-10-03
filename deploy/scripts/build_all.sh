@@ -8,6 +8,7 @@ set -euo pipefail
 
 TARGET="${1:-all}"
 APP_DOMAIN="${APP_DOMAIN:-meowgram.purrbrews.cc}"
+AUTHELIA_DOMAIN="${AUTHELIA_DOMAIN:-auth.purrbrews.cc}"
 AUTHELIA_ISSUER="${AUTHELIA_ISSUER:-https://auth.purrbrews.cc}"
 AUTHELIA_CLIENT_ID="${AUTHELIA_CLIENT_ID:-meowgram-client}"
 VERSION="1.0.0+1"
@@ -20,6 +21,7 @@ SERVER_DIR="$PROJECT_ROOT/server"
 echo "=========================================================="
 echo "  meowGram Production Build Pipeline: Release 1.0.0"
 echo "  Target Domain: $APP_DOMAIN"
+echo "  Authelia Domain: $AUTHELIA_DOMAIN"
 echo "  Target Environment: production"
 echo "=========================================================="
 
@@ -28,10 +30,13 @@ DART_DEFINES=(
   "--dart-define=APP_DOMAIN=$APP_DOMAIN"
   "--dart-define=HTTP_PORT=443"
   "--dart-define=USE_SECURE_SCHEMES=true"
+  "--dart-define=AUTHELIA_DOMAIN=$AUTHELIA_DOMAIN"
   "--dart-define=AUTHELIA_ISSUER_URL=$AUTHELIA_ISSUER"
   "--dart-define=AUTHELIA_CLIENT_ID=$AUTHELIA_CLIENT_ID"
   "--dart-define=API_BASE_URL=https://$APP_DOMAIN"
   "--dart-define=WS_BASE_URL=wss://$APP_DOMAIN/ws"
+  "--dart-define=SYNC_ENDPOINT=/api/messages/sync"
+  "--dart-define=HEALTH_ENDPOINT=/healthz"
 )
 
 cd "$CLIENT_DIR"

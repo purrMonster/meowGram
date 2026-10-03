@@ -21,6 +21,49 @@ void main() {
       final authWs = AppConfig.authenticatedWsUrl('sample_token_xyz');
       expect(authWs, contains('token=sample_token_xyz'));
     });
+
+    test('AUTHELIA_DOMAIN dynamically sets autheliaIssuerUrl and endpoints', () {
+      AppConfig.setOverrides({
+        'AUTHELIA_DOMAIN': 'auth.purrbrews.cc',
+      });
+
+      expect(AppConfig.autheliaDomain, equals('auth.purrbrews.cc'));
+      expect(AppConfig.autheliaIssuerUrl, equals('https://auth.purrbrews.cc'));
+      expect(AppConfig.autheliaJwksUrl,
+          equals('https://auth.purrbrews.cc/jwks.json'));
+      expect(AppConfig.autheliaDiscoveryUrl,
+          equals('https://auth.purrbrews.cc/.well-known/openid-configuration'));
+
+      AppConfig.clearOverrides();
+    });
+
+    test('loadFromEnvString overrides all endpoint variables from .env format', () {
+      const sampleEnv = '''
+# Test configuration
+APP_DOMAIN=custom.meowgram.chat
+HTTP_PORT=9000
+USE_SECURE_SCHEMES=true
+AUTHELIA_DOMAIN=auth.custom.org
+SYNC_ENDPOINT=/v2/messages/sync
+HEALTH_ENDPOINT=/v1/health
+''';
+      AppConfig.loadFromEnvString(sampleEnv);
+
+      expect(AppConfig.appDomain, equals('custom.meowgram.chat'));
+      expect(AppConfig.port, equals('9000'));
+      expect(AppConfig.useSecureSchemes, isTrue);
+      expect(AppConfig.apiBaseUrl, equals('https://custom.meowgram.chat:9000'));
+      expect(AppConfig.wsBaseUrl,
+          equals('wss://custom.meowgram.chat:9000/ws'));
+      expect(AppConfig.autheliaDomain, equals('auth.custom.org'));
+      expect(AppConfig.autheliaIssuerUrl, equals('https://auth.custom.org'));
+      expect(AppConfig.syncUrl(),
+          equals('https://custom.meowgram.chat:9000/v2/messages/sync'));
+      expect(AppConfig.healthCheckUrl,
+          equals('https://custom.meowgram.chat:9000/v1/health'));
+
+      AppConfig.clearOverrides();
+    });
   });
 
   group('PKCE Cryptographic Helper Tests', () {

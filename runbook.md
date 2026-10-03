@@ -348,35 +348,60 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 
 ## 8. Environment & Compile-Time Configuration Contract
 
-### Backend Environment Variables (`deploy/.env.example`)
+### Backend Environment Variables (`deploy/.env.example` / `.env`)
 
 | Variable | Dev Default | Staging/Prod Example | Description |
 |---|---|---|---|
-| `APP_DOMAIN` | `localhost` | `meowgram.chat` | Primary routing domain. Injected into Traefik host rules and healthcheck payloads. |
-| `ENVIRONMENT` | `development` | `production` | Environment tier. |
+| `APP_DOMAIN` | `localhost` | `meowgram.purrbrews.cc` | Primary routing domain. Injected into Traefik host rules and link generation. |
+| `ENVIRONMENT` | `development` | `production` | Environment tier (`development`, `staging`, `production`). |
+| `APP_ENV` | `development` | `production` | Alias for `ENVIRONMENT`. |
 | `LOG_LEVEL` | `debug` | `info` | Minimum log verbosity (`debug`, `info`, `warn`, `error`). |
+| `USE_SECURE_SCHEMES` | `false` | `true` | Enforces `https://` and `wss://` protocols. |
 | `HOST_HTTP_PORT` | `8080` | `8080` | Host port exposed on the host machine by Docker Compose. |
 | `HTTP_PORT` | `8080` | `8080` | Internal container port bound by the Go HTTP server. |
 | `WS_PORT` | `8080` | `8080` | WebSocket endpoint port (unified with `HTTP_PORT` over `/ws`). |
+| `API_BASE_URL` | *(Computed)* | `https://meowgram.purrbrews.cc` | Full REST API base URL override. |
+| `WS_BASE_URL` | *(Computed)* | `wss://meowgram.purrbrews.cc/ws` | Full WebSocket base URL override. |
+| `WS_ENDPOINT` | `/ws` | `/ws` | WebSocket upgrade route path. |
+| `SYNC_ENDPOINT` | `/api/messages/sync` | `/api/messages/sync` | Catch-up synchronization REST route path. |
+| `HEALTH_ENDPOINT` | `/healthz` | `/healthz` | Health check probe route path. |
+| `AUTHELIA_DOMAIN` | `localhost:9091` | `auth.purrbrews.cc` | FQDN or host:port for Authelia OIDC identity provider. |
+| `AUTHELIA_ISSUER` | *(Derived)* | `https://auth.purrbrews.cc` | Base Issuer URL for Authelia OIDC provider. Derived from `AUTHELIA_DOMAIN`. |
+| `AUTHELIA_ISSUER_URL` | *(Derived)* | `https://auth.purrbrews.cc` | Alias for `AUTHELIA_ISSUER`. |
+| `AUTHELIA_JWKS_URL` | *(Derived)* | `https://auth.purrbrews.cc/jwks.json` | URL for Authelia public keys (JWKS). Derived from `AUTHELIA_ISSUER`. |
 | `POSTGRES_USER` | `meowgram` | `meowgram_prod` | PostgreSQL user account. |
 | `POSTGRES_PASSWORD` | `meowgram_secret_dev...` | *(Strong secret)* | PostgreSQL password. |
 | `POSTGRES_DB` | `meowgram` | `meowgram` | PostgreSQL database name. |
 | `DATABASE_URL` | `postgres://...` | `postgres://...` | Full connection string for Go backend. |
-| `AUTHELIA_ISSUER` | `http://localhost:9091` | `https://auth.example.com` | Base Issuer URL for Authelia OIDC provider. |
-| `AUTHELIA_JWKS_URL` | `http://localhost:9091/jwks.json` | `https://auth.example.com/jwks.json` | URL for Authelia cryptographic public keys (JWKS). |
+| `CORS_ORIGINS` | *(Localhost list)* | `https://meowgram.purrbrews.cc` | Comma-separated list of allowed client origins. |
 
-### Flutter Client Compile-Time Flags (`--dart-define`)
+### Flutter Client Environment Variables & `.env` Controllability
 
-| Flag | Dev Default | Purpose |
+All endpoints can be controlled either via `--dart-define-from-file=.env`, `--dart-define=KEY=VAL`, or by placing a `.env` file in the project or `client/` folder (automatically loaded at startup via `AppConfig.initialize()`):
+
+| Variable / Flag | Dev Default | Description |
 |---|---|---|
 | `APP_DOMAIN` | `localhost` | Target backend host domain. |
 | `HTTP_PORT` | `8080` | Target backend HTTP port. |
-| `APP_ENV` | `development` | Runtime environment name. |
-| `AUTHELIA_CLIENT_ID` | `meowgram-client` | Public client identifier registered in Authelia. |
-| `AUTHELIA_ISSUER_URL` | `http://localhost:9091` | Authelia OIDC base issuer URL for discovery. |
-| `AUTH_REDIRECT_URI` | *(Dynamic)* | Optional explicit redirect override (default: loopback on desktop, origin on web). |
+| `APP_ENV` | `development` | Runtime environment name (`development`, `staging`, `production`). |
+| `USE_SECURE_SCHEMES` | `false` | Whether to force `https://` and `wss://`. |
 | `API_BASE_URL` | *(Computed)* | Direct override for HTTP REST API base URL. |
 | `WS_BASE_URL` | *(Computed)* | Direct override for WebSocket base URL. |
+| `WS_ENDPOINT` | `/ws` | WebSocket relative route path. |
+| `SYNC_ENDPOINT` | `/api/messages/sync` | Catch-up sync endpoint path or full URL. |
+| `HEALTH_ENDPOINT` | `/healthz` | Health check endpoint path or full URL. |
+| `AUTHELIA_DOMAIN` | `localhost:9091` | Authelia identity provider domain. Setting this auto-derives all OIDC endpoints! |
+| `AUTHELIA_ISSUER_URL` | *(Derived)* | Authelia OIDC base issuer URL for discovery. |
+| `AUTHELIA_CLIENT_ID` | `meowgram-client` | Public client identifier registered in Authelia. |
+| `AUTHELIA_JWKS_URL` | *(Derived)* | Authelia cryptographic public keys URL. |
+| `AUTHELIA_DISCOVERY_URL` | *(Derived)* | OpenID configuration discovery endpoint URL. |
+| `AUTHELIA_AUTHORIZATION_ENDPOINT` | *(Derived)* | OIDC PKCE authorization endpoint. |
+| `AUTHELIA_TOKEN_ENDPOINT` | *(Derived)* | OIDC token exchange endpoint. |
+| `AUTHELIA_USERINFO_ENDPOINT` | *(Derived)* | OIDC userinfo endpoint. |
+| `AUTHELIA_REVOCATION_ENDPOINT` | *(Derived)* | OIDC token revocation endpoint. |
+| `AUTH_REDIRECT_URI` | *(Dynamic)* | OAuth redirect URI (default: RFC 8252 loopback on desktop, origin on web). |
+| `IMMICH_DOMAIN` | `immich.purrbrews.cc` | Immich media service domain (Release 2). |
+| `IMMICH_API_URL` | *(Derived)* | Immich REST API base URL (Release 2). |
 
 ---
 

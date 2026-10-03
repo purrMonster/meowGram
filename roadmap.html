@@ -637,10 +637,10 @@
                             <span class="ust-title">UST-1.1.3: Zero-Hardcoded-Domains Contract</span>
                             <span class="badge">Done</span>
                         </div>
-                        <div class="ust-desc">Strictly decoupled hostnames, protocols, and ports via environment variables (<span class="code-pill">deploy/.env.example</span>) and compile-time <span class="code-pill">--dart-define</span> parameters (<span class="code-pill">AppConfig</span> class in Flutter). Fully portable between localhost and <span class="code-pill">purrbrews.cc</span>.</div>
+                        <div class="ust-desc">Strictly decoupled hostnames, protocols, and endpoints via environment variables (<span class="code-pill">deploy/.env.example</span>, <span class="code-pill">.env</span>) and Flutter <span class="code-pill">AppConfig</span> supporting <span class="code-pill">AUTHELIA_DOMAIN</span> and runtime `.env` loading. Fully portable between localhost and <span class="code-pill">purrbrews.cc</span>.</div>
                         <div class="ust-meta">
-                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">client/lib/src/config/app_config.dart</span>, <span class="code-pill">deploy/.env.example</span></span>
-                            <span class="meta-tag"><strong>Contract:</strong> 100% Config Driven</span>
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">client/lib/src/config/app_config.dart</span>, <span class="code-pill">deploy/.env.example</span>, <span class="code-pill">.env.example</span></span>
+                            <span class="meta-tag"><strong>Contract:</strong> 100% .env & Config Driven</span>
                         </div>
                     </div>
                 </div>

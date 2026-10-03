@@ -7,6 +7,7 @@ import 'package:meowgram_client/src/routes/app_router.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig.initialize();
   try {
     await Hive.initFlutter();
   } catch (e) {
