@@ -498,6 +498,12 @@ Apple platforms enforce cryptographic code signing and provisioning profiles tha
    - In Xcode menu, select `Product > Archive`.
    - In the Organizer window, click `Distribute App` &rarr; `App Store Connect` (or `Direct Distribution / Developer ID` for notarized macOS `.dmg`).
 
+#### 10.4.1 Day 1 iOS Testing: Progressive Web App (PWA) Mode
+To test on iOS devices without waiting for Apple Developer Team certificate provisioning:
+1. Navigate to `https://meowgram.purrbrews.cc` in Safari on iOS.
+2. Tap the Share button &rarr; **Add to Home Screen**.
+3. Launch **meowGram** from the Home Screen. The app runs in standalone fullscreen (`apple-mobile-web-app-capable: yes`, `black-translucent` status bar) with CanvasKit and core assets cached by `sw.js` for instant subsequent cold starts.
+
 ### 10.5 Windows Packaging & Signing
 1. Binary outputs compile to `build/windows/x64/runner/Release/meowGram.exe`.
 2. Sign with Authenticode EV certificate via `signtool.exe`:
