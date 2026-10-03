@@ -1,0 +1,66 @@
+services:
+  # ============================================================================
+  # Go Backend Service
+  # ============================================================================
+  server:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    image: meowgram-server:latest
+    container_name: meowgram-server
+    restart: unless-stopped
+    environment:
+      - APP_DOMAIN=${APP_DOMAIN:-localhost}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - PORT=${HTTP_PORT:-8080}
+      - HTTP_PORT=${HTTP_PORT:-8080}
+      - WS_PORT=${WS_PORT:-8080}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000,http://127.0.0.1:8080,http://localhost}
+      - READ_TIMEOUT_SECONDS=${READ_TIMEOUT_SECONDS:-15}
+      - WRITE_TIMEOUT_SECONDS=${WRITE_TIMEOUT_SECONDS:-15}
+      - IDLE_TIMEOUT_SECONDS=${IDLE_TIMEOUT_SECONDS:-60}
+    ports:
+      - "${HOST_HTTP_PORT:-8080}:${HTTP_PORT:-8080}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:${HTTP_PORT:-8080}/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.meowgram-server.rule=Host(`${APP_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.meowgram-server.entrypoints=web"
+      - "traefik.http.services.meowgram-server.loadbalancer.server.port=${HTTP_PORT:-8080}"
+    networks:
+      - meowgram-net
+
+  # ============================================================================
+  # Traefik Reverse Proxy (Optional Development Profile)
+  # Run with: docker compose --profile proxy up
+  # ============================================================================
+  traefik:
+    image: traefik:v3.3
+    container_name: meowgram-traefik
+    restart: unless-stopped
+    profiles:
+      - proxy
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:${TRAEFIK_HTTP_PORT:-80}"
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:${TRAEFIK_HTTP_PORT:-80}"
+      - "${TRAEFIK_DASHBOARD_PORT:-8081}:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - meowgram-net
+
+networks:
+  meowgram-net:
+    name: meowgram-net
+    driver: bridge

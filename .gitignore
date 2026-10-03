@@ -1,0 +1,69 @@
+# ==============================================================================
+# meowGram Root .gitignore
+# ==============================================================================
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# Environment & Secrets (NEVER COMMIT SENSITIVE CONFIG)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+*.crt
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.iml
+
+# ==============================================================================
+# Go Backend (/server)
+# ==============================================================================
+server/bin/
+server/dist/
+server/*.exe
+server/*.exe~
+server/*.dll
+server/*.so
+server/*.dylib
+server/coverage.out
+server/coverage.html
+server/.air.tmp/
+
+# ==============================================================================
+# Flutter Client (/client)
+# ==============================================================================
+client/.dart_tool/
+client/.flutter-plugins
+client/.flutter-plugins-dependencies
+client/.packages
+client/.pub-cache/
+client/.pub/
+client/build/
+client/ephemeral/
+client/.metadata
+client/ios/.generated/
+client/android/.gradle/
+client/android/captures/
+client/android/gradlew
+client/android/gradlew.bat
+client/android/local.properties
+client/windows/flutter/ephemeral/
+client/linux/flutter/ephemeral/
+client/macos/Flutter/ephemeral/
+
+# Docker Compose overrides
+deploy/docker-compose.override.yml
