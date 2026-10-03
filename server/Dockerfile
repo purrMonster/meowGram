@@ -46,14 +46,16 @@ RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 
-# Copy compiled binary from builder
+# Copy compiled binary and migrations from builder
 COPY --from=builder /bin/server /bin/server
+COPY --from=builder /src/migrations /migrations
 
 # Default environment configurations
 ENV PORT=8080 \
     APP_DOMAIN=localhost \
     ENVIRONMENT=production \
-    LOG_LEVEL=info
+    LOG_LEVEL=info \
+    MIGRATIONS_PATH=/migrations
 
 # Use non-root user
 USER appuser:appuser

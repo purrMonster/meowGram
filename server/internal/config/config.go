@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,17 +11,20 @@ import (
 
 // Config represents runtime configuration loaded strictly from environment variables.
 type Config struct {
-	Port         string
-	AppDomain    string
-	CORSOrigins  []string
-	Environment  string
-	LogLevel     string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
+	Port            string
+	AppDomain       string
+	CORSOrigins     []string
+	Environment     string
+	LogLevel        string
+	DatabaseURL     string
+	AutheliaIssuer  string
+	AutheliaJWKSURL string
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
+	IdleTimeout     time.Duration
 }
 
-// Load populates Config from environment variables according to the .env contract.
+// Load populates and validates Config from environment variables.
 func Load() (*Config, error) {
 	// Port fallback precedence: PORT -> HTTP_PORT -> 8080
 	port := os.Getenv("PORT")
@@ -47,6 +51,39 @@ func Load() (*Config, error) {
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel == "" {
 		logLevel = "info"
+	}
+
+	// Database connection URL
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		pgUser := os.Getenv("POSTGRES_USER")
+		pgPass := os.Getenv("POSTGRES_PASSWORD")
+		pgHost := os.Getenv("POSTGRES_HOST")
+		if pgHost == "" {
+			pgHost = "localhost"
+		}
+		pgPort := os.Getenv("POSTGRES_PORT")
+		if pgPort == "" {
+			pgPort = "5432"
+		}
+		pgDB := os.Getenv("POSTGRES_DB")
+		if pgUser != "" && pgDB != "" {
+			dbURL = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", pgUser, pgPass, pgHost, pgPort, pgDB)
+		}
+	}
+	if dbURL == "" {
+		return nil, errors.New("database connection configuration is required (DATABASE_URL or POSTGRES_USER/POSTGRES_DB)")
+	}
+
+	// Authelia OIDC configurations (Mandatory contract)
+	autheliaIssuer := os.Getenv("AUTHELIA_ISSUER")
+	if autheliaIssuer == "" {
+		return nil, errors.New("environment variable AUTHELIA_ISSUER is required")
+	}
+
+	autheliaJWKSURL := os.Getenv("AUTHELIA_JWKS_URL")
+	if autheliaJWKSURL == "" {
+		return nil, errors.New("environment variable AUTHELIA_JWKS_URL is required")
 	}
 
 	// CORS Origins: comma-separated list of origins
@@ -80,14 +117,17 @@ func Load() (*Config, error) {
 	idleTimeout := parseDurationSeconds(os.Getenv("IDLE_TIMEOUT_SECONDS"), 60*time.Second)
 
 	return &Config{
-		Port:         port,
-		AppDomain:    appDomain,
-		CORSOrigins:  corsOrigins,
-		Environment:  env,
-		LogLevel:     logLevel,
-		ReadTimeout:  readTimeout,
-		WriteTimeout: writeTimeout,
-		IdleTimeout:  idleTimeout,
+		Port:            port,
+		AppDomain:       appDomain,
+		CORSOrigins:     corsOrigins,
+		Environment:     env,
+		LogLevel:        logLevel,
+		DatabaseURL:     dbURL,
+		AutheliaIssuer:  autheliaIssuer,
+		AutheliaJWKSURL: autheliaJWKSURL,
+		ReadTimeout:     readTimeout,
+		WriteTimeout:    writeTimeout,
+		IdleTimeout:     idleTimeout,
 	}, nil
 }
 
@@ -109,7 +149,6 @@ func (c *Config) IsAllowedOrigin(origin string) bool {
 		if allowedNorm == "*" || allowedNorm == normalized {
 			return true
 		}
-		// Allow domain matching
 		if strings.Contains(allowedNorm, c.AppDomain) && strings.Contains(normalized, c.AppDomain) {
 			return true
 		}

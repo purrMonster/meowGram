@@ -1,5 +1,29 @@
 services:
   # ============================================================================
+  # PostgreSQL Database Service
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: meowgram-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-meowgram}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meowgram_secret_dev_change_in_production}
+      POSTGRES_DB: ${POSTGRES_DB:-meowgram}
+    ports:
+      - "${HOST_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-meowgram} -d ${POSTGRES_DB:-meowgram}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    networks:
+      - meowgram-net
+
+  # ============================================================================
   # Go Backend Service
   # ============================================================================
   server:
@@ -9,6 +33,9 @@ services:
     image: meowgram-server:latest
     container_name: meowgram-server
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       - APP_DOMAIN=${APP_DOMAIN:-localhost}
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -16,6 +43,9 @@ services:
       - PORT=${HTTP_PORT:-8080}
       - HTTP_PORT=${HTTP_PORT:-8080}
       - WS_PORT=${WS_PORT:-8080}
+      - DATABASE_URL=${DATABASE_URL:-postgres://${POSTGRES_USER:-meowgram}:${POSTGRES_PASSWORD:-meowgram_secret_dev_change_in_production}@postgres:5432/${POSTGRES_DB:-meowgram}?sslmode=disable}
+      - AUTHELIA_ISSUER=${AUTHELIA_ISSUER:-http://localhost:9091}
+      - AUTHELIA_JWKS_URL=${AUTHELIA_JWKS_URL:-http://localhost:9091/jwks.json}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000,http://127.0.0.1:8080,http://localhost}
       - READ_TIMEOUT_SECONDS=${READ_TIMEOUT_SECONDS:-15}
       - WRITE_TIMEOUT_SECONDS=${WRITE_TIMEOUT_SECONDS:-15}
@@ -59,6 +89,10 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     networks:
       - meowgram-net
+
+volumes:
+  postgres_data:
+    name: meowgram-postgres-data
 
 networks:
   meowgram-net:

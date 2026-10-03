@@ -10,9 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"meowgram/server/internal/auth"
 	"meowgram/server/internal/config"
+	"meowgram/server/internal/database"
 	"meowgram/server/internal/handler"
 	"meowgram/server/internal/middleware"
+	"meowgram/server/internal/repository"
 )
 
 func main() {
@@ -46,17 +49,40 @@ func main() {
 		"port", cfg.Port,
 		"environment", cfg.Environment,
 		"cors_origins", cfg.CORSOrigins,
+		"authelia_issuer", cfg.AutheliaIssuer,
+		"authelia_jwks_url", cfg.AutheliaJWKSURL,
 	)
+
+	// Initialize PostgreSQL connection pool and apply schema migrations
+	db, err := database.Open(cfg.DatabaseURL, logger)
+	if err != nil {
+		logger.Error("Failed to connect to database or execute migrations", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	// Initialize repository layer
+	userRepo := repository.NewUserRepository(db)
+
+	// Initialize Authelia OIDC Token Verifier
+	oidcVerifier, err := auth.NewOIDCVerifier(context.Background(), cfg)
+	if err != nil {
+		logger.Error("Failed to initialize OIDC verifier", "error", err)
+		os.Exit(1)
+	}
 
 	// Setup multiplexer / router
 	mux := http.NewServeMux()
 
-	// Endpoints
+	// Public health-check endpoints
 	mux.HandleFunc("GET /healthz", handler.HealthHandler(cfg))
 	mux.HandleFunc("HEAD /healthz", handler.HealthHandler(cfg))
-	mux.HandleFunc("/ws", handler.EchoWebSocketHandler(cfg, logger))
 
-	// Middleware chain: RequestLogger -> CORS -> Mux
+	// Protected WebSocket endpoint enforcing Authelia OIDC token verification & auto-provisioning
+	authMiddleware := auth.Middleware(oidcVerifier, userRepo, logger)
+	mux.Handle("/ws", authMiddleware(handler.EchoWebSocketHandler(cfg, logger)))
+
+	// Global Middleware chain: RequestLogger -> CORS -> Mux
 	var rootHandler http.Handler = mux
 	rootHandler = middleware.CORS(cfg)(rootHandler)
 	rootHandler = middleware.RequestLogger(logger)(rootHandler)
