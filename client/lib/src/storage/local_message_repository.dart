@@ -10,6 +10,7 @@ import 'package:meowgram_client/src/models/chat_message.dart';
 abstract class LocalMessageRepository {
   Future<void> init();
   Future<List<ChatMessage>> getCachedMessages();
+  Future<ChatMessage?> getNewestMessage();
   Future<void> saveMessage(ChatMessage message);
   Future<void> saveMessages(List<ChatMessage> messages);
   Future<void> clear();
@@ -58,6 +59,13 @@ class HiveLocalMessageRepository implements LocalMessageRepository {
       debugPrint('Warning: Error reading cached messages: $e');
       return [];
     }
+  }
+
+  @override
+  Future<ChatMessage?> getNewestMessage() async {
+    final cached = await getCachedMessages();
+    if (cached.isEmpty) return null;
+    return cached.last;
   }
 
   @override
@@ -114,6 +122,13 @@ class MemoryLocalMessageRepository implements LocalMessageRepository {
     final list = _store.values.toList();
     list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return list;
+  }
+
+  @override
+  Future<ChatMessage?> getNewestMessage() async {
+    final list = await getCachedMessages();
+    if (list.isEmpty) return null;
+    return list.last;
   }
 
   @override

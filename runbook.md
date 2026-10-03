@@ -1,7 +1,7 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.6.0  
-> **Status**: APPROVED (Epic 1.2 OIDC, Epic 1.3 WebSocket Core, UST-1.3.2 UI Shell, UST-1.4.1 Responsive Shell, & UST-1.4.2 Local Caching Complete)  
+> **Document Version**: 1.7.0  
+> **Status**: APPROVED (Epic 1.2 OIDC, Epic 1.3 WebSocket Core, & Epic 1.4 Foundational Text Chat Complete - UST-1.4.1, UST-1.4.2, UST-1.4.3)  
 > **Author**: Lead Developer / Antigravity IDE  
 > **Last Updated**: 2026-10-03  
 
@@ -27,6 +27,11 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
   - Adaptive shell (`ResponsiveLayout`) switching between a persistent dual-pane layout for screens >= 800px (Desktop/Tablet) and a stacked navigation single-pane layout with modal drawer for screens < 800px (Mobile).
   - Hive NoSQL local storage (`hive_flutter`) enabling **Instant Offline Launch** (loading cached messages immediately on launch before live WebSocket connection).
   - Cache-to-Live Handoff: Seamless synchronization and deduplication between offline SQLite/Hive cache and live 50-message WebSocket bursts.
+- **Catch-Up Synchronization Pipeline (UST-1.4.3)**:
+  - Dedicated REST endpoint `GET /api/messages/sync?after={iso8601_timestamp}` querying PostgreSQL messages where `created_at > {timestamp}` chronologically (limit 500).
+  - Client-side `SyncService` triggered automatically upon WebSocket reconnection, retrieving the newest cached timestamp and requesting gap-fill messages.
+  - Strict timezone standardization: timestamps are normalized to UTC (`toUtc().toIso8601String()`) and parsed to UTC before executing PostgreSQL `TIMESTAMPTZ` comparisons.
+  - Deduplicating merge in `ChatBloc`: incoming messages are deduplicated by PostgreSQL UUID against live WebSocket hydration bursts and active state, sorted chronologically, and persisted to Hive.
 
 ---
 
@@ -43,6 +48,8 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Responsive Breakpoint** | 800.0 Logical Pixels (`LayoutBuilder`) | Standard split point for tablets/desktops vs smartphones. Screens >= 800px show dual-pane (Sidebar + Chat); screens < 800px show single-pane with Drawer. |
 | **Local Cache Database** | `hive_flutter` (`HiveLocalMessageRepository`) | Chosen over `sqflite` for unified cross-platform support across Web (IndexedDB), Windows, macOS, Linux, Android, and iOS without requiring C/FFI toolchains or WebAssembly build glue. |
 | **Cache-to-Live Handoff** | Two-stage initialization in `ChatBloc` | Stage 1 loads cached messages from Hive instantly (zero UI wait). Stage 2 connects WebSocket and deduplicates against the 50-message server burst using PostgreSQL UUIDs. |
+| **Catch-Up Synchronization** | Dedicated REST Endpoint (`GET /api/messages/sync`) | Fills message gaps after extended offline durations without overloading the initial WebSocket upgrade frame. Capped at 500 records per request to prevent payload bloat. |
+| **Timezone Standardization** | ISO 8601 UTC / RFC 3339 (`.UTC()`) | Client exports `createdAt.toUtc().toIso8601String()`; Go backend normalizes any offset to UTC before querying PostgreSQL `TIMESTAMPTZ` column. Prevents timezone drift across global clients. |
 | **Time Formatting** | `intl` (`DateFormat.jm()`) | Standardized localized time representation across Web and native mobile/desktop platforms. |
 | **Mobile Keyboard Adaptation** | `SafeArea` + `viewInsets` in `ChatInputBar` | Prevents software keyboard from overlapping chat input bar on Android/iOS without double-padding on Web/Desktop. |
 | **Message Ordering Guarantee** | Chronological Sorting & In-Memory Deduplication | Re-sorts by `createdAt` ascending and deduplicates by PostgreSQL UUID to guarantee deterministic ordering across network jitters. |
@@ -278,7 +285,65 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 
 ---
 
-## 7. Environment & Compile-Time Configuration Contract
+## 7. Catch-Up Synchronization Architecture (UST-1.4.3)
+
+```
+┌──────────────┐          ┌─────────────┐        ┌─────────────┐       ┌────────────┐       ┌────────────┐
+│ WebSocket    │          │ SyncService │        │ Hive Cache  │       │ ChatBloc   │       │ Go Backend │
+│ Service      │          │ (Client)    │        │ Repository  │       │ State      │       │ REST API   │
+└──────┬───────┘          └──────┬──────┘        └──────┬──────┘       └─────┬──────┘       └─────┬──────┘
+       │                         │                      │                    │                    │
+       │ (1) Status: connected   │                      │                    │                    │
+       ├────────────────────────►│                      │                    │                    │
+       │                         │ (2) getNewestMessage │                    │                    │
+       │                         ├─────────────────────►│                    │                    │
+       │                         │◄─────────────────────┤                    │                    │
+       │                         │     DateTime?        │                    │                    │
+       │                         │                      │                    │                    │
+       │                         │ (3) GET /api/messages/sync?after={UTC_ISO}│                    │
+       │                         ├───────────────────────────────────────────────────────────────►│
+       │                         │                                           │                    │ (4) created_at > $1
+       │                         │                                           │                    │     LIMIT 500
+       │                         │◄───────────────────────────────────────────────────────────────┤
+       │                         │     JSON: List<Message>                   │                    │
+       │                         │                                           │                    │
+       │                         │ (5) SyncCompleted(messages)               │                    │
+       │                         ├──────────────────────────────────────────►│                    │
+       │                         │                      │                    │                    │
+       │                         │                      │                    │ (6) Deduplicate by │
+       │                         │                      │                    │     PostgreSQL UUID│
+       │                         │                      │                    │     Sort Chrono ASC│
+       │                         │                      │ (7) saveMessages   │                    │
+       │                         │                      │◄───────────────────┤                    │
+       │                         │                      │     (batch Hive)   │                    │
+       │                         │                      │                    │                    │
+```
+
+### 7.1 Gap Analysis & The Need for Catch-Up Sync
+- **The Problem**: When a user was offline for minutes or hours (e.g. laptop closed or device in airplane mode), dozens or hundreds of messages may have been broadcast. The default WebSocket reconnection handshake emits a burst of the 50 most recent messages (`SendHistory(ctx, 50)`). If more than 50 messages were sent while offline, a permanent gap remains between the user's latest local message and the 50-message burst.
+- **The Solution**: A dedicated REST endpoint (`GET /api/messages/sync?after={timestamp}`) allows the client to fetch all messages created strictly after the newest locally cached message, up to 500 messages per request.
+
+### 7.2 Endpoint Contract & Timezone Standardization
+- **Endpoint**: `GET /api/messages/sync?after={iso8601_timestamp}`
+- **Security**: Authenticated via Authelia OIDC Bearer token (`Authorization: Bearer <token>`) or `?token=<token>`.
+- **Query Parameter**: `after` (mandatory, ISO 8601 / RFC 3339 formatted).
+- **Timezone Standardization Architecture**:
+  - **Client**: `newest.createdAt.toUtc().toIso8601String()` produces RFC 3339 with `Z` suffix (e.g. `2026-10-03T13:40:00.123456Z`).
+  - **URL Encoding**: `Uri.replace(queryParameters: {'after': afterIso})` safely percent-encodes colons and plus signs.
+  - **Go Backend Parser (`ParseSyncTimestamp`)**: Supports `RFC3339Nano`, `RFC3339`, ISO variants, and numeric epoch timestamps. Resolves space-encoded `+` characters in timezone offsets.
+  - **Database Query**: Converted to `.UTC()` before parameter binding (`$1`). PostgreSQL stores `created_at` as `TIMESTAMPTZ` (UTC internally), guaranteeing mathematically exact comparison (`created_at > $1`).
+- **Response**: Array of message objects `[]*model.Message` serialized as JSON (HTTP 200 OK).
+
+### 7.3 Conflict Resolution & In-Memory Deduplication
+- Because both the WebSocket hydration burst (50 messages) and the REST sync response can deliver overlapping messages, `ChatBloc` uses PostgreSQL UUID (`ChatMessage.id`) as a unique deduplication key:
+  1. Messages already present in `state.messages` are filtered out.
+  2. Non-duplicate messages are merged into the timeline.
+  3. The timeline is re-sorted chronologically ascending (`createdAt.compareTo`).
+  4. Only newly discovered messages are batch persisted to local Hive storage (`_localRepo.saveMessages(newMessages)`).
+
+---
+
+## 8. Environment & Compile-Time Configuration Contract
 
 ### Backend Environment Variables (`deploy/.env.example`)
 
@@ -312,7 +377,7 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 
 ---
 
-## 8. Operations & Developer Playbook
+## 9. Operations & Developer Playbook
 
 ### 8.1 Starting the Infrastructure (PostgreSQL + Go Backend)
 
@@ -367,7 +432,7 @@ go test -v ./...
 
 ---
 
-## 9. Review Gate & Verification Checklist
+## 10. Review Gate & Verification Checklist
 
 - [x] Database migration `000002_create_messages_table.up.sql` created and verified.
 - [x] Foreign key constraint properly mapped to `users.authelia_sub`.
@@ -385,6 +450,10 @@ go test -v ./...
 - [x] `Sidebar` desktop navigation widget displaying chat channels, active online members, and user profile footer.
 - [x] `HiveLocalMessageRepository` cross-platform offline message cache using `hive_flutter` with fallback in-memory repository.
 - [x] Cache-to-live handoff in `ChatBloc` delivering instant offline launch before live WebSocket hydration.
-- [x] Full client test suite (17/17 tests across `chat_ui_test.dart`, `responsive_layout_test.dart`, and `widget_test.dart`) passing with 100% success rate.
+- [x] Full client test suite (22/22 tests across `chat_ui_test.dart`, `responsive_layout_test.dart`, `sync_service_test.dart`, and `widget_test.dart`) passing with 100% success rate.
 - [x] Flutter Web production build verified with `flutter build web`.
 - [x] Backend compiles cleanly with zero warnings or errors.
+- [x] Catch-up sync endpoint `GET /api/messages/sync?after={iso8601_timestamp}` created with ISO 8601 UTC parsing and 500-message limit.
+- [x] Client `SyncService` listens for WebSocket reconnection, queries local repository for newest timestamp, and fetches gap fill.
+- [x] `ChatBloc` handles `SyncCompleted` event with PostgreSQL UUID deduplication and Hive cache persistence.
+- [x] Go backend unit test suite (`sync_test.go`, `hub_test.go`) passing with 100% success rate.
