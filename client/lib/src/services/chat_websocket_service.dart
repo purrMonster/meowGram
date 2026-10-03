@@ -1,8 +1,8 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:meowgram_client/src/config/app_config.dart';
 import 'package:web_socket_channel/status.dart' as ws_status;
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 enum SocketStatus { disconnected, connecting, connected, error }
 
@@ -18,6 +18,7 @@ class ChatMessage {
   });
 }
 
+/// Service managing the realtime WebSocket channel with Bearer token authentication.
 class ChatWebSocketService extends ChangeNotifier {
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _subscription;
@@ -31,7 +32,14 @@ class ChatWebSocketService extends ChangeNotifier {
   String? _lastError;
   String? get lastError => _lastError;
 
-  void connect(String wsUrl) {
+  String? _connectedUrl;
+  String? get connectedUrl => _connectedUrl;
+
+  /// Connects to the backend WebSocket endpoint.
+  ///
+  /// In compliance with Epic 1.2, [accessToken] is injected via the `?token=` query parameter
+  /// because browser WebSockets cannot attach custom HTTP Authorization headers during handshake.
+  void connect({String? customWsUrl, String? accessToken}) {
     if (_status == SocketStatus.connected ||
         _status == SocketStatus.connecting) {
       return;
@@ -41,7 +49,24 @@ class ChatWebSocketService extends ChangeNotifier {
     _lastError = null;
 
     try {
-      final uri = Uri.parse(wsUrl);
+      String targetUrl;
+      if (customWsUrl != null && customWsUrl.isNotEmpty) {
+        targetUrl = customWsUrl;
+        if (accessToken != null &&
+            accessToken.isNotEmpty &&
+            !targetUrl.contains('token=')) {
+          final sep = targetUrl.contains('?') ? '&' : '?';
+          targetUrl =
+              '$targetUrl${sep}token=${Uri.encodeComponent(accessToken)}';
+        }
+      } else if (accessToken != null && accessToken.isNotEmpty) {
+        targetUrl = AppConfig.authenticatedWsUrl(accessToken);
+      } else {
+        targetUrl = AppConfig.wsBaseUrl;
+      }
+
+      _connectedUrl = targetUrl;
+      final uri = Uri.parse(targetUrl);
       final channel = WebSocketChannel.connect(uri);
       _channel = channel;
 
@@ -90,13 +115,11 @@ class ChatWebSocketService extends ChangeNotifier {
       return;
     }
 
-    // Add local sent message to history
     _messages.add(
       ChatMessage(text: text, isFromSelf: true, timestamp: DateTime.now()),
     );
     notifyListeners();
 
-    // Send payload to backend WebSocket endpoint
     _channel!.sink.add(text);
   }
 
@@ -105,6 +128,7 @@ class ChatWebSocketService extends ChangeNotifier {
     _subscription = null;
     _channel?.sink.close(ws_status.normalClosure);
     _channel = null;
+    _connectedUrl = null;
     _setStatus(SocketStatus.disconnected);
   }
 

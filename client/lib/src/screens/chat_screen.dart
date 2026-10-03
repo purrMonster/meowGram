@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/widgets/connection_badge.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String username;
+  final AuthController authController;
 
-  const ChatScreen({super.key, this.username = 'Whiskers'});
+  const ChatScreen({super.key, required this.authController});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -21,8 +22,8 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto-connect to configured WebSocket URL
-    _socketService.connect(AppConfig.wsBaseUrl);
+    // Auto-connect to backend WebSocket endpoint with Bearer token injected
+    _socketService.connect(accessToken: widget.authController.accessToken);
   }
 
   @override
@@ -60,6 +61,9 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final profile = widget.authController.userProfile;
+    final username = profile?.username ?? 'Whiskers';
+    final sub = profile?.sub ?? 'unknown';
 
     return Scaffold(
       appBar: AppBar(
@@ -87,16 +91,18 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
             Text(
-              'User: @${widget.username} • ${AppConfig.appDomain}',
+              'User: @$username • sub: $sub',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 11,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12.0),
+            padding: const EdgeInsets.only(right: 6.0),
             child: AnimatedBuilder(
               animation: _socketService,
               builder: (context, _) =>
@@ -106,32 +112,36 @@ class _ChatScreenState extends State<ChatScreen> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Reconnect WebSocket',
-            onPressed: () => _socketService.connect(AppConfig.wsBaseUrl),
+            onPressed: () => _socketService.connect(
+                accessToken: widget.authController.accessToken),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            tooltip: 'Logout session',
+            onPressed: () {
+              _socketService.disconnect();
+              widget.authController.logout();
+            },
           ),
         ],
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // Target Banner
+            // Target & Auth Token Banner
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.4),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.router_rounded,
-                    size: 16,
-                    color: theme.colorScheme.primary,
-                  ),
+                  Icon(Icons.lock_outline_rounded,
+                      size: 16, color: theme.colorScheme.primary),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'WS Target: ${AppConfig.wsBaseUrl}',
+                      'WS Target: ${_socketService.connectedUrl ?? AppConfig.authenticatedWsUrl(widget.authController.accessToken ?? '')}',
                       style: const TextStyle(
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                      ),
+                          fontSize: 11, fontFamily: 'monospace'),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -160,14 +170,14 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'Connected to Go Echo Backend',
+                              'Authenticated via Authelia OIDC',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Send a message below to test bidirectional WebSocket streaming.',
+                              'Logged in as @$username ($sub).\nConnected to Go backend with token verification & auto-provisioning.',
                               textAlign: TextAlign.center,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
@@ -178,24 +188,18 @@ class _ChatScreenState extends State<ChatScreen> {
                               spacing: 8,
                               children: [
                                 ActionChip(
-                                  avatar: const Icon(
-                                    Icons.pets_rounded,
-                                    size: 16,
-                                  ),
+                                  avatar:
+                                      const Icon(Icons.pets_rounded, size: 16),
                                   label: const Text('Meow! 🐾'),
-                                  onPressed: () => _sendMessage(
-                                    'Meow from @${widget.username}! 🐾',
-                                  ),
+                                  onPressed: () =>
+                                      _sendMessage('Meow from @$username! 🐾'),
                                 ),
                                 ActionChip(
-                                  avatar: const Icon(
-                                    Icons.bolt_rounded,
-                                    size: 16,
-                                  ),
+                                  avatar:
+                                      const Icon(Icons.bolt_rounded, size: 16),
                                   label: const Text('Ping Server'),
                                   onPressed: () => _sendMessage(
-                                    'ping-${DateTime.now().millisecondsSinceEpoch}',
-                                  ),
+                                      'ping-${DateTime.now().millisecondsSinceEpoch}'),
                                 ),
                               ],
                             ),
@@ -208,9 +212,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   return ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
+                        horizontal: 16, vertical: 12),
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
                       final msg = messages[index];
@@ -223,41 +225,32 @@ class _ChatScreenState extends State<ChatScreen> {
 
             // Quick suggestion chips
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 4.0,
-              ),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
                     ActionChip(
                       avatar: const Icon(Icons.pets, size: 14),
-                      label: const Text(
-                        'Purr...',
-                        style: TextStyle(fontSize: 12),
-                      ),
+                      label:
+                          const Text('Purr...', style: TextStyle(fontSize: 12)),
                       onPressed: () => _sendMessage('Purr... 😺'),
                     ),
                     const SizedBox(width: 8),
                     ActionChip(
                       avatar: const Icon(Icons.favorite, size: 14),
-                      label: const Text(
-                        'Cat treats please!',
-                        style: TextStyle(fontSize: 12),
-                      ),
+                      label: const Text('Cat treats please!',
+                          style: TextStyle(fontSize: 12)),
                       onPressed: () => _sendMessage('Cat treats please! 🐟'),
                     ),
                     const SizedBox(width: 8),
                     ActionChip(
                       avatar: const Icon(Icons.code, size: 14),
-                      label: const Text(
-                        'echo test',
-                        style: TextStyle(fontSize: 12),
-                      ),
+                      label: const Text('echo test',
+                          style: TextStyle(fontSize: 12)),
                       onPressed: () => _sendMessage(
-                        'WebSocket echo test: ${DateTime.now().toIso8601String()}',
-                      ),
+                          'WebSocket echo test: ${DateTime.now().toIso8601String()}'),
                     ),
                   ],
                 ),
@@ -290,9 +283,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         fillColor: theme.colorScheme.surfaceContainerHighest
                             .withOpacity(0.5),
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 12,
-                        ),
+                            horizontal: 20, vertical: 12),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
@@ -367,15 +358,14 @@ class _MessageBubble extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  isSelf ? 'Sent' : 'Echoed from Server',
+                  isSelf ? 'Sent' : 'Server Response',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: isSelf
                         ? theme.colorScheme.onPrimaryContainer.withOpacity(0.7)
-                        : theme.colorScheme.onSecondaryContainer.withOpacity(
-                            0.7,
-                          ),
+                        : theme.colorScheme.onSecondaryContainer
+                            .withOpacity(0.7),
                   ),
                 ),
               ],
