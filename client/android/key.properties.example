@@ -1,0 +1,14 @@
+# ==============================================================================
+# Android Release Signing Configuration Example (DO NOT COMMIT SENSITIVE SECRETS)
+# ==============================================================================
+#
+# Generate a production upload keystore with:
+#   keytool -genkey -v -keystore upload-keystore.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# Copy this file to `android/key.properties` and fill in your actual credentials.
+# `key.properties` and `*.jks` are strictly ignored by .gitignore.
+
+storePassword=CHANGE_ME_KEYSTORE_PASSWORD
+keyPassword=CHANGE_ME_KEY_PASSWORD
+keyAlias=upload
+storeFile=../upload-keystore.jks

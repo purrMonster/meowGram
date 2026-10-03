@@ -141,8 +141,16 @@ class LoginScreen extends StatelessWidget {
                                   label: 'Domain', value: AppConfig.appDomain),
                               const SizedBox(height: 6),
                               _ConfigRow(
+                                  label: 'Auth Domain',
+                                  value: AppConfig.autheliaDomain),
+                              const SizedBox(height: 6),
+                              _ConfigRow(
                                   label: 'Issuer',
                                   value: AppConfig.autheliaIssuerUrl),
+                              const SizedBox(height: 6),
+                              _ConfigRow(
+                                  label: 'API Base',
+                                  value: AppConfig.apiBaseUrl),
                               const SizedBox(height: 6),
                               _ConfigRow(
                                   label: 'Client ID',

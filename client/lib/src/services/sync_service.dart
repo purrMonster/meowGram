@@ -120,8 +120,9 @@ class SyncService {
       final effectiveToken = token ?? _accessToken;
       final baseUrl = _baseUrlOverride ?? AppConfig.apiBaseUrl;
 
-      // Build target URI with URL-safe encoded query parameters
-      final uri = Uri.parse('$baseUrl/api/messages/sync').replace(
+      // Build target URI with URL-safe encoded query parameters using AppConfig
+      final targetSyncUrl = AppConfig.syncUrl(baseUrlOverride: _baseUrlOverride);
+      final uri = Uri.parse(targetSyncUrl).replace(
         queryParameters: {
           'after': afterIso,
         },

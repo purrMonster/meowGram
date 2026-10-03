@@ -1,7 +1,7 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.7.0  
-> **Status**: APPROVED (Epic 1.2 OIDC, Epic 1.3 WebSocket Core, & Epic 1.4 Foundational Text Chat Complete - UST-1.4.1, UST-1.4.2, UST-1.4.3)  
+> **Document Version**: 1.8.0  
+> **Status**: APPROVED (Release 1 Feature-Frozen: Packaging Sprint & Production Distribution Complete)  
 > **Author**: Lead Developer / Antigravity IDE  
 > **Last Updated**: 2026-10-03  
 
@@ -50,6 +50,9 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Cache-to-Live Handoff** | Two-stage initialization in `ChatBloc` | Stage 1 loads cached messages from Hive instantly (zero UI wait). Stage 2 connects WebSocket and deduplicates against the 50-message server burst using PostgreSQL UUIDs. |
 | **Catch-Up Synchronization** | Dedicated REST Endpoint (`GET /api/messages/sync`) | Fills message gaps after extended offline durations without overloading the initial WebSocket upgrade frame. Capped at 500 records per request to prevent payload bloat. |
 | **Timezone Standardization** | ISO 8601 UTC / RFC 3339 (`.UTC()`) | Client exports `createdAt.toUtc().toIso8601String()`; Go backend normalizes any offset to UTC before querying PostgreSQL `TIMESTAMPTZ` column. Prevents timezone drift across global clients. |
+| **Release 1 Packaging** | Multi-Platform Scripts (`build_all.ps1` / `build_all.sh`) | Unified build scripts inject production `--dart-define` flags targeting `purrbrews.cc`, producing Web, Android (APK/AAB), Windows, macOS, and iOS bundles. |
+| **Android Keystore Separation** | Git-ignored `key.properties` & `*.jks` | Cryptographic signing keys remain strictly local/CI-injected; `build.gradle.kts` gracefully falls back to debug signing when `key.properties` is absent. |
+| **Backend Docker Packaging** | Multi-stage static Alpine image (`meowgram:1.0.0`) | Stripped, non-root 8.7MB container embedding migrations, healthcheck, and CA certificates for production orchestration. |
 | **Time Formatting** | `intl` (`DateFormat.jm()`) | Standardized localized time representation across Web and native mobile/desktop platforms. |
 | **Mobile Keyboard Adaptation** | `SafeArea` + `viewInsets` in `ChatInputBar` | Prevents software keyboard from overlapping chat input bar on Android/iOS without double-padding on Web/Desktop. |
 | **Message Ordering Guarantee** | Chronological Sorting & In-Memory Deduplication | Re-sorts by `createdAt` ascending and deduplicates by PostgreSQL UUID to guarantee deterministic ordering across network jitters. |
@@ -345,35 +348,60 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 
 ## 8. Environment & Compile-Time Configuration Contract
 
-### Backend Environment Variables (`deploy/.env.example`)
+### Backend Environment Variables (`deploy/.env.example` / `.env`)
 
 | Variable | Dev Default | Staging/Prod Example | Description |
 |---|---|---|---|
-| `APP_DOMAIN` | `localhost` | `meowgram.chat` | Primary routing domain. Injected into Traefik host rules and healthcheck payloads. |
-| `ENVIRONMENT` | `development` | `production` | Environment tier. |
+| `APP_DOMAIN` | `localhost` | `meowgram.purrbrews.cc` | Primary routing domain. Injected into Traefik host rules and link generation. |
+| `ENVIRONMENT` | `development` | `production` | Environment tier (`development`, `staging`, `production`). |
+| `APP_ENV` | `development` | `production` | Alias for `ENVIRONMENT`. |
 | `LOG_LEVEL` | `debug` | `info` | Minimum log verbosity (`debug`, `info`, `warn`, `error`). |
+| `USE_SECURE_SCHEMES` | `false` | `true` | Enforces `https://` and `wss://` protocols. |
 | `HOST_HTTP_PORT` | `8080` | `8080` | Host port exposed on the host machine by Docker Compose. |
 | `HTTP_PORT` | `8080` | `8080` | Internal container port bound by the Go HTTP server. |
 | `WS_PORT` | `8080` | `8080` | WebSocket endpoint port (unified with `HTTP_PORT` over `/ws`). |
+| `API_BASE_URL` | *(Computed)* | `https://meowgram.purrbrews.cc` | Full REST API base URL override. |
+| `WS_BASE_URL` | *(Computed)* | `wss://meowgram.purrbrews.cc/ws` | Full WebSocket base URL override. |
+| `WS_ENDPOINT` | `/ws` | `/ws` | WebSocket upgrade route path. |
+| `SYNC_ENDPOINT` | `/api/messages/sync` | `/api/messages/sync` | Catch-up synchronization REST route path. |
+| `HEALTH_ENDPOINT` | `/healthz` | `/healthz` | Health check probe route path. |
+| `AUTHELIA_DOMAIN` | `localhost:9091` | `auth.purrbrews.cc` | FQDN or host:port for Authelia OIDC identity provider. |
+| `AUTHELIA_ISSUER` | *(Derived)* | `https://auth.purrbrews.cc` | Base Issuer URL for Authelia OIDC provider. Derived from `AUTHELIA_DOMAIN`. |
+| `AUTHELIA_ISSUER_URL` | *(Derived)* | `https://auth.purrbrews.cc` | Alias for `AUTHELIA_ISSUER`. |
+| `AUTHELIA_JWKS_URL` | *(Derived)* | `https://auth.purrbrews.cc/jwks.json` | URL for Authelia public keys (JWKS). Derived from `AUTHELIA_ISSUER`. |
 | `POSTGRES_USER` | `meowgram` | `meowgram_prod` | PostgreSQL user account. |
 | `POSTGRES_PASSWORD` | `meowgram_secret_dev...` | *(Strong secret)* | PostgreSQL password. |
 | `POSTGRES_DB` | `meowgram` | `meowgram` | PostgreSQL database name. |
 | `DATABASE_URL` | `postgres://...` | `postgres://...` | Full connection string for Go backend. |
-| `AUTHELIA_ISSUER` | `http://localhost:9091` | `https://auth.example.com` | Base Issuer URL for Authelia OIDC provider. |
-| `AUTHELIA_JWKS_URL` | `http://localhost:9091/jwks.json` | `https://auth.example.com/jwks.json` | URL for Authelia cryptographic public keys (JWKS). |
+| `CORS_ORIGINS` | *(Localhost list)* | `https://meowgram.purrbrews.cc` | Comma-separated list of allowed client origins. |
 
-### Flutter Client Compile-Time Flags (`--dart-define`)
+### Flutter Client Environment Variables & `.env` Controllability
 
-| Flag | Dev Default | Purpose |
+All endpoints can be controlled either via `--dart-define-from-file=.env`, `--dart-define=KEY=VAL`, or by placing a `.env` file in the project or `client/` folder (automatically loaded at startup via `AppConfig.initialize()`):
+
+| Variable / Flag | Dev Default | Description |
 |---|---|---|
 | `APP_DOMAIN` | `localhost` | Target backend host domain. |
 | `HTTP_PORT` | `8080` | Target backend HTTP port. |
-| `APP_ENV` | `development` | Runtime environment name. |
-| `AUTHELIA_CLIENT_ID` | `meowgram-client` | Public client identifier registered in Authelia. |
-| `AUTHELIA_ISSUER_URL` | `http://localhost:9091` | Authelia OIDC base issuer URL for discovery. |
-| `AUTH_REDIRECT_URI` | *(Dynamic)* | Optional explicit redirect override (default: loopback on desktop, origin on web). |
+| `APP_ENV` | `development` | Runtime environment name (`development`, `staging`, `production`). |
+| `USE_SECURE_SCHEMES` | `false` | Whether to force `https://` and `wss://`. |
 | `API_BASE_URL` | *(Computed)* | Direct override for HTTP REST API base URL. |
 | `WS_BASE_URL` | *(Computed)* | Direct override for WebSocket base URL. |
+| `WS_ENDPOINT` | `/ws` | WebSocket relative route path. |
+| `SYNC_ENDPOINT` | `/api/messages/sync` | Catch-up sync endpoint path or full URL. |
+| `HEALTH_ENDPOINT` | `/healthz` | Health check endpoint path or full URL. |
+| `AUTHELIA_DOMAIN` | `localhost:9091` | Authelia identity provider domain. Setting this auto-derives all OIDC endpoints! |
+| `AUTHELIA_ISSUER_URL` | *(Derived)* | Authelia OIDC base issuer URL for discovery. |
+| `AUTHELIA_CLIENT_ID` | `meowgram-client` | Public client identifier registered in Authelia. |
+| `AUTHELIA_JWKS_URL` | *(Derived)* | Authelia cryptographic public keys URL. |
+| `AUTHELIA_DISCOVERY_URL` | *(Derived)* | OpenID configuration discovery endpoint URL. |
+| `AUTHELIA_AUTHORIZATION_ENDPOINT` | *(Derived)* | OIDC PKCE authorization endpoint. |
+| `AUTHELIA_TOKEN_ENDPOINT` | *(Derived)* | OIDC token exchange endpoint. |
+| `AUTHELIA_USERINFO_ENDPOINT` | *(Derived)* | OIDC userinfo endpoint. |
+| `AUTHELIA_REVOCATION_ENDPOINT` | *(Derived)* | OIDC token revocation endpoint. |
+| `AUTH_REDIRECT_URI` | *(Dynamic)* | OAuth redirect URI (default: RFC 8252 loopback on desktop, origin on web). |
+| `IMMICH_DOMAIN` | `immich.purrbrews.cc` | Immich media service domain (Release 2). |
+| `IMMICH_API_URL` | *(Derived)* | Immich REST API base URL (Release 2). |
 
 ---
 
@@ -432,7 +460,106 @@ go test -v ./...
 
 ---
 
-## 10. Review Gate & Verification Checklist
+## 10. Release 1 Build & Packaging Procedures
+
+### 10.1 Production Environment Target: `purrbrews.cc`
+All production binaries must be compiled with `--dart-define` flags targeting the production infrastructure:
+```bash
+--dart-define=APP_ENV=production \
+--dart-define=APP_DOMAIN=meowgram.purrbrews.cc \
+--dart-define=HTTP_PORT=443 \
+--dart-define=USE_SECURE_SCHEMES=true \
+--dart-define=AUTHELIA_ISSUER_URL=https://auth.purrbrews.cc \
+--dart-define=AUTHELIA_CLIENT_ID=meowgram-client \
+--dart-define=API_BASE_URL=https://meowgram.purrbrews.cc \
+--dart-define=WS_BASE_URL=wss://meowgram.purrbrews.cc/ws
+```
+
+### 10.2 Automated Build Execution Scripts
+Run the automated build script for sequential compilation:
+- **On Windows (PowerShell)**:
+  ```powershell
+  deploy/scripts/build_all.ps1 -Target all
+  ```
+- **On Linux / macOS (Bash / CI/CD)**:
+  ```bash
+  chmod +x deploy/scripts/build_all.sh
+  ./deploy/scripts/build_all.sh all
+  ```
+
+### 10.3 Android Signing & Keystore Generation
+To publish to Google Play or generate official release APKs:
+1. **Generate Local Keystore** (execute once on local secure machine):
+   ```bash
+   keytool -genkey -v -keystore upload-keystore.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+   ```
+2. **Configure `android/key.properties`**:
+   Copy `android/key.properties.example` to `android/key.properties` and fill in:
+   ```properties
+   storePassword=your_keystore_password
+   keyPassword=your_key_password
+   keyAlias=upload
+   storeFile=../upload-keystore.jks
+   ```
+   > [!CAUTION]
+   > NEVER commit `upload-keystore.jks` or `key.properties` to version control. Both patterns are enforced in `.gitignore`.
+3. **Build Artifacts**:
+   - Google Play Bundle: `flutter build appbundle --release` &rarr; `build/app/outputs/bundle/release/app-release.aab`
+   - Direct Install APK: `flutter build apk --release` &rarr; `build/app/outputs/flutter-apk/app-release.apk`
+
+### 10.4 iOS & macOS Code Signing Procedures (Manual Xcode Steps)
+Apple platforms enforce cryptographic code signing and provisioning profiles that **cannot be fully automated via command-line scripts without an active Apple Developer Team**:
+1. **Open Workspace**:
+   - iOS: Open `client/ios/Runner.xcworkspace` in Xcode.
+   - macOS: Open `client/macos/Runner.xcworkspace` in Xcode.
+2. **Signing & Capabilities**:
+   - Select the `Runner` target.
+   - Under the `Signing & Capabilities` tab, select your team (`Team: PurrBrews LLC`).
+   - Bundle Identifier is locked to `com.purrbrews.meowgram`.
+   - Check `Automatically manage signing` (recommended) or import manual Distribution Provisioning Profiles.
+3. **App Sandbox & Hardened Runtime (macOS)**:
+   - Verify `Incoming Connections (Server)` and `Outgoing Connections (Client)` are checked in `Runner.entitlements` to permit WebSocket and HTTP connectivity.
+4. **Archive & Distribution**:
+   - In Xcode menu, select `Product > Archive`.
+   - In the Organizer window, click `Distribute App` &rarr; `App Store Connect` (or `Direct Distribution / Developer ID` for notarized macOS `.dmg`).
+
+#### 10.4.1 Day 1 iOS Testing: Progressive Web App (PWA) Mode
+To test on iOS devices without waiting for Apple Developer Team certificate provisioning:
+1. Navigate to `https://meowgram.purrbrews.cc` in Safari on iOS.
+2. Tap the Share button &rarr; **Add to Home Screen**.
+3. Launch **meowGram** from the Home Screen. The app runs in standalone fullscreen (`apple-mobile-web-app-capable: yes`, `black-translucent` status bar) with CanvasKit and core assets cached by `sw.js` for instant subsequent cold starts.
+
+### 10.5 Windows Packaging & Signing
+1. Binary outputs compile to `build/windows/x64/runner/Release/meowGram.exe`.
+2. Sign with Authenticode EV certificate via `signtool.exe`:
+   ```cmd
+   signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /a "build\windows\x64\runner\Release\meowGram.exe"
+   ```
+
+### 10.6 Backend Docker Image Rollout (`meowgram:1.0.0`)
+1. **Build and Tag Image**:
+   ```bash
+   docker build -t meowgram:1.0.0 -t meowgram:latest -f server/Dockerfile server
+   ```
+2. **Push to Production Registry**:
+   ```bash
+   docker tag meowgram:1.0.0 registry.purrbrews.cc/meowgram:1.0.0
+   docker push registry.purrbrews.cc/meowgram:1.0.0
+   ```
+3. **Deploy to Production Swarm / Compose**:
+   ```bash
+   # On production node
+   docker compose -f deploy/docker-compose.yml pull
+   docker compose -f deploy/docker-compose.yml up -d --no-deps backend
+   ```
+4. **Health Check Verification**:
+   ```bash
+   curl -f https://meowgram.purrbrews.cc/healthz
+   ```
+
+---
+
+## 11. Review Gate & Verification Checklist
 
 - [x] Database migration `000002_create_messages_table.up.sql` created and verified.
 - [x] Foreign key constraint properly mapped to `users.authelia_sub`.
@@ -450,10 +577,14 @@ go test -v ./...
 - [x] `Sidebar` desktop navigation widget displaying chat channels, active online members, and user profile footer.
 - [x] `HiveLocalMessageRepository` cross-platform offline message cache using `hive_flutter` with fallback in-memory repository.
 - [x] Cache-to-live handoff in `ChatBloc` delivering instant offline launch before live WebSocket hydration.
+- [x] Version string bumped to `1.0.0+1` in `client/pubspec.yaml`.
+- [x] Application uniformly named "meowGram" across Android, iOS, macOS, Windows, and Web.
+- [x] Launcher icons generated across all OS platforms using `flutter_launcher_icons`.
+- [x] Automated build scripts created: `deploy/scripts/build_all.ps1` and `deploy/scripts/build_all.sh`.
+- [x] Production `--dart-define` parameters target `purrbrews.cc` environment with secure schemes.
+- [x] Android release signing configured with `key.properties` and keystore documentation provided.
+- [x] Backend Docker image `meowgram:1.0.0` built and verified (8.7MB static Alpine binary).
+- [x] Manual Xcode code signing steps documented for iOS/macOS App Store and TestFlight distribution.
 - [x] Full client test suite (22/22 tests across `chat_ui_test.dart`, `responsive_layout_test.dart`, `sync_service_test.dart`, and `widget_test.dart`) passing with 100% success rate.
-- [x] Flutter Web production build verified with `flutter build web`.
-- [x] Backend compiles cleanly with zero warnings or errors.
-- [x] Catch-up sync endpoint `GET /api/messages/sync?after={iso8601_timestamp}` created with ISO 8601 UTC parsing and 500-message limit.
-- [x] Client `SyncService` listens for WebSocket reconnection, queries local repository for newest timestamp, and fetches gap fill.
-- [x] `ChatBloc` handles `SyncCompleted` event with PostgreSQL UUID deduplication and Hive cache persistence.
-- [x] Go backend unit test suite (`sync_test.go`, `hub_test.go`) passing with 100% success rate.
+- [x] Go backend test suite (`sync_test.go`, `hub_test.go`) passing with 100% success rate.
+- [x] Production Web build compiled successfully to `client/build/web`.

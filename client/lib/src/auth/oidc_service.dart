@@ -20,8 +20,7 @@ class OidcService {
   Future<void> discoverEndpoints() async {
     if (_authorizationEndpoint != null && _tokenEndpoint != null) return;
 
-    final issuer = AppConfig.autheliaIssuerUrl.replaceAll(RegExp(r'/+$'), '');
-    final discoveryUrl = Uri.parse('$issuer/.well-known/openid-configuration');
+    final discoveryUrl = Uri.parse(AppConfig.autheliaDiscoveryUrl);
 
     try {
       final response = await _httpClient
@@ -33,11 +32,11 @@ class OidcService {
         _tokenEndpoint = data['token_endpoint'] as String?;
       }
     } catch (_) {
-      // Fallback to standard Authelia OIDC endpoint paths if discovery endpoint times out
+      // Fallback to configured Authelia OIDC endpoint paths if discovery endpoint times out
     }
 
-    _authorizationEndpoint ??= '$issuer/api/oidc/authorization';
-    _tokenEndpoint ??= '$issuer/api/oidc/token';
+    _authorizationEndpoint ??= AppConfig.autheliaAuthorizationEndpoint;
+    _tokenEndpoint ??= AppConfig.autheliaTokenEndpoint;
   }
 
   /// Builds the authorization URI with RFC 7636 PKCE query parameters.

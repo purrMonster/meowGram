@@ -4,6 +4,10 @@ analyzer:
   exclude:
     - build/**
     - web/**
+    - android/**
+    - ios/**
+    - windows/**
+    - macos/**
   language:
     strict-casts: true
     strict-inference: true

@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>meowGram Development Roadmap</title>
+    <title>meowGram Architecture Roadmap & Release Dashboard</title>
     <style>
         :root {
-            --bg-color: #0f172a;
+            --bg-color: #0b1120;
             --surface-color: #1e293b;
+            --surface-card: #0f172a;
             --border-color: #334155;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
@@ -15,113 +16,372 @@
             --status-progress: #f59e0b;
             --status-pending: #64748b;
             --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.15);
+            --purple: #a855f7;
+            --purple-glow: rgba(168, 85, 247, 0.15);
+            --amber: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-main);
-            line-height: 1.5;
+            line-height: 1.6;
             padding: 2rem;
-            max-width: 900px;
+            max-width: 1100px;
             margin: 0 auto;
         }
 
-        h1 {
+        header {
             text-align: center;
-            color: var(--accent);
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
         }
 
+        h1 {
+            color: var(--accent);
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
+            font-weight: 800;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.15rem;
+            max-width: 650px;
+            margin: 0 auto;
+        }
+
+        /* Nav Pills */
+        .nav-bar {
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            background: var(--surface-color);
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background: var(--accent);
+            color: #0b1120;
+            border-color: var(--accent);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+
+        /* Executive Release Card */
+        .release-banner {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 14px;
+            padding: 2rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.4), 0 0 20px var(--accent-glow);
+        }
+
+        .release-banner-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .release-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .grid-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.75rem;
+        }
+
+        .stat-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.15rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 0.35rem;
+        }
+
+        .stat-value {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .stat-sub {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* Architecture Pillars */
+        .pillars-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1.75rem;
+        }
+
+        .pillar-card {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.15rem;
+            border-left: 4px solid var(--accent);
+        }
+
+        .pillar-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 0.4rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pillar-desc {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.45;
+        }
+
+        /* Matrix Table */
+        .platform-table-wrapper {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-top: 1rem;
+        }
+
+        .platform-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            background: rgba(15, 23, 42, 0.6);
+        }
+
+        .platform-table th, .platform-table td {
+            padding: 0.85rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .platform-table th {
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        .platform-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .platform-table tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Release Sections */
         .release-section {
             background: var(--surface-color);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            padding: 1.75rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
         }
 
         .release-title {
             margin-top: 0;
             border-bottom: 1px solid var(--border-color);
-            padding-bottom: 0.5rem;
-            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            color: var(--text-main);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.45rem;
+            font-weight: 700;
+        }
+
+        .release-overview {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.925rem;
+            line-height: 1.55;
+            color: var(--text-muted);
+        }
+
+        .release-overview strong {
             color: var(--text-main);
         }
 
         details.epic {
-            background: rgba(0,0,0,0.2);
+            background: var(--surface-card);
             border: 1px solid var(--border-color);
-            border-radius: 6px;
-            margin-bottom: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1.15rem;
             overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        details.epic:hover {
+            border-color: rgba(56, 189, 248, 0.4);
         }
 
         details.epic > summary {
-            padding: 1rem;
+            padding: 1.1rem 1.35rem;
             font-weight: 600;
             cursor: pointer;
             list-style: none;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: background 0.2s;
-        }
-
-        details.epic > summary:hover {
-            background: rgba(255,255,255,0.05);
+            background: rgba(0, 0, 0, 0.25);
+            font-size: 1.05rem;
         }
 
         details.epic > summary::-webkit-details-marker {
             display: none;
         }
 
+        details.epic[open] > summary {
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.35);
+        }
+
         .epic-details {
-            padding: 1rem;
-            border-top: 1px solid var(--border-color);
-            background: rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            background: rgba(0, 0, 0, 0.12);
         }
 
         .epic-goal {
-            font-size: 0.9rem;
+            font-size: 0.925rem;
             color: var(--text-muted);
-            margin-bottom: 1rem;
-            font-style: italic;
+            margin-bottom: 1.35rem;
+            padding-left: 0.85rem;
+            border-left: 3px solid var(--accent);
         }
 
         .ust-list {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 1rem;
         }
 
         .ust-item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 0.5rem;
             background: var(--surface-color);
-            padding: 0.75rem 1rem;
-            border-radius: 4px;
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
             border-left: 4px solid var(--status-pending);
             font-size: 0.9rem;
+            transition: transform 0.15s ease;
+        }
+
+        .ust-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .ust-title {
+            font-weight: 700;
+            color: var(--text-main);
+            font-size: 0.95rem;
+        }
+
+        .ust-desc {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .ust-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+            font-size: 0.775rem;
+        }
+
+        .meta-tag {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            color: var(--text-muted);
+        }
+
+        .meta-tag strong {
+            color: var(--accent);
         }
 
         .badge {
-            padding: 0.25rem 0.75rem;
+            padding: 0.3rem 0.75rem;
             border-radius: 9999px;
-            font-size: 0.75rem;
+            font-size: 0.725rem;
             font-weight: 700;
             text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
-        /* Status Colors */
+        /* Status Badges */
         .status-done {
             border-left-color: var(--status-done);
         }
         .status-done .badge {
             background: rgba(16, 185, 129, 0.2);
             color: var(--status-done);
+            border: 1px solid rgba(16, 185, 129, 0.3);
         }
 
         .status-progress {
@@ -130,6 +390,7 @@
         .status-progress .badge {
             background: rgba(245, 158, 11, 0.2);
             color: var(--status-progress);
+            border: 1px solid rgba(245, 158, 11, 0.3);
         }
 
         .status-pending {
@@ -138,120 +399,398 @@
         .status-pending .badge {
             background: rgba(100, 116, 139, 0.2);
             color: var(--status-pending);
+            border: 1px solid rgba(100, 116, 139, 0.3);
+        }
+
+        .badge-frozen {
+            background: rgba(56, 189, 248, 0.2);
+            color: var(--accent);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+        }
+
+        .badge-planned {
+            background: rgba(168, 85, 247, 0.2);
+            color: var(--purple);
+            border: 1px solid rgba(168, 85, 247, 0.4);
+        }
+
+        .code-pill {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.8rem;
+            color: var(--accent);
+        }
+
+        /* Controls */
+        .expand-controls {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .ctrl-btn {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            padding: 0.3rem 0.7rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .ctrl-btn:hover {
+            color: var(--text-main);
+            border-color: var(--accent);
         }
     </style>
 </head>
 <body>
 
-    <h1>meowGram Architecture Roadmap</h1>
+    <header>
+        <h1>meowGram Architecture Roadmap</h1>
+        <div class="subtitle">Multi-Platform Real-Time Chat & Ephemeral Media System — Release Lifecycle & Technical Specification</div>
+    </header>
 
-    <!-- Phase 1 -->
+    <div class="nav-bar">
+        <a href="#release-1" class="nav-btn active">Release 1: Core Chat (v1.0.0+1)</a>
+        <a href="#release-2" class="nav-btn">Release 2: Immich Media (Next)</a>
+        <a href="#release-3" class="nav-btn">Release 3: Ephemeral Media (Planned)</a>
+    </div>
+
+    <!-- Release 1 Production Milestone Dashboard -->
+    <div class="release-banner" id="release-1">
+        <div class="release-banner-header">
+            <div class="release-tag">
+                <span>🚀 Release 1: Core Chat Foundation</span>
+                <span class="badge badge-frozen">v1.0.0+1 Feature-Frozen</span>
+            </div>
+            <div>
+                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981;">
+                    ✓ 100% Quality Gates Passed (22/22 Tests)
+                </span>
+            </div>
+        </div>
+
+        <div class="grid-stats">
+            <div class="stat-card">
+                <div class="stat-label">Production Domain</div>
+                <div class="stat-value">meowgram.purrbrews.cc</div>
+                <div class="stat-sub">Traefik Automated TLS & Let's Encrypt</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Identity & Security</div>
+                <div class="stat-value">Authelia OIDC (PKCE)</div>
+                <div class="stat-sub">RFC 7636 + RFC 8252 Loopback + EdDSA/RS256</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Client Verification</div>
+                <div class="stat-value" style="color: #10b981;">22 / 22 Passed (100%)</div>
+                <div class="stat-sub">Unit, Widget, Layout, & Sync Test Suites</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Backend Production Image</div>
+                <div class="stat-value">meowgram:1.0.0</div>
+                <div class="stat-sub">8.76 MB Static Binary &bull; Non-Root Alpine 3.21</div>
+            </div>
+        </div>
+
+        <!-- Architectural Highlights -->
+        <h4 style="margin: 1.5rem 0 0.5rem 0; font-size: 1rem; color: var(--accent);">Architectural Foundations of Release 1</h4>
+        <div class="pillars-grid">
+            <div class="pillar-card">
+                <div class="pillar-title">🔒 Zero-Trust OIDC / PKCE Auth Flow</div>
+                <div class="pillar-desc">
+                    Centralized Authelia identity provider with Authorization Code Flow & PKCE (RFC 7636). Zero hardcoded domains: compile-time <span class="code-pill">--dart-define</span> injection, state/verifier CSRF validation, desktop RFC 8252 loopback receiver, and backend cryptographic JWT claims verification.
+                </div>
+            </div>
+            <div class="pillar-card">
+                <div class="pillar-title">⚡ Gorilla WebSocket Engine & Persistence Contract</div>
+                <div class="pillar-desc">
+                    High-throughput Go Hub maintaining isolated <span class="code-pill">ReadPump</span> and <span class="code-pill">WritePump</span> goroutines with mutex synchronization. Mandatory persistence contract: incoming messages land in PostgreSQL before peer fan-out. Non-blocking 256-buffered channels protect against slow-client backpressure.
+                </div>
+            </div>
+            <div class="pillar-card">
+                <div class="pillar-title">🔄 Dual-Tier State Hydration & Catch-Up Sync</div>
+                <div class="pillar-desc">
+                    Two-stage cache hydration via Hive NoSQL (IndexedDB on Web, file-backed on Native/Desktop) provides instant zero-latency launch. On connection, the WebSocket replays the last 50 historical messages. Catch-up sync REST endpoint (<span class="code-pill">GET /api/messages/sync</span>) bridges extended offline gaps with PostgreSQL UUID deduplication.
+                </div>
+            </div>
+            <div class="pillar-card">
+                <div class="pillar-title">📱 Adaptive UI & Cross-Platform Shell</div>
+                <div class="pillar-desc">
+                    ResponsiveLayout engine with an 800.0px breakpoint dynamically renders a dual-pane layout (persistent channel/member sidebar + chat timeline) on desktop/tablet, and a stacked layout with a drawer on mobile. Strict software keyboard insets handling (<span class="code-pill">SafeArea</span> + <span class="code-pill">viewInsets</span>).
+                </div>
+            </div>
+        </div>
+
+        <!-- Packaging Matrix -->
+        <div>
+            <h4 style="margin: 1.5rem 0 0.5rem 0; font-size: 1rem; color: var(--accent);">Production Packaging & Artifact Distribution Matrix</h4>
+            <div class="platform-table-wrapper">
+                <table class="platform-table">
+                    <thead>
+                        <tr>
+                            <th>Platform Target</th>
+                            <th>Artifact Type</th>
+                            <th>Distribution Path / Output Target</th>
+                            <th>Code Signing / Security</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Web (PWA)</strong></td>
+                            <td>HTML5 / CanvasKit / WASM</td>
+                            <td><span class="code-pill">client/build/web/</span></td>
+                            <td>HTTPS / Content Security Policy / Traefik Automated TLS</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Android (Google Play)</strong></td>
+                            <td>AAB Bundle</td>
+                            <td><span class="code-pill">client/build/app/outputs/bundle/release/app-release.aab</span></td>
+                            <td>Signed with <span class="code-pill">upload-keystore.jks</span> (RSA 2048) &bull; Fallback to debug</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Android (Direct)</strong></td>
+                            <td>Universal APK</td>
+                            <td><span class="code-pill">client/build/app/outputs/flutter-apk/app-release.apk</span></td>
+                            <td>Production Keystore &bull; Sideload / MDM Ready</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Windows Desktop</strong></td>
+                            <td>Win32 x64 Executable</td>
+                            <td><span class="code-pill">client/build/windows/x64/runner/Release/meowGram.exe</span></td>
+                            <td>Authenticode EV Signing via SignTool &bull; Microsoft Defender SmartScreen</td>
+                        </tr>
+                        <tr>
+                            <td><strong>macOS Desktop</strong></td>
+                            <td>Universal App Bundle</td>
+                            <td><span class="code-pill">client/build/macos/Build/Products/Release/meowGram.app</span></td>
+                            <td>Hardened Runtime + Network Client Entitlements (<span class="code-pill">Runner.entitlements</span>)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>iOS (iPhone/iPad)</strong></td>
+                            <td>IPA / Xcode Archive</td>
+                            <td><span class="code-pill">client/build/ios/archive/Runner.xcarchive</span></td>
+                            <td>Apple Developer Team Code Signing &bull; App Store Connect & TestFlight</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Backend Service</strong></td>
+                            <td>OCI Docker Image</td>
+                            <td><span class="code-pill">meowgram:1.0.0</span> &rarr; <span class="code-pill">registry.purrbrews.cc</span></td>
+                            <td>Non-root <span class="code-pill">appuser</span>, static CGO-free Go binary, Alpine 3.21 (8.76 MB)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 1 Detail -->
     <div class="release-section">
-        <h2 class="release-title">Release 1: Core Chat Foundation</h2>
+        <div class="release-title">
+            <span>Release 1: Core Chat Foundation Breakdown</span>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981;">Complete (100%)</span>
+        </div>
+
+        <div class="release-overview">
+            <strong>Release 1 Scope & Architecture:</strong> Provides the complete foundational real-time messaging pipeline, including Docker Compose and Traefik reverse proxy orchestration, centralized OIDC authentication via Authelia, a robust Go WebSocket hub with strict persistence guarantees, an adaptive Flutter UI shell with dual-pane layout, Hive-based offline message caching, and automated catch-up sync.
+        </div>
         
-        <details class="epic">
+        <!-- Epic 1.1 -->
+        <details class="epic" open>
             <summary>
-                Epic 1.1: DevOps, CI/CD, & Infrastructure Shell
-                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">Done</span>
+                <span>Epic 1.1: DevOps, CI/CD, & Infrastructure Shell</span>
+                <span class="badge">Done</span>
             </summary>
             <div class="epic-details">
                 <div class="epic-goal">Goal: Establish the foundational multi-node backend, repository structure, and cross-platform build pipelines.</div>
                 <div class="ust-list">
                     <div class="ust-item status-done">
-                        <span><strong>UST-1.1.1:</strong> Scaffold Flutter Monorepo</span>
-                        <span class="badge">Done</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.1.1: Multi-Service Monorepo Structure</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Established unified repository topology for Go backend, Flutter cross-platform client, and Docker Compose orchestration. Standardized directory layouts, documentation templates, and cross-platform path handling.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">server/</span>, <span class="code-pill">client/</span>, <span class="code-pill">deploy/</span></span>
+                            <span class="meta-tag"><strong>Status:</strong> Merged & Verified</span>
+                        </div>
                     </div>
                     <div class="ust-item status-done">
-                        <span><strong>UST-1.1.2:</strong> Containerize Backend Shell</span>
-                        <span class="badge">Done</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.1.2: Orchestration & Ingress Routing (Traefik)</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Configured Traefik v3 reverse proxy with automated Let's Encrypt TLS termination, clean path-based routing, HTTP-to-HTTPS redirection, and WebSocket connection upgrade proxying.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">deploy/docker-compose.yml</span>, <span class="code-pill">deploy/traefik/</span></span>
+                            <span class="meta-tag"><strong>Target:</strong> <span class="code-pill">meowgram.purrbrews.cc</span></span>
+                        </div>
                     </div>
                     <div class="ust-item status-done">
-                        <span><strong>UST-1.1.3:</strong> Implement Git-Only Deployment Workflow</span>
-                        <span class="badge">Done</span>
-                    </div>
-                    <div class="ust-item status-done">
-                        <span><strong>UST-1.1.4:</strong> Automate Localized Secret Generation</span>
-                        <span class="badge">Done</span>
-                    </div>
-                    <div class="ust-item status-done">
-                        <span><strong>UST-1.1.5:</strong> Configure Reverse Proxy (Traefik)</span>
-                        <span class="badge">Done</span>
-                    </div>
-                </div>
-            </div>
-        </details>
-
-        <details class="epic">
-            <summary>
-                Epic 1.2: Identity & Authentication
-                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">Done</span>
-            </summary>
-            <div class="epic-details">
-                <div class="epic-goal">Goal: Allow users to log in securely using Authelia (OIDC) so messages can be attributed across devices.</div>
-                <div class="ust-list">
-                    <div class="ust-item status-done">
-                        <span><strong>UST-1.2.1:</strong> Database Schema & Migrations</span>
-                        <span class="badge">Done</span>
-                    </div>
-                    <div class="ust-item status-done">
-                        <span><strong>UST-1.2.2:</strong> Backend Auth API & Token Validation</span>
-                        <span class="badge">Done</span>
-                    </div>
-                    <div class="ust-item status-done">
-                        <span><strong>UST-1.2.3:</strong> Client Auth UI & State (PKCE Loopback)</span>
-                        <span class="badge">Done</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.1.3: Zero-Hardcoded-Domains Contract</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Strictly decoupled hostnames, protocols, and endpoints via environment variables (<span class="code-pill">deploy/.env.example</span>, <span class="code-pill">.env</span>) and Flutter <span class="code-pill">AppConfig</span> supporting <span class="code-pill">AUTHELIA_DOMAIN</span> and runtime `.env` loading. Fully portable between localhost and <span class="code-pill">purrbrews.cc</span>.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">client/lib/src/config/app_config.dart</span>, <span class="code-pill">deploy/.env.example</span>, <span class="code-pill">.env.example</span></span>
+                            <span class="meta-tag"><strong>Contract:</strong> 100% .env & Config Driven</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </details>
 
-        <details class="epic">
+        <!-- Epic 1.2 -->
+        <details class="epic" open>
             <summary>
-                Epic 1.3: Real-Time WebSocket Core
-                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">Done</span>
+                <span>Epic 1.2: Identity & OIDC Authentication Core</span>
+                <span class="badge">Done</span>
             </summary>
             <div class="epic-details">
-                <div class="epic-goal">Goal: Establish the persistent bidirectional connection and prove live text exchange across devices.</div>
+                <div class="epic-goal">Goal: Secure all endpoints and real-time streams behind centralized Authelia OpenID Connect authentication.</div>
                 <div class="ust-list">
                     <div class="ust-item status-done">
-                        <span><strong>UST-1.3.1:</strong> WebSocket Connection Management & Handshake</span>
-                        <span class="badge">Done</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.2.1: Authelia OIDC Container & Discovery</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Configured Authelia identity provider with JWKS key discovery endpoint (<span class="code-pill">/.well-known/openid-configuration</span>), EdDSA/RS256 signing keys, and public client registration with PKCE requirements.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">deploy/authelia/configuration.yml</span></span>
+                            <span class="meta-tag"><strong>Client ID:</strong> <span class="code-pill">meowgram-client</span></span>
+                        </div>
                     </div>
                     <div class="ust-item status-done">
-                        <span><strong>UST-1.3.3:</strong> Message Broadcast Logic (In-Memory Hub)</span>
-                        <span class="badge">Done</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.2.2: Backend OIDC Verifier Middleware</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Implemented <span class="code-pill">coreos/go-oidc/v3</span> verification middleware extracting claims from Bearer tokens, enforcing signature and expiry checks, and auto-provisioning PostgreSQL user profiles on first login.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">server/internal/auth/verifier.go</span>, <span class="code-pill">server/internal/middleware/</span></span>
+                            <span class="meta-tag"><strong>Security:</strong> Cryptographic JWT validation</span>
+                        </div>
                     </div>
                     <div class="ust-item status-done">
-                        <span><strong>UST-1.3.4:</strong> Message Persistence (DB sync before broadcast)</span>
-                        <span class="badge">Done</span>
-                    </div>
-                    <div class="ust-item status-done">
-                        <span><strong>UST-1.3.2:</strong> Basic Chat UI Shell (Flutter rendering)</span>
-                        <span class="badge">Done</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.2.3: Flutter Client PKCE Loopback Flow</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Implemented OAuth 2.0 Authorization Code Flow with PKCE (RFC 7636). Features dynamic port allocation loopback HTTP server (RFC 8252) on desktop and standard origin redirection on web.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">client/lib/src/services/auth_service.dart</span></span>
+                            <span class="meta-tag"><strong>Specs:</strong> RFC 7636, RFC 8252</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </details>
 
-        <details class="epic">
+        <!-- Epic 1.3 -->
+        <details class="epic" open>
             <summary>
-                Epic 1.4: Cross-Platform Polish & State Sync
-                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">Done</span>
+                <span>Epic 1.3: Real-Time WebSocket Core</span>
+                <span class="badge">Done</span>
             </summary>
             <div class="epic-details">
-                <div class="epic-goal">Goal: Ensure the app feels native on all screens and handles intermittent offline states.</div>
+                <div class="epic-goal">Goal: Deliver high-concurrency real-time messaging with strict persistence guarantees.</div>
                 <div class="ust-list">
                     <div class="ust-item status-done">
-                        <span><strong>UST-1.4.1:</strong> Responsive UI Adaptations (Desktop/Mobile)</span>
-                        <span class="badge">Done</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.3.1: Connection Management (Go Hub)</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Built in-memory Go Hub with isolated client goroutines (<span class="code-pill">ReadPump</span> and <span class="code-pill">WritePump</span>) preventing Gorilla WebSocket race conditions. Thread-safe client register/unregister loops via Go channels.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">server/internal/hub/hub.go</span>, <span class="code-pill">server/internal/hub/client.go</span></span>
+                            <span class="meta-tag"><strong>Tests:</strong> 100% Hub concurrency passing</span>
+                        </div>
                     </div>
                     <div class="ust-item status-done">
-                        <span><strong>UST-1.4.2:</strong> Local Caching for Offline Launch (SQLite/Hive)</span>
-                        <span class="badge">Done</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.3.2: Basic Chat UI Shell (Flutter)</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Responsive chat timeline powered by <span class="code-pill">flutter_bloc</span> with software keyboard insets handling (<span class="code-pill">SafeArea</span> + <span class="code-pill">viewInsets</span>), message bubbles (self vs peer), auto-scroll listener, and system notifications.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">client/lib/src/screens/chat_screen.dart</span>, <span class="code-pill">client/lib/src/blocs/chat_bloc.dart</span></span>
+                            <span class="meta-tag"><strong>Tests:</strong> 22/22 Widget & UI tests passing</span>
+                        </div>
                     </div>
                     <div class="ust-item status-done">
-                        <span><strong>UST-1.4.3:</strong> Catch-Up Synchronization (Sequence IDs & UUIDs)</span>
-                        <span class="badge">Done</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.3.3: Broadcast & Backpressure Protection</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Non-blocking fan-out broadcast engine with buffered channels (256 frames per client). Automatic slow-client detection and eviction to prevent Head-of-Line blocking in the main hub loop.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">server/internal/hub/hub.go</span></span>
+                            <span class="meta-tag"><strong>Buffer:</strong> 256 message outbound queue</span>
+                        </div>
+                    </div>
+                    <div class="ust-item status-done">
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.3.4: Persistence Before Broadcast</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Enforced database persistence mandate: messages land in PostgreSQL <span class="code-pill">messages</span> table before dispatching to the broadcast channel. Initial 50 historical messages replayed on connection.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">server/internal/handler/websocket.go</span>, <span class="code-pill">server/internal/repository/message_repo.go</span></span>
+                            <span class="meta-tag"><strong>Guarantee:</strong> Zero message drop across restarts</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <!-- Epic 1.4 -->
+        <details class="epic" open>
+            <summary>
+                <span>Epic 1.4: Cross-Platform Polish & State Sync</span>
+                <span class="badge">Done</span>
+            </summary>
+            <div class="epic-details">
+                <div class="epic-goal">Goal: Ensure the app feels native on all screens, caches messages locally, and catches up after offline gaps.</div>
+                <div class="ust-list">
+                    <div class="ust-item status-done">
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.4.1: Responsive UI Adaptations (800px Breakpoint)</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">ResponsiveLayout wrapper toggles between desktop persistent dual-pane (Sidebar with channels and active users + Chat timeline) and mobile single-pane with modal Drawer navigation based on 800.0px width constraint.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">client/lib/src/screens/responsive_layout.dart</span>, <span class="code-pill">client/lib/src/widgets/sidebar.dart</span></span>
+                            <span class="meta-tag"><strong>Breakpoint:</strong> 800.0 logical pixels</span>
+                        </div>
+                    </div>
+                    <div class="ust-item status-done">
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.4.2: Local Caching for Instant Launch (Hive NoSQL)</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Two-stage cache-to-live handoff in ChatBloc: loads cached messages instantly from Hive (IndexedDB on web, binary file on native desktop/mobile) with zero network latency before live WebSocket connects.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">client/lib/src/repositories/local_message_repository.dart</span></span>
+                            <span class="meta-tag"><strong>Engine:</strong> Hive NoSQL Box <span class="code-pill">messages_cache</span></span>
+                        </div>
+                    </div>
+                    <div class="ust-item status-done">
+                        <div class="ust-header">
+                            <span class="ust-title">UST-1.4.3: Catch-Up Synchronization Pipeline</span>
+                            <span class="badge">Done</span>
+                        </div>
+                        <div class="ust-desc">Automated REST sync endpoint (<span class="code-pill">GET /api/messages/sync?after={ISO8601_UTC}</span>) triggered upon reconnection. Queries PostgreSQL for messages newer than local cache, capped at 500 records, and deduplicates using PostgreSQL UUIDs.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Artifacts:</strong> <span class="code-pill">server/internal/handler/sync.go</span>, <span class="code-pill">client/lib/src/services/sync_service.dart</span></span>
+                            <span class="meta-tag"><strong>Recovery:</strong> Zero offline gap loss</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -259,44 +798,79 @@
     </div>
 
     <!-- Phase 2 -->
-    <div class="release-section">
-        <h2 class="release-title">Release 2: Immich Integration (Media Sharing)</h2>
+    <div class="release-section" id="release-2">
+        <div class="release-title">
+            <span>Release 2: Immich Integration (Rich Media Sharing)</span>
+            <span class="badge badge-planned">Next Release Cycle</span>
+        </div>
+
+        <div class="release-overview">
+            <strong>Release 2 Architectural Strategy:</strong> Bridges meowGram with self-hosted Immich instances for enterprise-grade photo and video ingestion, machine learning tagging, and transcoding. meowGram acts as a secure streaming proxy so client devices never receive direct Immich master credentials. Media asset IDs are linked to chat timeline messages in PostgreSQL.
+        </div>
         
-        <details class="epic">
+        <details class="epic" open>
             <summary>
-                Epic 2.1: Backend Media Routing
-                <span class="badge" style="background: rgba(100, 116, 139, 0.2); color: #64748b;">Pending</span>
+                <span>Epic 2.1: Backend Media Routing</span>
+                <span class="badge">Pending</span>
             </summary>
             <div class="epic-details">
                 <div class="epic-goal">Goal: Securely bridge meowGram's backend to the Immich REST API for heavy lifting.</div>
                 <div class="ust-list">
                     <div class="ust-item status-pending">
-                        <span><strong>UST-2.1.1:</strong> Immich API Authentication Pipeline</span>
-                        <span class="badge">Pending</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-2.1.1: Immich API Authentication Pipeline</span>
+                            <span class="badge">Pending</span>
+                        </div>
+                        <div class="ust-desc">Authenticate server proxy requests against the Immich REST API using pre-shared API keys and service accounts. Implement health check verification against <span class="code-pill">/api/server-info/version</span>.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Target Endpoint:</strong> <span class="code-pill">https://immich.purrbrews.cc/api</span></span>
+                            <span class="meta-tag"><strong>Auth Mode:</strong> API Key Header <span class="code-pill">x-api-key</span></span>
+                        </div>
                     </div>
                     <div class="ust-item status-pending">
-                        <span><strong>UST-2.1.2:</strong> Image Proxy Upload & Asset ID Storage</span>
-                        <span class="badge">Pending</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-2.1.2: Image Proxy Upload & Asset ID Storage</span>
+                            <span class="badge">Pending</span>
+                        </div>
+                        <div class="ust-desc">Stream incoming multipart image uploads directly to Immich (<span class="code-pill">/api/assets</span>) via an HTTP pipe to prevent memory bloat, and store the resulting Immich UUID asset identifiers in the PostgreSQL <span class="code-pill">media_assets</span> table.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Pipeline:</strong> Direct multipart pipe stream</span>
+                            <span class="meta-tag"><strong>Persistence:</strong> PostgreSQL <span class="code-pill">media_assets</span> table</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </details>
 
-        <details class="epic">
+        <details class="epic" open>
             <summary>
-                Epic 2.2: Frontend Feed UI
-                <span class="badge" style="background: rgba(100, 116, 139, 0.2); color: #64748b;">Pending</span>
+                <span>Epic 2.2: Frontend Feed UI</span>
+                <span class="badge">Pending</span>
             </summary>
             <div class="epic-details">
                 <div class="epic-goal">Goal: Allow users to capture, upload, and view rich media within the chat timeline.</div>
                 <div class="ust-list">
                     <div class="ust-item status-pending">
-                        <span><strong>UST-2.2.1:</strong> Native Camera & Gallery Integration (Flutter)</span>
-                        <span class="badge">Pending</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-2.2.1: Native Camera & Gallery Integration (Flutter)</span>
+                            <span class="badge">Pending</span>
+                        </div>
+                        <div class="ust-desc">Cross-platform media picker using <span class="code-pill">image_picker</span> supporting camera capture on mobile, file dialog selection on desktop/web, and client-side image compression before upload.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Packages:</strong> <span class="code-pill">image_picker</span>, <span class="code-pill">flutter_image_compress</span></span>
+                            <span class="meta-tag"><strong>Platforms:</strong> iOS, Android, macOS, Windows, Web</span>
+                        </div>
                     </div>
                     <div class="ust-item status-pending">
-                        <span><strong>UST-2.2.2:</strong> Render Immich Asset IDs in Chat List</span>
-                        <span class="badge">Pending</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-2.2.2: Render Immich Asset IDs in Chat List</span>
+                            <span class="badge">Pending</span>
+                        </div>
+                        <div class="ust-desc">Cache and display thumbnails with progressive image loading (<span class="code-pill">cached_network_image</span>), hero animations, pinch-to-zoom interactive viewer, and full-resolution lightbox viewing.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>UI Pattern:</strong> Hero thumbnail &rarr; interactive lightbox viewer</span>
+                            <span class="meta-tag"><strong>Caching:</strong> Memory + disk thumbnail cache</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -304,24 +878,45 @@
     </div>
 
     <!-- Phase 3 -->
-    <div class="release-section">
-        <h2 class="release-title">Release 3: Ephemeral Media (Self-Destruct)</h2>
+    <div class="release-section" id="release-3">
+        <div class="release-title">
+            <span>Release 3: Ephemeral Media (Self-Destruct)</span>
+            <span class="badge badge-planned">Future Horizon</span>
+        </div>
+
+        <div class="release-overview">
+            <strong>Release 3 Architectural Strategy:</strong> Introduces privacy-centric disappearing messages and view-once media. Ephemeral state is governed by Redis TTL keyspace notifications, while binary objects are stored in an isolated MinIO S3 bucket with strict hardware lifecycle auto-purges. The client enforces hold-to-view gestures and OS screenshot deterrence.
+        </div>
         
         <details class="epic">
             <summary>
-                Epic 3.1: Ephemeral State & Storage
-                <span class="badge" style="background: rgba(100, 116, 139, 0.2); color: #64748b;">Pending</span>
+                <span>Epic 3.1: Ephemeral State & Storage</span>
+                <span class="badge">Pending</span>
             </summary>
             <div class="epic-details">
                 <div class="epic-goal">Goal: Introduce strict TTL (Time-to-Live) components to safely handle disappearing messages.</div>
                 <div class="ust-list">
                     <div class="ust-item status-pending">
-                        <span><strong>UST-3.1.1:</strong> Redis Pub/Sub for Read/View State Tracking</span>
-                        <span class="badge">Pending</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-3.1.1: Redis Pub/Sub for Read/View State Tracking</span>
+                            <span class="badge">Pending</span>
+                        </div>
+                        <div class="ust-desc">High-speed ephemeral receipt tracking with automatic expiration timers via Redis keyspace notifications (<span class="code-pill">notify-keyspace-events KEx</span>) and real-time socket view notifications.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Backend:</strong> Redis 7 Alpine &bull; Pub/Sub</span>
+                            <span class="meta-tag"><strong>Trigger:</strong> Expired event triggers broadcast destruction</span>
+                        </div>
                     </div>
                     <div class="ust-item status-pending">
-                        <span><strong>UST-3.1.2:</strong> MinIO Containerization with 24-Hour Bucket Lifecycle</span>
-                        <span class="badge">Pending</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-3.1.2: MinIO Containerization with 24-Hour Bucket Lifecycle</span>
+                            <span class="badge">Pending</span>
+                        </div>
+                        <div class="ust-desc">S3-compatible object storage tier configured with hardware-enforced 24-hour expiration lifecycles. Files auto-deleted at storage block level without manual cron jobs.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Storage:</strong> MinIO S3 Storage Engine</span>
+                            <span class="meta-tag"><strong>Lifecycle:</strong> Hardware enforced 24h expiration</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -329,19 +924,33 @@
 
         <details class="epic">
             <summary>
-                Epic 3.2: Ephemeral Client UI
-                <span class="badge" style="background: rgba(100, 116, 139, 0.2); color: #64748b;">Pending</span>
+                <span>Epic 3.2: Ephemeral Client UI</span>
+                <span class="badge">Pending</span>
             </summary>
             <div class="epic-details">
                 <div class="epic-goal">Goal: Build the view-once interfaces and countdown lockouts.</div>
                 <div class="ust-list">
                     <div class="ust-item status-pending">
-                        <span><strong>UST-3.2.1:</strong> View-Once Rendering & Gestures</span>
-                        <span class="badge">Pending</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-3.2.1: View-Once Rendering & Gestures</span>
+                            <span class="badge">Pending</span>
+                        </div>
+                        <div class="ust-desc">Hold-to-view gesture mechanics, animated blur overlays, and OS-level screenshot detection/blocking (<span class="code-pill">FLAG_SECURE</span> on Android, <span class="code-pill">isCaptured</span> notification on iOS).</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Gesture:</strong> Press-and-hold to reveal</span>
+                            <span class="meta-tag"><strong>Privacy:</strong> Anti-screenshot OS flags</span>
+                        </div>
                     </div>
                     <div class="ust-item status-pending">
-                        <span><strong>UST-3.2.2:</strong> Self-Destruct Timer UI & Cache Purge Logic</span>
-                        <span class="badge">Pending</span>
+                        <div class="ust-header">
+                            <span class="ust-title">UST-3.2.2: Self-Destruct Timer UI & Cache Purge Logic</span>
+                            <span class="badge">Pending</span>
+                        </div>
+                        <div class="ust-desc">Circular countdown indicators and immediate zero-trace memory/disk wiping upon expiration. Ensures view-once media cannot be extracted from device file caches or RAM dumps.</div>
+                        <div class="ust-meta">
+                            <span class="meta-tag"><strong>Cache Policy:</strong> Zero-trace ephemeral purge</span>
+                            <span class="meta-tag"><strong>UI:</strong> Circular SVG countdown timer</span>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -50,8 +50,12 @@ func main() {
 		"port", cfg.Port,
 		"environment", cfg.Environment,
 		"cors_origins", cfg.CORSOrigins,
+		"authelia_domain", cfg.AutheliaDomain,
 		"authelia_issuer", cfg.AutheliaIssuer,
 		"authelia_jwks_url", cfg.AutheliaJWKSURL,
+		"sync_endpoint", cfg.SyncEndpoint,
+		"health_endpoint", cfg.HealthEndpoint,
+		"ws_endpoint", cfg.WSEndpoint,
 	)
 
 	// Initialize PostgreSQL connection pool and apply schema migrations
@@ -84,16 +88,26 @@ func main() {
 	// Setup multiplexer / router
 	mux := http.NewServeMux()
 
-	// Public health-check endpoints
+	// Public health-check endpoints (standard + dynamic route)
 	mux.HandleFunc("GET /healthz", handler.HealthHandler(cfg))
 	mux.HandleFunc("HEAD /healthz", handler.HealthHandler(cfg))
+	if cfg.HealthEndpoint != "/healthz" {
+		mux.HandleFunc("GET "+cfg.HealthEndpoint, handler.HealthHandler(cfg))
+		mux.HandleFunc("HEAD "+cfg.HealthEndpoint, handler.HealthHandler(cfg))
+	}
 
 	// Protected WebSocket endpoint enforcing Authelia OIDC token verification & Hub broadcast
 	authMiddleware := auth.Middleware(oidcVerifier, userRepo, logger)
 	mux.Handle("/ws", authMiddleware(handler.WebSocketHandler(hub, messageRepo, cfg, logger)))
+	if cfg.WSEndpoint != "/ws" {
+		mux.Handle(cfg.WSEndpoint, authMiddleware(handler.WebSocketHandler(hub, messageRepo, cfg, logger)))
+	}
 
 	// Protected catch-up synchronization endpoint (UST-1.4.3)
 	mux.Handle("GET /api/messages/sync", authMiddleware(handler.SyncHandler(messageRepo, logger)))
+	if cfg.SyncEndpoint != "/api/messages/sync" {
+		mux.Handle("GET "+cfg.SyncEndpoint, authMiddleware(handler.SyncHandler(messageRepo, logger)))
+	}
 
 	// Global Middleware chain: RequestLogger -> CORS -> Mux
 	var rootHandler http.Handler = mux
