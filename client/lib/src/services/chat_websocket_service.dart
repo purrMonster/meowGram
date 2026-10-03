@@ -42,9 +42,18 @@ class ChatWebSocketService extends ChangeNotifier {
 
     try {
       final uri = Uri.parse(wsUrl);
-      _channel = WebSocketChannel.connect(uri);
+      final channel = WebSocketChannel.connect(uri);
+      _channel = channel;
 
-      _subscription = _channel!.stream.listen(
+      // Handle connection handshake resolution and errors gracefully
+      channel.ready.then((_) {
+        _setStatus(SocketStatus.connected);
+      }).catchError((dynamic error) {
+        _lastError = error.toString();
+        _setStatus(SocketStatus.error);
+      });
+
+      _subscription = channel.stream.listen(
         (data) {
           if (_status != SocketStatus.connected) {
             _setStatus(SocketStatus.connected);
@@ -68,9 +77,6 @@ class ChatWebSocketService extends ChangeNotifier {
         },
         cancelOnError: false,
       );
-
-      // In web/desktop, stream open is ready once listen starts or first message is received
-      _setStatus(SocketStatus.connected);
     } catch (e) {
       _lastError = e.toString();
       _setStatus(SocketStatus.error);
