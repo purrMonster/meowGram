@@ -8,9 +8,13 @@ environment:
   flutter: ">=3.24.0"
 
 dependencies:
+  crypto: ^3.0.7
   flutter:
     sdk: flutter
   go_router: ^14.8.1
+  http: ^1.6.0
+  openid_client: ^0.4.10+2
+  url_launcher: ^6.3.3
   web_socket_channel: ^3.0.3
 
 dev_dependencies:
