@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"meowgram/server/internal/auth"
 	"meowgram/server/internal/config"
 
 	"github.com/gorilla/websocket"
@@ -17,7 +19,7 @@ const (
 	maxMessageSize = 512 * 1024 // 512 KB
 )
 
-// EchoWebSocketHandler handles incoming WebSocket connections and echoes back messages.
+// EchoWebSocketHandler handles incoming WebSocket connections, greeting authenticated users and echoing messages.
 func EchoWebSocketHandler(cfg *config.Config, logger *slog.Logger) http.HandlerFunc {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -36,6 +38,10 @@ func EchoWebSocketHandler(cfg *config.Config, logger *slog.Logger) http.HandlerF
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract authenticated user and sub claim from request context
+		user, hasUser := auth.UserFromContext(r.Context())
+		sub, _ := auth.SubFromContext(r.Context())
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			logger.Error("Failed to upgrade WebSocket connection", "error", err, "remote_addr", r.RemoteAddr)
@@ -43,9 +49,19 @@ func EchoWebSocketHandler(cfg *config.Config, logger *slog.Logger) http.HandlerF
 		}
 		defer conn.Close()
 
+		username := "Anonymous"
+		userID := ""
+		if hasUser && user != nil {
+			username = user.Username
+			userID = user.ID
+		}
+
 		logger.Info("WebSocket client connected",
 			"remote_addr", r.RemoteAddr,
 			"user_agent", r.UserAgent(),
+			"user_id", userID,
+			"username", username,
+			"sub", sub,
 		)
 
 		conn.SetReadLimit(maxMessageSize)
@@ -54,6 +70,11 @@ func EchoWebSocketHandler(cfg *config.Config, logger *slog.Logger) http.HandlerF
 			_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 			return nil
 		})
+
+		// Send initial welcome frame acknowledging OIDC authenticated identity
+		welcomeMsg := fmt.Sprintf("Welcome to meowGram Lounge, @%s! (ID: %s)", username, userID)
+		_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(welcomeMsg))
 
 		// Ping ticker goroutine
 		ticker := time.NewTicker(pingPeriod)
@@ -81,9 +102,16 @@ func EchoWebSocketHandler(cfg *config.Config, logger *slog.Logger) http.HandlerF
 			messageType, payload, err := conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-					logger.Warn("WebSocket closed unexpectedly", "error", err, "remote_addr", r.RemoteAddr)
+					logger.Warn("WebSocket closed unexpectedly",
+						"error", err,
+						"remote_addr", r.RemoteAddr,
+						"username", username,
+					)
 				} else {
-					logger.Info("WebSocket closed normally", "remote_addr", r.RemoteAddr)
+					logger.Info("WebSocket closed normally",
+						"remote_addr", r.RemoteAddr,
+						"username", username,
+					)
 				}
 				close(done)
 				break
@@ -91,14 +119,27 @@ func EchoWebSocketHandler(cfg *config.Config, logger *slog.Logger) http.HandlerF
 
 			logger.Debug("WebSocket message received",
 				"remote_addr", r.RemoteAddr,
+				"username", username,
 				"bytes", len(payload),
 				"type", messageType,
 			)
 
+			// Formulate echo response tagged with the verified user's identity
+			var responsePayload []byte
+			if messageType == websocket.TextMessage {
+				responsePayload = []byte(fmt.Sprintf("[%s]: %s", username, string(payload)))
+			} else {
+				responsePayload = payload
+			}
+
 			// Echo payload back to client
 			_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := conn.WriteMessage(messageType, payload); err != nil {
-				logger.Error("Failed to echo WebSocket message", "error", err, "remote_addr", r.RemoteAddr)
+			if err := conn.WriteMessage(messageType, responsePayload); err != nil {
+				logger.Error("Failed to echo WebSocket message",
+					"error", err,
+					"remote_addr", r.RemoteAddr,
+					"username", username,
+				)
 				close(done)
 				break
 			}
