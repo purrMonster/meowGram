@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"meowgram/server/internal/auth"
+	"meowgram/server/internal/chat"
 	"meowgram/server/internal/config"
 	"meowgram/server/internal/database"
 	"meowgram/server/internal/handler"
@@ -61,8 +62,17 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize repository layer
+	// Initialize repository layers
 	userRepo := repository.NewUserRepository(db)
+	messageRepo := repository.NewMessageRepository(db)
+
+	// Initialize the Real-Time Broadcast Hub
+	hub := chat.NewHub(logger)
+	hubCtx, hubCancel := context.WithCancel(context.Background())
+	defer hubCancel()
+
+	// Run Hub in its own dedicated background goroutine
+	go hub.Run(hubCtx)
 
 	// Initialize Authelia OIDC Token Verifier
 	oidcVerifier, err := auth.NewOIDCVerifier(context.Background(), cfg)
@@ -78,9 +88,9 @@ func main() {
 	mux.HandleFunc("GET /healthz", handler.HealthHandler(cfg))
 	mux.HandleFunc("HEAD /healthz", handler.HealthHandler(cfg))
 
-	// Protected WebSocket endpoint enforcing Authelia OIDC token verification & auto-provisioning
+	// Protected WebSocket endpoint enforcing Authelia OIDC token verification & Hub broadcast
 	authMiddleware := auth.Middleware(oidcVerifier, userRepo, logger)
-	mux.Handle("/ws", authMiddleware(handler.EchoWebSocketHandler(cfg, logger)))
+	mux.Handle("/ws", authMiddleware(handler.WebSocketHandler(hub, messageRepo, cfg, logger)))
 
 	// Global Middleware chain: RequestLogger -> CORS -> Mux
 	var rootHandler http.Handler = mux
@@ -95,7 +105,7 @@ func main() {
 		IdleTimeout:  cfg.IdleTimeout,
 	}
 
-	// Server shutdown channel
+	// Server startup failure channel
 	serverErrors := make(chan error, 1)
 
 	go func() {
@@ -116,6 +126,9 @@ func main() {
 
 	case sig := <-shutdown:
 		logger.Info("Shutdown signal received", "signal", sig.String())
+
+		// Cancel Hub context to disconnect active clients
+		hubCancel()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

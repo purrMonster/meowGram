@@ -1,7 +1,7 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.3.0  
-> **Status**: APPROVED (Epic 1.2 & UST-1.2.3 Client OIDC PKCE Complete)  
+> **Document Version**: 1.4.0  
+> **Status**: APPROVED (Epic 1.2 OIDC Auth & Epic 1.3 WebSocket Core Complete)  
 > **Author**: Lead Developer / Antigravity IDE  
 > **Last Updated**: 2026-10-03  
 
@@ -14,7 +14,10 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 ### Architectural Mandate Updates
 - **Backend OIDC Pivot (Epic 1.2)**: All custom local authentication, password storage, user registration, and local JWT issuance are completely eliminated in favor of **Authelia OpenID Connect (OIDC)**.
 - **Client OIDC PKCE Integration (UST-1.2.3)**: The Flutter client implements the OAuth 2.0 Authorization Code Flow with Proof Key for Code Exchange (PKCE, RFC 7636). The client is purely public and stores **zero client secrets**.
-- **Auto-Provisioning**: On first successful authenticated connection, the user's `sub` and username are atomically recorded in the local PostgreSQL `users` table.
+- **Real-Time WebSocket Core (Epic 1.3 - UST-1.3.1, UST-1.3.3, UST-1.3.4)**:
+  - In-memory Go `Hub` manages active client registries via synchronized channels (`register`, `unregister`, `broadcast`).
+  - Strict **Persistence Before Broadcast**: Inbound messages are committed to PostgreSQL (`messages` table) before entering the broadcast pipeline, guaranteeing zero dropped messages.
+  - Goroutine Isolation: Per-client `ReadPump` and `WritePump` goroutines guarantee Gorilla WebSocket concurrency safety and prevent head-of-line blocking.
 
 ---
 
@@ -29,11 +32,102 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Auth State Management** | `AuthController` with `refreshListenable` GoRouter | Declarative route protection. Automatically redirects `/login` -> `/chat` on token acquisition and `/chat` -> `/login` on expiry/logout. |
 | **Token Refresh Lifecycle** | Proactive Background Timer (`expiresAt - 60s`) | Silently exchanges `refresh_token` for a fresh `access_token` prior to expiration, preventing WebSocket disconnects during active chat. |
 | **Backend OIDC Verifier** | `coreos/go-oidc/v3` with Remote KeySet | Cryptographically verifies incoming Bearer JWTs against Authelia's JWKS endpoint without handling user credentials. |
+| **Broadcast Engine** | Go In-Memory `Hub` with Goroutine Channels | Highly performant, zero external messaging broker (Redis/RabbitMQ) dependency needed for single-node core. Scales efficiently across tens of thousands of concurrent connections. |
+| **Message Ordering Guarantee** | **Persistence Before Broadcast** | `ReadPump` saves message to PostgreSQL *before* queueing into `hub.Broadcast`. If the database write fails or client drops mid-flight, uncommitted state never corrupts peer chat streams. |
+| **Socket Thread Safety** | Gorilla WebSocket `ReadPump` & `WritePump` Split | Gorilla `*websocket.Conn` forbids concurrent writer calls. Isolating socket writes exclusively to `WritePump` while reads run on `ReadPump` eliminates data races without coarse mutex locks. |
+| **Backpressure Protection** | Non-blocking Broadcast with Channel Eviction | `Hub` uses `select { case client.send <- msg: default: unregister }` with a 256-frame buffered channel. Slow or stalled clients cannot block the main broadcast loop or lag other peers. |
 | **Database Migrations** | `golang-migrate/migrate/v4` | Automated `.up.sql` migrations executed on server container initialization. |
 
 ---
 
-## 3. Cross-Platform Redirect URI Mechanics & Tradeoffs
+## 3. Real-Time WebSocket Core Architecture (Epic 1.3)
+
+```
+                            ┌──────────────────────────────────────────────┐
+                            │               PostgreSQL                     │
+                            │           (Table: `messages`)                │
+                            └──────────────────────▲───────────────────────┘
+                                                   │
+                                      (1) Save Message (SQL INSERT)
+                                                   │
+ ┌──────────────────────┐        ┌─────────────────┴────────┐       ┌──────────────────────┐
+ │ Client A (WebSocket) │        │ Client A ReadPump (Go)   │       │ Client B (WebSocket) │
+ └──────────┬───────────┘        └────────────┬─────────────┘       └──────────▲───────────┘
+            │                                 │                                │
+      JSON Message                       (2) Enqueue                           │
+            │                                 │                           JSON Message
+            ▼                                 ▼                                │
+  [ Gorilla WebSocket ] ───────►    [ Hub.Broadcast Channel ]                  │
+                                              │                                │
+                                         (3) Fan-out                           │
+                                              ▼                                │
+                                    ┌───────────────────┐                      │
+                                    │ Client B Send Ch  │ ─────────────────────┘
+                                    │ (buffered: 256)   │    (4) Client B WritePump
+                                    └───────────────────┘
+```
+
+### 3.1 Concurrency Model & Channel Synchronization
+- **`Hub.Run(ctx context.Context)`**:
+  - Runs in a background goroutine started during server initialization.
+  - Listens on `Register` (`chan *Client`), `Unregister` (`chan *Client`), and `Broadcast` (`chan *model.WSMessage`).
+  - Maintains private `clients map[*Client]bool` safely confined to its single goroutine event loop.
+- **`Client.ReadPump()`**:
+  - Bound to WebSocket read loop. Enforces `pongWait` (60s), `maxMessageSize` (512 bytes), and `SetReadDeadline`.
+  - Parses inbound JSON: `{"type": "chat", "text_content": "Hello!"}`.
+  - Injects verified `sender_id` (Authelia `sub`) and triggers `messageRepo.Create(...)`.
+  - Upon successful DB insert, sends message payload to `hub.Broadcast`.
+  - Defers `hub.Unregister` and `conn.Close()` on socket termination.
+- **`Client.WritePump()`**:
+  - Exclusively handles all socket write operations.
+  - Listens to `client.Send` channel and `ticker` (ping interval 54s).
+  - Encodes payloads into WebSocket JSON text frames and sends ping control frames to keep network connections alive.
+
+### 3.2 Database Schema: Messages Table (`migrations/000002_create_messages_table.up.sql`)
+
+```sql
+-- Ensure unique constraint exists for foreign key reference
+ALTER TABLE users ADD CONSTRAINT uq_users_authelia_sub UNIQUE (authelia_sub);
+
+-- Messages storage table
+CREATE TABLE IF NOT EXISTS messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sender_id VARCHAR(255) NOT NULL,
+    text_content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_messages_sender FOREIGN KEY (sender_id) 
+        REFERENCES users(authelia_sub) ON DELETE CASCADE
+);
+
+-- Fast reverse-chronological message history lookups
+CREATE INDEX IF NOT EXISTS idx_messages_created_at_desc ON messages (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages (sender_id);
+```
+
+### 3.3 WebSocket JSON Protocol Specification
+- **Inbound Client Frame**:
+  ```json
+  {
+    "type": "chat",
+    "text_content": "Purr purr! Hello meowGram lounge."
+  }
+  ```
+- **Outbound Broadcast Frame**:
+  ```json
+  {
+    "id": "7f8b91a2-3c4d-5e6f-7a8b-9c0d1e2f3a4b",
+    "sender_id": "usr_authelia_sub_12345",
+    "text_content": "Purr purr! Hello meowGram lounge.",
+    "created_at": "2026-10-03T12:30:00Z",
+    "type": "chat"
+  }
+  ```
+- **Connection Hydration (Recent History)**:
+  On successful upgrade and registration, the server streams the last 50 persisted messages to the connecting client formatted as `"type": "history"`.
+
+---
+
+## 4. Cross-Platform Redirect URI Mechanics & Tradeoffs
 
 ```
                   ┌────────────────────────────────────────┐
@@ -62,7 +156,7 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 
 ---
 
-## 4. Environment & Compile-Time Configuration Contract
+## 5. Environment & Compile-Time Configuration Contract
 
 ### Backend Environment Variables (`deploy/.env.example`)
 
@@ -96,9 +190,9 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 
 ---
 
-## 5. Operations & Developer Playbook
+## 6. Operations & Developer Playbook
 
-### 5.1 Starting the Infrastructure (PostgreSQL + Go Backend)
+### 6.1 Starting the Infrastructure (PostgreSQL + Go Backend)
 
 ```powershell
 cd c:\Users\jyotirmoyc\Desktop\Projects\meowGram
@@ -113,7 +207,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 curl http://localhost:8080/healthz
 ```
 
-### 5.2 Launching the Flutter Client with OIDC PKCE
+### 6.2 Launching the Flutter Client with OIDC PKCE
 
 #### On Google Chrome (Web):
 ```powershell
@@ -137,28 +231,28 @@ flutter run -d windows `
   --dart-define=APP_ENV=development
 ```
 
-### 5.3 Automated Testing
+### 6.3 Automated Testing
 
 ```powershell
 # Run Flutter client unit and widget test suite
 cd c:\Users\jyotirmoyc\Desktop\Projects\meowGram\client
 flutter test
 
-# Run Go backend test suite
+# Run Go backend test suite (unit tests for Hub, migrations, repos)
 cd c:\Users\jyotirmoyc\Desktop\Projects\meowGram\server
 go test -v ./...
 ```
 
 ---
 
-## 6. Review Gate & Verification Checklist
+## 7. Review Gate & Verification Checklist
 
-- [x] Flutter client generates RFC 7636 compliant PKCE code verifier and S256 challenge.
-- [x] Client contains zero client secrets (public client model).
-- [x] OIDC state controller manages session tokens, claims parsing, and auto-refresh timers.
-- [x] Cross-platform redirect architecture handles Web origin inspection and Desktop loopback server.
-- [x] Login screen updated with single "Login with purrBrews" button and OIDC contract card.
-- [x] GoRouter declarative route guards enforce redirect between `/login` and `/chat`.
-- [x] `ChatWebSocketService` injects verified Bearer token into `?token={token}` query parameter.
-- [x] Automated test suite passing with 100% test success rate.
-- [x] Flutter Web production build verified with `flutter build web`.
+- [x] Database migration `000002_create_messages_table.up.sql` created and verified.
+- [x] Foreign key constraint properly mapped to `users.authelia_sub`.
+- [x] In-memory Go `Hub` maintains thread-safe registry of connected clients via goroutines and channels.
+- [x] Separate `ReadPump` and `WritePump` goroutines guarantee Gorilla WebSocket concurrency safety.
+- [x] Strict **Persistence Before Broadcast**: Inbound messages are inserted into PostgreSQL before dispatching to `hub.Broadcast`.
+- [x] WebSocket handler authenticates connections via OIDC token and sends last 50 historical messages upon connection.
+- [x] Unit test suite (`hub_test.go`) validates Hub lifecycle, registration, unregistration, and broadcasting.
+- [x] Flutter client unit tests passing with 100% test success rate.
+- [x] Backend compiles cleanly with zero warnings or errors.
