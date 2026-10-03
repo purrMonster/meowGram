@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
+import 'package:meowgram_client/src/services/sync_service.dart';
 import 'package:meowgram_client/src/storage/local_message_repository.dart';
 
 // =============================================================================
@@ -33,6 +34,13 @@ class ChatMessageReceived extends ChatEvent {
   final ChatMessage message;
 
   const ChatMessageReceived(this.message);
+}
+
+/// Dispatched when catch-up synchronization delivers missed messages (UST-1.4.3).
+class SyncCompleted extends ChatEvent {
+  final List<ChatMessage> messages;
+
+  const SyncCompleted(this.messages);
 }
 
 /// Request to send a message to the lounge.
@@ -133,21 +141,34 @@ class ChatState {
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatWebSocketService _socketService;
   final LocalMessageRepository _localRepo;
+  final SyncService _syncService;
   StreamSubscription<ChatMessage>? _messageSub;
   StreamSubscription<SocketStatus>? _statusSub;
+  StreamSubscription<List<ChatMessage>>? _syncSub;
 
   ChatBloc({
     required ChatWebSocketService socketService,
     LocalMessageRepository? localRepo,
+    SyncService? syncService,
   })  : _socketService = socketService,
         _localRepo = localRepo ?? HiveLocalMessageRepository(),
+        _syncService = syncService ??
+            SyncService(
+              socketService: socketService,
+              localRepo: localRepo ?? HiveLocalMessageRepository(),
+            ),
         super(const ChatState()) {
     on<ChatInitializeRequested>(_onInitializeRequested);
     on<ChatConnectRequested>(_onConnectRequested);
     on<ChatMessageReceived>(_onMessageReceived);
+    on<SyncCompleted>(_onSyncCompleted);
     on<ChatSendMessage>(_onSendMessage);
     on<ChatStatusChanged>(_onStatusChanged);
     on<ChatDisconnectRequested>(_onDisconnectRequested);
+
+    _syncSub = _syncService.onSyncCompleted.listen((messages) {
+      add(SyncCompleted(messages));
+    });
   }
 
   Future<void> _onInitializeRequested(
@@ -213,6 +234,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       connectedUrl: _socketService.connectedUrl,
     ));
 
+    // Configure sync service credentials
+    _syncService.setAccessToken(accessToken);
+
     _socketService.connect(
       accessToken: accessToken,
       customWsUrl: customWsUrl,
@@ -252,6 +276,58 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     unawaited(_localRepo.saveMessage(incoming));
   }
 
+  Future<void> _onSyncCompleted(
+    SyncCompleted event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (event.messages.isEmpty) return;
+
+    // -------------------------------------------------------------------------
+    // Deduplication & Timeline Merge (UST-1.4.3):
+    // Compare incoming catch-up messages against the current timeline using PostgreSQL UUID.
+    // Filter out any messages already delivered by the live WebSocket 50-message burst
+    // or existing local cache.
+    // -------------------------------------------------------------------------
+    final existingIds = <String>{};
+    for (final m in state.messages) {
+      if (m.id != null && m.id!.isNotEmpty) {
+        existingIds.add(m.id!);
+      }
+    }
+
+    final newMessages = <ChatMessage>[];
+    for (final incoming in event.messages) {
+      if (incoming.id != null && incoming.id!.isNotEmpty) {
+        if (!existingIds.contains(incoming.id)) {
+          existingIds.add(incoming.id!);
+          newMessages.add(incoming);
+        }
+      } else {
+        final duplicate = state.messages.any(
+          (m) =>
+              m.createdAt.isAtSameMomentAs(incoming.createdAt) &&
+              m.textContent == incoming.textContent,
+        );
+        if (!duplicate) {
+          newMessages.add(incoming);
+        }
+      }
+    }
+
+    if (newMessages.isEmpty) {
+      return;
+    }
+
+    // Merge and enforce ascending chronological sorting
+    final merged = List<ChatMessage>.from(state.messages)..addAll(newMessages);
+    merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    emit(state.copyWith(messages: merged));
+
+    // Batch persist newly integrated catch-up messages to local storage
+    unawaited(_localRepo.saveMessages(newMessages));
+  }
+
   void _onSendMessage(
     ChatSendMessage event,
     Emitter<ChatState> emit,
@@ -283,6 +359,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> close() async {
     await _messageSub?.cancel();
     await _statusSub?.cancel();
+    await _syncSub?.cancel();
+    _syncService.dispose();
     return super.close();
   }
 }

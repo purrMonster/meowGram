@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"meowgram/server/internal/model"
 )
@@ -93,3 +94,43 @@ func (r *MessageRepository) GetRecent(ctx context.Context, limit int) ([]*model.
 
 	return messages, nil
 }
+
+// GetMessagesAfter retrieves up to `limit` messages created strictly after `after` timestamp,
+// ordered chronologically (oldest to newest) to power deterministic catch-up sync (UST-1.4.3).
+// Capped at 500 messages to prevent payload bloat.
+func (r *MessageRepository) GetMessagesAfter(ctx context.Context, after time.Time, limit int) ([]*model.Message, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+
+	query := `
+		SELECT m.id, m.sender_id, COALESCE(u.username, m.sender_id) AS username, m.text_content, m.created_at
+		FROM messages m
+		LEFT JOIN users u ON m.sender_id = u.authelia_sub
+		WHERE m.created_at > $1
+		ORDER BY m.created_at ASC
+		LIMIT $2;
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, after, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query catch-up messages: %w", err)
+	}
+	defer rows.Close()
+
+	messages := make([]*model.Message, 0)
+	for rows.Next() {
+		var msg model.Message
+		if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.Username, &msg.TextContent, &msg.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan message row: %w", err)
+		}
+		messages = append(messages, &msg)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %w", err)
+	}
+
+	return messages, nil
+}
+

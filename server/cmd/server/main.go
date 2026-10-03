@@ -92,6 +92,9 @@ func main() {
 	authMiddleware := auth.Middleware(oidcVerifier, userRepo, logger)
 	mux.Handle("/ws", authMiddleware(handler.WebSocketHandler(hub, messageRepo, cfg, logger)))
 
+	// Protected catch-up synchronization endpoint (UST-1.4.3)
+	mux.Handle("GET /api/messages/sync", authMiddleware(handler.SyncHandler(messageRepo, logger)))
+
 	// Global Middleware chain: RequestLogger -> CORS -> Mux
 	var rootHandler http.Handler = mux
 	rootHandler = middleware.CORS(cfg)(rootHandler)
