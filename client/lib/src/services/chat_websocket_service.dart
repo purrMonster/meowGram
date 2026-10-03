@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:web_socket_channel/status.dart' as status;
+import 'package:web_socket_channel/status.dart' as ws_status;
 
 enum SocketStatus { disconnected, connecting, connected, error }
 
@@ -97,7 +97,7 @@ class ChatWebSocketService extends ChangeNotifier {
   void disconnect() {
     _subscription?.cancel();
     _subscription = null;
-    _channel?.sink.close(status.normalClosure);
+    _channel?.sink.close(ws_status.normalClosure);
     _channel = null;
     _setStatus(SocketStatus.disconnected);
   }

@@ -10,25 +10,25 @@ class ConnectionBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (color, label, icon) = switch (status) {
       SocketStatus.connected => (
-        Colors.greenAccent.shade700,
-        'Connected',
-        Icons.check_circle_rounded,
-      ),
+          Colors.greenAccent.shade700,
+          'Connected',
+          Icons.check_circle_rounded,
+        ),
       SocketStatus.connecting => (
-        Colors.amber.shade700,
-        'Connecting...',
-        Icons.sync_rounded,
-      ),
+          Colors.amber.shade700,
+          'Connecting...',
+          Icons.sync_rounded,
+        ),
       SocketStatus.error => (
-        Colors.redAccent.shade700,
-        'Connection Error',
-        Icons.error_outline_rounded,
-      ),
+          Colors.redAccent.shade700,
+          'Connection Error',
+          Icons.error_outline_rounded,
+        ),
       SocketStatus.disconnected => (
-        Colors.grey.shade600,
-        'Disconnected',
-        Icons.pause_circle_outline_rounded,
-      ),
+          Colors.grey.shade600,
+          'Disconnected',
+          Icons.pause_circle_outline_rounded,
+        ),
     };
 
     return Container(

@@ -352,9 +352,8 @@ class _MessageBubble extends StatelessWidget {
           ),
         ),
         child: Column(
-          crossAxisAlignment: isSelf
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisSize: MainAxisSize.min,

@@ -5,6 +5,9 @@
 class AppConfig {
   const AppConfig._();
 
+  /// Canonical application name
+  static const String appName = 'meowGram';
+
   /// Current environment name: development, staging, production
   static const String environment = String.fromEnvironment(
     'APP_ENV',
