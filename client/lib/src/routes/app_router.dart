@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/screens/chat_screen.dart';
 import 'package:meowgram_client/src/screens/login_screen.dart';
+import 'package:meowgram_client/src/screens/responsive_layout.dart';
 
 /// Creates the central application router using [GoRouter] with declarative route guards.
 ///
@@ -43,7 +44,7 @@ GoRouter createAppRouter(AuthController authController) {
         path: '/chat',
         name: 'chat',
         builder: (BuildContext context, GoRouterState state) {
-          return ChatScreen(authController: authController);
+          return ResponsiveLayout(authController: authController);
         },
       ),
     ],

@@ -1,7 +1,7 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.5.0  
-> **Status**: APPROVED (Epic 1.2 OIDC Auth, Epic 1.3 WebSocket Core, & UST-1.3.2 Chat UI Shell Complete)  
+> **Document Version**: 1.6.0  
+> **Status**: APPROVED (Epic 1.2 OIDC, Epic 1.3 WebSocket Core, UST-1.3.2 UI Shell, UST-1.4.1 Responsive Shell, & UST-1.4.2 Local Caching Complete)  
 > **Author**: Lead Developer / Antigravity IDE  
 > **Last Updated**: 2026-10-03  
 
@@ -23,6 +23,10 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
   - Mobile software keyboard safety with `SafeArea` and `MediaQuery.viewInsetsOf(context)`.
   - Dynamic `MessageBubble` styling distinguishing self messages (right-aligned, primary palette) from peer messages (left-aligned with `@username`) and system notices.
   - Automatic bottom scrolling triggered on inbound arrivals and outbound sends.
+- **Responsive Adaptations & Offline Local Caching (UST-1.4.1 & UST-1.4.2)**:
+  - Adaptive shell (`ResponsiveLayout`) switching between a persistent dual-pane layout for screens >= 800px (Desktop/Tablet) and a stacked navigation single-pane layout with modal drawer for screens < 800px (Mobile).
+  - Hive NoSQL local storage (`hive_flutter`) enabling **Instant Offline Launch** (loading cached messages immediately on launch before live WebSocket connection).
+  - Cache-to-Live Handoff: Seamless synchronization and deduplication between offline SQLite/Hive cache and live 50-message WebSocket bursts.
 
 ---
 
@@ -36,6 +40,9 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Token Transport to WS** | URL Query Parameter (`?token={access_token}`) | Standard web browsers do not allow arbitrary HTTP headers (such as `Authorization`) during WebSocket handshake (`new WebSocket(...)`). |
 | **Auth State Management** | `AuthController` with `refreshListenable` GoRouter | Declarative route protection. Automatically redirects `/login` -> `/chat` on token acquisition and `/chat` -> `/login` on expiry/logout. |
 | **Chat Timeline State** | `flutter_bloc` (`ChatBloc`) | Unidirectional data flow cleanly separating WebSocket stream listening from UI presentation. Decouples event handling (history bursts, real-time broadcasts) from rendering. |
+| **Responsive Breakpoint** | 800.0 Logical Pixels (`LayoutBuilder`) | Standard split point for tablets/desktops vs smartphones. Screens >= 800px show dual-pane (Sidebar + Chat); screens < 800px show single-pane with Drawer. |
+| **Local Cache Database** | `hive_flutter` (`HiveLocalMessageRepository`) | Chosen over `sqflite` for unified cross-platform support across Web (IndexedDB), Windows, macOS, Linux, Android, and iOS without requiring C/FFI toolchains or WebAssembly build glue. |
+| **Cache-to-Live Handoff** | Two-stage initialization in `ChatBloc` | Stage 1 loads cached messages from Hive instantly (zero UI wait). Stage 2 connects WebSocket and deduplicates against the 50-message server burst using PostgreSQL UUIDs. |
 | **Time Formatting** | `intl` (`DateFormat.jm()`) | Standardized localized time representation across Web and native mobile/desktop platforms. |
 | **Mobile Keyboard Adaptation** | `SafeArea` + `viewInsets` in `ChatInputBar` | Prevents software keyboard from overlapping chat input bar on Android/iOS without double-padding on Web/Desktop. |
 | **Message Ordering Guarantee** | Chronological Sorting & In-Memory Deduplication | Re-sorts by `createdAt` ascending and deduplicates by PostgreSQL UUID to guarantee deterministic ordering across network jitters. |
@@ -210,7 +217,68 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 
 ---
 
-## 6. Environment & Compile-Time Configuration Contract
+---
+
+## 6. Responsive Shell & Local Offline Caching Architecture (UST-1.4.1 & UST-1.4.2)
+
+```
+       ┌────────────────────────────────────────────────────────┐
+       │                Local Storage (Hive Box)                │
+       │        (IndexedDB on Web, Binary Box on Native)        │
+       └───────────────────────────▲────────────────────────────┘
+                                   │  1. Instant Cached Messages
+                                   ▼
+       ┌────────────────────────────────────────────────────────┐
+       │                       ChatBloc                         │
+       │  Stage 1: Load cache immediately -> render UI          │
+       │  Stage 2: Connect WebSocket -> hydrate 50 msgs burst   │
+       │  Deduplication: by PostgreSQL UUID; re-sort by time    │
+       │  Background Sync: write incoming frames to Hive box    │
+       └───────────────────────────▲────────────────────────────┘
+                                   │
+                                   ▼
+       ┌────────────────────────────────────────────────────────┐
+       │              ResponsiveLayout (LayoutBuilder)          │
+       │  Breakpoint: 800.0 logical pixels                      │
+       ├───────────────────────────┬────────────────────────────┤
+       │   Width >= 800px (Desktop)│    Width < 800px (Mobile)  │
+       │   Persistent Dual-Pane    │    Single-Pane Stacked     │
+       │   [Sidebar] + [ChatScreen]│    [ChatScreen] + [Drawer] │
+       └───────────────────────────┴────────────────────────────┘
+```
+
+### 6.1 Responsive Breakpoint & Layout Logic
+- **Breakpoint**: `800.0` logical pixels evaluated via `LayoutBuilder`.
+- **Desktop/Tablet Mode (`>= 800px`)**:
+  - Persistent left `Sidebar` (270px fixed width).
+  - Channels directory (`# general-lounge`, `# cat-memes`, `# treat-discussions`).
+  - Active lounge members list with online status indicator dots.
+  - User profile badge in footer with logout action.
+  - Main chat viewport (`ChatScreen`) fills remaining horizontal space.
+- **Mobile Mode (`< 800px`)**:
+  - Full-screen `ChatScreen` with push/pop stacked navigation.
+  - AppBar leading hamburger menu button (`Icons.menu_rounded`) opens `Sidebar` in a modal `Drawer`.
+
+### 6.2 Local Storage Strategy (Hive vs. sqflite)
+- **Technology Chosen**: `hive: ^2.2.3` and `hive_flutter: ^1.1.0`.
+- **Why Hive?**:
+  - `sqflite` requires native C SQLite compilation (not supported on Web without complex WASM toolchains and worker files).
+  - `hive` provides unified key-value NoSQL storage using IndexedDB on Web and memory-mapped binary files on Windows, macOS, Linux, Android, and iOS.
+  - Zero platform-specific native C FFI dependencies.
+- **Interface Contract**: `LocalMessageRepository` with production `HiveLocalMessageRepository` and test `MemoryLocalMessageRepository`.
+
+### 6.3 Cache-to-Live Handoff & Synchronization Mechanics
+- **Two-Stage Initialization**:
+  1. On launch, `ChatBloc` dispatches `ChatInitializeRequested`. It queries `localRepo.getCachedMessages()` and immediately emits `isLoadedFromCache: true`. The UI renders instant history without waiting for network handshakes.
+  2. In the background, `socketService.connect()` establishes the WebSocket connection. The backend streams the latest 50 messages (`SendHistory`).
+- **Conflict Resolution & Deduplication**:
+  - Incoming server messages are checked against existing items by PostgreSQL UUID (`ChatMessage.id`).
+  - Duplicate frames are discarded; new frames are appended and re-sorted ascending by `createdAt`.
+  - Inbound messages are saved to Hive asynchronously in the background (`unawaited(_localRepo.saveMessage(incoming))`), guaranteeing persistent offline continuity.
+
+---
+
+## 7. Environment & Compile-Time Configuration Contract
 
 ### Backend Environment Variables (`deploy/.env.example`)
 
@@ -244,9 +312,9 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 
 ---
 
-## 7. Operations & Developer Playbook
+## 8. Operations & Developer Playbook
 
-### 7.1 Starting the Infrastructure (PostgreSQL + Go Backend)
+### 8.1 Starting the Infrastructure (PostgreSQL + Go Backend)
 
 ```powershell
 cd c:\Users\jyotirmoyc\Desktop\Projects\meowGram
@@ -261,7 +329,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 curl http://localhost:8080/healthz
 ```
 
-### 7.2 Launching the Flutter Client with OIDC PKCE
+### 8.2 Launching the Flutter Client with OIDC PKCE
 
 #### On Google Chrome (Web):
 ```powershell
@@ -285,7 +353,7 @@ flutter run -d windows `
   --dart-define=APP_ENV=development
 ```
 
-### 7.3 Automated Testing
+### 8.3 Automated Testing
 
 ```powershell
 # Run Flutter client unit and widget test suite
@@ -299,7 +367,7 @@ go test -v ./...
 
 ---
 
-## 8. Review Gate & Verification Checklist
+## 9. Review Gate & Verification Checklist
 
 - [x] Database migration `000002_create_messages_table.up.sql` created and verified.
 - [x] Foreign key constraint properly mapped to `users.authelia_sub`.
@@ -313,6 +381,10 @@ go test -v ./...
 - [x] `MessageBubble` dynamically styled (right-aligned primary for self, left-aligned for peers with `@username`, centered pills for system events).
 - [x] `ChatInputBar` responsive keyboard handling with `SafeArea` and `MediaQuery.viewInsetsOf`.
 - [x] Timeline auto-scrolling with `ScrollController` on message receipt and submission.
-- [x] Comprehensive client test suite (14/14 tests) passing with 100% test success rate.
+- [x] `ResponsiveLayout` responsive wrapper with 800.0 logical pixel breakpoint distinguishing desktop dual-pane from mobile drawer.
+- [x] `Sidebar` desktop navigation widget displaying chat channels, active online members, and user profile footer.
+- [x] `HiveLocalMessageRepository` cross-platform offline message cache using `hive_flutter` with fallback in-memory repository.
+- [x] Cache-to-live handoff in `ChatBloc` delivering instant offline launch before live WebSocket hydration.
+- [x] Full client test suite (17/17 tests across `chat_ui_test.dart`, `responsive_layout_test.dart`, and `widget_test.dart`) passing with 100% success rate.
 - [x] Flutter Web production build verified with `flutter build web`.
 - [x] Backend compiles cleanly with zero warnings or errors.

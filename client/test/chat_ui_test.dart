@@ -6,6 +6,7 @@ import 'package:meowgram_client/src/bloc/chat_bloc.dart';
 import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/screens/chat_screen.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
+import 'package:meowgram_client/src/storage/local_message_repository.dart';
 import 'package:meowgram_client/src/widgets/chat_input_bar.dart';
 import 'package:meowgram_client/src/widgets/message_bubble.dart';
 
@@ -98,13 +99,18 @@ void main() {
     });
   });
 
-  group('ChatBloc Logic Tests', () {
+  group('ChatBloc Logic & Cache-to-Live Handoff Tests', () {
     late FakeWebSocketService fakeService;
+    late MemoryLocalMessageRepository fakeLocalRepo;
     late ChatBloc chatBloc;
 
     setUp(() {
       fakeService = FakeWebSocketService();
-      chatBloc = ChatBloc(socketService: fakeService);
+      fakeLocalRepo = MemoryLocalMessageRepository();
+      chatBloc = ChatBloc(
+        socketService: fakeService,
+        localRepo: fakeLocalRepo,
+      );
     });
 
     tearDown(() {
@@ -112,12 +118,51 @@ void main() {
       fakeService.dispose();
     });
 
-    test('Initial connection request hooks into stream and sets connecting',
+    test('Initial connection request hooks into stream and sets connected status',
         () async {
       chatBloc.add(const ChatConnectRequested(accessToken: 'dummy_token'));
       // Allow microtask loop to process the event
       await Future<void>.delayed(const Duration(milliseconds: 10));
       expect(chatBloc.state.status, equals(SocketStatus.connected));
+    });
+
+    test('Immediately renders cached messages before live connection completes',
+        () async {
+      // 1. Pre-populate local cache
+      final cachedMsg = ChatMessage(
+        id: 'cached-id-1',
+        senderId: 'user-whiskers',
+        textContent: 'Offline cached message',
+        createdAt: DateTime.parse('2026-10-01T10:00:00Z'),
+      );
+      await fakeLocalRepo.saveMessage(cachedMsg);
+
+      // 2. Initialize Bloc
+      chatBloc.add(const ChatInitializeRequested(accessToken: 'dummy_token'));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      // UI state should immediately reflect cached message
+      expect(chatBloc.state.messages.length, equals(1));
+      expect(chatBloc.state.messages.first.id, equals('cached-id-1'));
+      expect(chatBloc.state.isLoadedFromCache, isTrue);
+
+      // 3. Server emits fresh live message
+      final liveMsg = ChatMessage(
+        id: 'live-id-2',
+        senderId: 'user-felix',
+        textContent: 'Fresh live incoming message',
+        createdAt: DateTime.parse('2026-10-01T10:05:00Z'),
+      );
+      fakeService.emitMessage(liveMsg);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      // State merges both cached and live messages
+      expect(chatBloc.state.messages.length, equals(2));
+      expect(chatBloc.state.messages.last.id, equals('live-id-2'));
+
+      // Background cache also recorded the live message
+      final cachedList = await fakeLocalRepo.getCachedMessages();
+      expect(cachedList.length, equals(2));
     });
 
     test('Appends and chronologically sorts messages while deduplicating by ID',
@@ -281,11 +326,15 @@ void main() {
   });
 
   group('ChatScreen Integration Tests', () {
-    testWidgets('Renders lounge header, messages list, and quick action chips',
+    testWidgets('Renders lounge room header, messages list, and quick action chips',
         (WidgetTester tester) async {
       final authController = AuthController();
       final fakeService = FakeWebSocketService();
-      final chatBloc = ChatBloc(socketService: fakeService);
+      final fakeLocalRepo = MemoryLocalMessageRepository();
+      final chatBloc = ChatBloc(
+        socketService: fakeService,
+        localRepo: fakeLocalRepo,
+      );
 
       await tester.pumpWidget(
         MaterialApp(
@@ -293,13 +342,14 @@ void main() {
             authController: authController,
             socketService: fakeService,
             chatBloc: chatBloc,
+            activeRoom: 'general-lounge',
           ),
         ),
       );
 
       await tester.pump();
 
-      expect(find.text('meowGram Lounge'), findsOneWidget);
+      expect(find.text('# general-lounge'), findsOneWidget);
       expect(find.byType(ChatInputBar), findsOneWidget);
       expect(find.text('Purr... 😺'), findsWidgets);
 

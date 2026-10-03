@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
+import 'package:meowgram_client/src/storage/local_message_repository.dart';
 
 // =============================================================================
 // Chat Events
@@ -9,6 +10,14 @@ import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 
 abstract class ChatEvent {
   const ChatEvent();
+}
+
+/// Request to initialize the chat timeline with local cache before connecting live.
+class ChatInitializeRequested extends ChatEvent {
+  final String? accessToken;
+  final String? customWsUrl;
+
+  const ChatInitializeRequested({this.accessToken, this.customWsUrl});
 }
 
 /// Request to connect to the backend WebSocket endpoint.
@@ -55,12 +64,14 @@ class ChatState {
   final List<ChatMessage> messages;
   final String? lastError;
   final String? connectedUrl;
+  final bool isLoadedFromCache;
 
   const ChatState({
     this.status = SocketStatus.disconnected,
     this.messages = const [],
     this.lastError,
     this.connectedUrl,
+    this.isLoadedFromCache = false,
   });
 
   bool get isConnected => status == SocketStatus.connected;
@@ -71,12 +82,14 @@ class ChatState {
     List<ChatMessage>? messages,
     String? lastError,
     String? connectedUrl,
+    bool? isLoadedFromCache,
   }) {
     return ChatState(
       status: status ?? this.status,
       messages: messages ?? this.messages,
       lastError: lastError,
       connectedUrl: connectedUrl ?? this.connectedUrl,
+      isLoadedFromCache: isLoadedFromCache ?? this.isLoadedFromCache,
     );
   }
 
@@ -88,6 +101,7 @@ class ChatState {
           status == other.status &&
           lastError == other.lastError &&
           connectedUrl == other.connectedUrl &&
+          isLoadedFromCache == other.isLoadedFromCache &&
           messages.length == other.messages.length;
 
   @override
@@ -95,22 +109,40 @@ class ChatState {
       status.hashCode ^
       messages.hashCode ^
       lastError.hashCode ^
-      connectedUrl.hashCode;
+      connectedUrl.hashCode ^
+      isLoadedFromCache.hashCode;
 }
 
 // =============================================================================
-// Chat Bloc
+// Chat Bloc & Cache-to-Live Handoff
 // =============================================================================
 
-/// Manages the real-time chat timeline, historical message batching, and WebSocket stream orchestration.
+/// Manages the real-time chat timeline, local offline caching, and WebSocket streams.
+///
+/// Cache-to-Live Handoff Mechanics:
+/// 1. Instant Offline Launch: On app launch or initialization ([ChatInitializeRequested] /
+///    [ChatConnectRequested]), cached messages are immediately read from [LocalMessageRepository]
+///    and emitted to the UI state. Users see their recent chat history with zero network delay.
+/// 2. Live WebSocket Hydration: In the background, the WebSocket connection is established.
+///    The server streams the 50 most recent messages.
+/// 3. Conflict Resolution: Inbound messages are deduplicated against existing cached items using
+///    their unique PostgreSQL UUID ([ChatMessage.id]). The combined timeline is re-sorted
+///    chronologically by [ChatMessage.createdAt] ascending.
+/// 4. Background Sync: All incoming live and historical messages are written asynchronously to
+///    the local database ([LocalMessageRepository.saveMessage]) without blocking the UI thread.
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final ChatWebSocketService _socketService;
+  final LocalMessageRepository _localRepo;
   StreamSubscription<ChatMessage>? _messageSub;
   StreamSubscription<SocketStatus>? _statusSub;
 
-  ChatBloc({required ChatWebSocketService socketService})
-      : _socketService = socketService,
+  ChatBloc({
+    required ChatWebSocketService socketService,
+    LocalMessageRepository? localRepo,
+  })  : _socketService = socketService,
+        _localRepo = localRepo ?? HiveLocalMessageRepository(),
         super(const ChatState()) {
+    on<ChatInitializeRequested>(_onInitializeRequested);
     on<ChatConnectRequested>(_onConnectRequested);
     on<ChatMessageReceived>(_onMessageReceived);
     on<ChatSendMessage>(_onSendMessage);
@@ -118,15 +150,56 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatDisconnectRequested>(_onDisconnectRequested);
   }
 
+  Future<void> _onInitializeRequested(
+    ChatInitializeRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    await _performCacheToLiveHandoff(
+      accessToken: event.accessToken,
+      customWsUrl: event.customWsUrl,
+      emit: emit,
+    );
+  }
+
   Future<void> _onConnectRequested(
     ChatConnectRequested event,
     Emitter<ChatState> emit,
   ) async {
-    // Cancel any previous subscriptions
+    await _performCacheToLiveHandoff(
+      accessToken: event.accessToken,
+      customWsUrl: event.customWsUrl,
+      emit: emit,
+    );
+  }
+
+  /// Executes the two-stage cache-to-live handoff pipeline.
+  Future<void> _performCacheToLiveHandoff({
+    String? accessToken,
+    String? customWsUrl,
+    required Emitter<ChatState> emit,
+  }) async {
+    // -------------------------------------------------------------------------
+    // Stage 1: Instant Local Cache Rendering
+    // Immediately load persisted messages from local storage (Hive/IndexedDB).
+    // -------------------------------------------------------------------------
+    try {
+      final cached = await _localRepo.getCachedMessages();
+      if (cached.isNotEmpty) {
+        emit(state.copyWith(
+          messages: cached,
+          isLoadedFromCache: true,
+        ));
+      }
+    } catch (_) {
+      // Gracefully continue to live connection if local cache read encounters an error
+    }
+
+    // -------------------------------------------------------------------------
+    // Stage 2: Background WebSocket Connection & Hydration
+    // -------------------------------------------------------------------------
     await _messageSub?.cancel();
     await _statusSub?.cancel();
 
-    // Listen to new incoming messages (history burst and real-time broadcasts)
     _messageSub = _socketService.messageStream.listen((message) {
       add(ChatMessageReceived(message));
     });
@@ -141,26 +214,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ));
 
     _socketService.connect(
-      accessToken: event.accessToken,
-      customWsUrl: event.customWsUrl,
+      accessToken: accessToken,
+      customWsUrl: customWsUrl,
     );
   }
 
-  void _onMessageReceived(
+  Future<void> _onMessageReceived(
     ChatMessageReceived event,
     Emitter<ChatState> emit,
-  ) {
+  ) async {
     final incoming = event.message;
 
-    // Deduplicate if message has a PostgreSQL UUID and is already present
+    // -------------------------------------------------------------------------
+    // Synchronization & Deduplication Logic:
+    // If incoming message has a PostgreSQL UUID, check if it already exists
+    // (e.g., from local cache or prior broadcast).
+    // -------------------------------------------------------------------------
     if (incoming.id != null && incoming.id!.isNotEmpty) {
       final exists = state.messages.any((m) => m.id == incoming.id);
       if (exists) {
+        // Persist to local cache in case timestamps or attributes were updated
+        unawaited(_localRepo.saveMessage(incoming));
         return;
       }
     }
 
-    // Append and maintain ascending chronological order
+    // Append and maintain ascending chronological order across cached + live messages
     final updatedList = List<ChatMessage>.from(state.messages)..add(incoming);
     updatedList.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
@@ -168,6 +247,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       messages: updatedList,
       connectedUrl: _socketService.connectedUrl,
     ));
+
+    // Asynchronously save to local database in background
+    unawaited(_localRepo.saveMessage(incoming));
   }
 
   void _onSendMessage(

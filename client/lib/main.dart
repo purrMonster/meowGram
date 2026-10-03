@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
 import 'package:meowgram_client/src/routes/app_router.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Hive.initFlutter();
+  } catch (e) {
+    debugPrint('Hive initialization notice: $e');
+  }
   final authController = AuthController();
   runApp(MeowGramApp(authController: authController));
 }
