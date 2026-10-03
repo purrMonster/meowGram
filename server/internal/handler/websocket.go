@@ -66,7 +66,7 @@ func WebSocketHandler(
 		hub.Register <- client
 
 		// 4. Stream recent message history to this newly connected client
-		client.SendHistory(r.Context(), 30)
+		client.SendHistory(r.Context(), 50)
 
 		// 5. Concurrency Model: Spawn isolated read and write pumps
 		// WritePump serializes all outgoing messages and ping heartbeats

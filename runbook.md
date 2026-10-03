@@ -1,7 +1,7 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.4.0  
-> **Status**: APPROVED (Epic 1.2 OIDC Auth & Epic 1.3 WebSocket Core Complete)  
+> **Document Version**: 1.5.0  
+> **Status**: APPROVED (Epic 1.2 OIDC Auth, Epic 1.3 WebSocket Core, & UST-1.3.2 Chat UI Shell Complete)  
 > **Author**: Lead Developer / Antigravity IDE  
 > **Last Updated**: 2026-10-03  
 
@@ -18,6 +18,11 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
   - In-memory Go `Hub` manages active client registries via synchronized channels (`register`, `unregister`, `broadcast`).
   - Strict **Persistence Before Broadcast**: Inbound messages are committed to PostgreSQL (`messages` table) before entering the broadcast pipeline, guaranteeing zero dropped messages.
   - Goroutine Isolation: Per-client `ReadPump` and `WritePump` goroutines guarantee Gorilla WebSocket concurrency safety and prevent head-of-line blocking.
+- **Basic Chat UI Shell (UST-1.3.2)**:
+  - Responsive Flutter UI powered by `flutter_bloc` managing the real-time message timeline, 50-message initial history hydration, and deduplication.
+  - Mobile software keyboard safety with `SafeArea` and `MediaQuery.viewInsetsOf(context)`.
+  - Dynamic `MessageBubble` styling distinguishing self messages (right-aligned, primary palette) from peer messages (left-aligned with `@username`) and system notices.
+  - Automatic bottom scrolling triggered on inbound arrivals and outbound sends.
 
 ---
 
@@ -30,6 +35,10 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Web Redirect URI** | Host Origin (`Uri.base.origin`) | Seamless in-browser redirect on Web. URL inspection captures `code` and `state` parameters without local socket binding. |
 | **Token Transport to WS** | URL Query Parameter (`?token={access_token}`) | Standard web browsers do not allow arbitrary HTTP headers (such as `Authorization`) during WebSocket handshake (`new WebSocket(...)`). |
 | **Auth State Management** | `AuthController` with `refreshListenable` GoRouter | Declarative route protection. Automatically redirects `/login` -> `/chat` on token acquisition and `/chat` -> `/login` on expiry/logout. |
+| **Chat Timeline State** | `flutter_bloc` (`ChatBloc`) | Unidirectional data flow cleanly separating WebSocket stream listening from UI presentation. Decouples event handling (history bursts, real-time broadcasts) from rendering. |
+| **Time Formatting** | `intl` (`DateFormat.jm()`) | Standardized localized time representation across Web and native mobile/desktop platforms. |
+| **Mobile Keyboard Adaptation** | `SafeArea` + `viewInsets` in `ChatInputBar` | Prevents software keyboard from overlapping chat input bar on Android/iOS without double-padding on Web/Desktop. |
+| **Message Ordering Guarantee** | Chronological Sorting & In-Memory Deduplication | Re-sorts by `createdAt` ascending and deduplicates by PostgreSQL UUID to guarantee deterministic ordering across network jitters. |
 | **Token Refresh Lifecycle** | Proactive Background Timer (`expiresAt - 60s`) | Silently exchanges `refresh_token` for a fresh `access_token` prior to expiration, preventing WebSocket disconnects during active chat. |
 | **Backend OIDC Verifier** | `coreos/go-oidc/v3` with Remote KeySet | Cryptographically verifies incoming Bearer JWTs against Authelia's JWKS endpoint without handling user credentials. |
 | **Broadcast Engine** | Go In-Memory `Hub` with Goroutine Channels | Highly performant, zero external messaging broker (Redis/RabbitMQ) dependency needed for single-node core. Scales efficiently across tens of thousands of concurrent connections. |
@@ -156,7 +165,52 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages (sender_id);
 
 ---
 
-## 5. Environment & Compile-Time Configuration Contract
+---
+
+## 5. Flutter Real-Time Chat Shell Architecture (UST-1.3.2)
+
+```
+       ┌────────────────────────────────────────────────────────┐
+       │                 ChatWebSocketService                   │
+       │    (Streams: messageStream, statusStream; sink.add)    │
+       └───────────────────────────▲────────────────────────────┘
+                                   │  Streams & Commands
+                                   ▼
+       ┌────────────────────────────────────────────────────────┐
+       │                       ChatBloc                         │
+       │  - Events: Connect, Received, Send, StatusChanged       │
+       │  - State: messages, status, lastError, connectedUrl    │
+       │  - Deduplication: by PostgreSQL UUID                   │
+       │  - Ordering: strictly ascending by createdAt           │
+       └───────────────────────────▲────────────────────────────┘
+                                   │  BlocBuilder / BlocConsumer
+                                   ▼
+       ┌────────────────────────────────────────────────────────┐
+       │                      ChatScreen                        │
+       │  - Timeline: ListView.builder with ScrollController    │
+       │  - Auto-scrolling: triggers on inbound & outbound msgs │
+       │  - Bubbles: MessageBubble (Self: right/primary,        │
+       │             Peers: left/@username, System: pills)      │
+       │  - Input: ChatInputBar (SafeArea + viewInsets aware)   │
+       └────────────────────────────────────────────────────────┘
+```
+
+### 5.1 New Flutter Dependencies Added
+- **`flutter_bloc: ^9.1.1`** (with `bloc: ^9.2.1`): Implements unidirectional data flow for WebSocket streams, separating transport mechanics from widget rendering.
+- **`intl: ^0.20.3`**: Provides standardized, localized time formatting (`DateFormat.jm()`) for message timestamps across Web, Desktop, and Mobile.
+
+### 5.2 Responsive Software Keyboard Handling
+Mobile software keyboards require dynamic layout insets to avoid obstructing the chat input bar:
+- `Scaffold(resizeToAvoidBottomInset: true)` naturally contracts viewport height when the keyboard activates.
+- `ChatInputBar` leverages `SafeArea(top: false, bottom: !isKeyboardOpen)` and checks `MediaQuery.viewInsetsOf(context).bottom > 0` to adjust vertical padding dynamically.
+- Desktop and Web platforms experience zero layout shift because `viewInsets.bottom` remains `0`.
+
+### 5.3 Auto-Scrolling Mechanics
+`ScrollController` is bound to the `ListView.builder`. `BlocConsumer.listener` detects when `state.messages.length > _lastMessageCount` (e.g. during initial 50-message history hydration burst or live broadcast arrivals) and automatically invokes `_scrollToBottom()`, animating smoothly with `Curves.easeOutCubic`.
+
+---
+
+## 6. Environment & Compile-Time Configuration Contract
 
 ### Backend Environment Variables (`deploy/.env.example`)
 
@@ -190,9 +244,9 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages (sender_id);
 
 ---
 
-## 6. Operations & Developer Playbook
+## 7. Operations & Developer Playbook
 
-### 6.1 Starting the Infrastructure (PostgreSQL + Go Backend)
+### 7.1 Starting the Infrastructure (PostgreSQL + Go Backend)
 
 ```powershell
 cd c:\Users\jyotirmoyc\Desktop\Projects\meowGram
@@ -207,7 +261,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 curl http://localhost:8080/healthz
 ```
 
-### 6.2 Launching the Flutter Client with OIDC PKCE
+### 7.2 Launching the Flutter Client with OIDC PKCE
 
 #### On Google Chrome (Web):
 ```powershell
@@ -231,7 +285,7 @@ flutter run -d windows `
   --dart-define=APP_ENV=development
 ```
 
-### 6.3 Automated Testing
+### 7.3 Automated Testing
 
 ```powershell
 # Run Flutter client unit and widget test suite
@@ -245,7 +299,7 @@ go test -v ./...
 
 ---
 
-## 7. Review Gate & Verification Checklist
+## 8. Review Gate & Verification Checklist
 
 - [x] Database migration `000002_create_messages_table.up.sql` created and verified.
 - [x] Foreign key constraint properly mapped to `users.authelia_sub`.
@@ -254,5 +308,11 @@ go test -v ./...
 - [x] Strict **Persistence Before Broadcast**: Inbound messages are inserted into PostgreSQL before dispatching to `hub.Broadcast`.
 - [x] WebSocket handler authenticates connections via OIDC token and sends last 50 historical messages upon connection.
 - [x] Unit test suite (`hub_test.go`) validates Hub lifecycle, registration, unregistration, and broadcasting.
-- [x] Flutter client unit tests passing with 100% test success rate.
+- [x] `ChatMessage` model with JSON wire protocol parsing, time formatting (`intl`), and `isFromSelf` matching.
+- [x] `ChatBloc` state management with `flutter_bloc` managing message list, deduplication, and chronological sorting.
+- [x] `MessageBubble` dynamically styled (right-aligned primary for self, left-aligned for peers with `@username`, centered pills for system events).
+- [x] `ChatInputBar` responsive keyboard handling with `SafeArea` and `MediaQuery.viewInsetsOf`.
+- [x] Timeline auto-scrolling with `ScrollController` on message receipt and submission.
+- [x] Comprehensive client test suite (14/14 tests) passing with 100% test success rate.
+- [x] Flutter Web production build verified with `flutter build web`.
 - [x] Backend compiles cleanly with zero warnings or errors.

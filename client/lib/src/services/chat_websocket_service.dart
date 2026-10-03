@@ -1,24 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
+import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:web_socket_channel/status.dart' as ws_status;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+export 'package:meowgram_client/src/models/chat_message.dart';
+
 enum SocketStatus { disconnected, connecting, connected, error }
 
-class ChatMessage {
-  final String text;
-  final bool isFromSelf;
-  final DateTime timestamp;
-
-  const ChatMessage({
-    required this.text,
-    required this.isFromSelf,
-    required this.timestamp,
-  });
-}
-
 /// Service managing the realtime WebSocket channel with Bearer token authentication.
+///
+/// In compliance with Epic 1.2 and Epic 1.3:
+/// - Injects [accessToken] into the `?token=` query parameter because browser WebSockets
+///   cannot attach custom HTTP `Authorization` headers during handshake.
+/// - Parses incoming text frames as JSON envelopes containing `type`, `id`, `sender_id`, `text_content`, etc.
+/// - Handles multi-line frame batches flushed by Gorilla WebSocket write pump.
+/// - Exposes reactive streams ([messageStream], [statusStream]) for Bloc integration.
 class ChatWebSocketService extends ChangeNotifier {
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _subscription;
@@ -35,10 +34,15 @@ class ChatWebSocketService extends ChangeNotifier {
   String? _connectedUrl;
   String? get connectedUrl => _connectedUrl;
 
+  final StreamController<ChatMessage> _messageStreamController =
+      StreamController<ChatMessage>.broadcast();
+  Stream<ChatMessage> get messageStream => _messageStreamController.stream;
+
+  final StreamController<SocketStatus> _statusStreamController =
+      StreamController<SocketStatus>.broadcast();
+  Stream<SocketStatus> get statusStream => _statusStreamController.stream;
+
   /// Connects to the backend WebSocket endpoint.
-  ///
-  /// In compliance with Epic 1.2, [accessToken] is injected via the `?token=` query parameter
-  /// because browser WebSockets cannot attach custom HTTP Authorization headers during handshake.
   void connect({String? customWsUrl, String? accessToken}) {
     if (_status == SocketStatus.connected ||
         _status == SocketStatus.connecting) {
@@ -83,15 +87,7 @@ class ChatWebSocketService extends ChangeNotifier {
           if (_status != SocketStatus.connected) {
             _setStatus(SocketStatus.connected);
           }
-          final text = data.toString();
-          _messages.add(
-            ChatMessage(
-              text: text,
-              isFromSelf: false,
-              timestamp: DateTime.now(),
-            ),
-          );
-          notifyListeners();
+          _handleIncomingData(data.toString());
         },
         onDone: () {
           _setStatus(SocketStatus.disconnected);
@@ -108,21 +104,54 @@ class ChatWebSocketService extends ChangeNotifier {
     }
   }
 
+  /// Parses incoming WebSocket payload, handling newline-delimited JSON chunks.
+  void _handleIncomingData(String rawData) {
+    final lines = rawData.split('\n');
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      ChatMessage message;
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map) {
+          message = ChatMessage.fromJson(Map<String, dynamic>.from(decoded));
+        } else {
+          message = ChatMessage(
+            textContent: trimmed,
+            type: 'chat',
+            createdAt: DateTime.now(),
+          );
+        }
+      } catch (_) {
+        // Fallback for raw text strings
+        message = ChatMessage(
+          textContent: trimmed,
+          type: 'chat',
+          createdAt: DateTime.now(),
+        );
+      }
+
+      _messages.add(message);
+      _messageStreamController.add(message);
+    }
+    notifyListeners();
+  }
+
+  /// Sends a chat message to the server encoded as a JSON envelope.
   void sendMessage(String text) {
-    if (text.trim().isEmpty ||
+    final trimmed = text.trim();
+    if (trimmed.isEmpty ||
         _status != SocketStatus.connected ||
         _channel == null) {
       return;
     }
 
-    _messages.add(
-      ChatMessage(text: text, isFromSelf: true, timestamp: DateTime.now()),
-    );
-    notifyListeners();
-
-    _channel!.sink.add(text);
+    final payload = jsonEncode({'text_content': trimmed});
+    _channel!.sink.add(payload);
   }
 
+  /// Closes the active WebSocket connection cleanly.
   void disconnect() {
     _subscription?.cancel();
     _subscription = null;
@@ -134,12 +163,15 @@ class ChatWebSocketService extends ChangeNotifier {
 
   void _setStatus(SocketStatus newStatus) {
     _status = newStatus;
+    _statusStreamController.add(newStatus);
     notifyListeners();
   }
 
   @override
   void dispose() {
     disconnect();
+    _messageStreamController.close();
+    _statusStreamController.close();
     super.dispose();
   }
 }
