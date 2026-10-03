@@ -10,17 +10,23 @@ import 'package:meowgram_client/src/widgets/connection_badge.dart';
 import 'package:meowgram_client/src/widgets/message_bubble.dart';
 
 /// The central chat lounge screen integrating [ChatBloc], real-time WebSocket streams,
-/// historical message hydration, and responsive keyboard handling.
+/// historical message hydration, offline cache display, and responsive keyboard handling.
 class ChatScreen extends StatefulWidget {
   final AuthController authController;
   final ChatWebSocketService? socketService;
   final ChatBloc? chatBloc;
+  final bool isDesktop;
+  final String activeRoom;
+  final Widget? drawer;
 
   const ChatScreen({
     super.key,
     required this.authController,
     this.socketService,
     this.chatBloc,
+    this.isDesktop = false,
+    this.activeRoom = 'general-lounge',
+    this.drawer,
   });
 
   @override
@@ -39,14 +45,15 @@ class _ChatScreenState extends State<ChatScreen> {
     _socketService = widget.socketService ?? ChatWebSocketService();
     _chatBloc = widget.chatBloc ?? ChatBloc(socketService: _socketService);
 
-    // Trigger initial WebSocket connection with verified Authelia Bearer token
+    // Initial connection with cache-to-live handoff
     _chatBloc.add(
-      ChatConnectRequested(accessToken: widget.authController.accessToken),
+      ChatInitializeRequested(accessToken: widget.authController.accessToken),
     );
   }
 
   @override
   void dispose() {
+    // Only dispose if created locally and not passed from ResponsiveLayout
     if (widget.chatBloc == null) {
       _chatBloc.close();
     }
@@ -89,29 +96,42 @@ class _ChatScreenState extends State<ChatScreen> {
       value: _chatBloc,
       child: Scaffold(
         resizeToAvoidBottomInset: true,
+        drawer: widget.drawer,
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded),
-            tooltip: 'Back to Login',
-            onPressed: () {
-              _chatBloc.add(const ChatDisconnectRequested());
-              context.go('/login');
-            },
-          ),
+          leading: widget.isDesktop
+              ? Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Icon(
+                    Icons.tag_rounded,
+                    color: theme.colorScheme.primary,
+                  ),
+                )
+              : (widget.drawer != null
+                  ? Builder(
+                      builder: (ctx) => IconButton(
+                        icon: const Icon(Icons.menu_rounded),
+                        tooltip: 'Open Channels',
+                        onPressed: () => Scaffold.of(ctx).openDrawer(),
+                      ),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      tooltip: 'Back to Login',
+                      onPressed: () {
+                        _chatBloc.add(const ChatDisconnectRequested());
+                        context.go('/login');
+                      },
+                    )),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.pets_rounded, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'meowGram Lounge',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+              Text(
+                '# ${widget.activeRoom}',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
               Text(
                 'User: @$username • sub: $currentSub',
@@ -125,7 +145,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           actions: [
             Padding(
-              padding: const EdgeInsets.only(right: 6.0),
+              padding: const EdgeInsets.only(right: 4.0),
               child: BlocBuilder<ChatBloc, ChatState>(
                 builder: (context, state) {
                   return ConnectionBadge(status: state.status);
@@ -133,7 +153,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.refresh_rounded),
+              icon: const Icon(Icons.refresh_rounded, size: 20),
               tooltip: 'Reconnect WebSocket',
               onPressed: () {
                 _chatBloc.add(
@@ -143,14 +163,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 );
               },
             ),
-            IconButton(
-              icon: const Icon(Icons.logout_rounded),
-              tooltip: 'Logout session',
-              onPressed: () {
-                _chatBloc.add(const ChatDisconnectRequested());
-                widget.authController.logout();
-              },
-            ),
+            if (!widget.isDesktop && widget.drawer == null)
+              IconButton(
+                icon: const Icon(Icons.logout_rounded, size: 20),
+                tooltip: 'Logout session',
+                onPressed: () {
+                  _chatBloc.add(const ChatDisconnectRequested());
+                  widget.authController.logout();
+                },
+              ),
           ],
         ),
         body: SafeArea(
@@ -158,7 +179,7 @@ class _ChatScreenState extends State<ChatScreen> {
           bottom: true,
           child: Column(
             children: [
-              // Connection & URL Status Banner
+              // Connection & Offline Cache Status Banner
               BlocBuilder<ChatBloc, ChatState>(
                 builder: (context, state) {
                   final target = state.connectedUrl ??
@@ -173,14 +194,18 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Row(
                       children: [
                         Icon(
-                          Icons.lock_outline_rounded,
+                          state.isLoadedFromCache
+                              ? Icons.offline_bolt_outlined
+                              : Icons.lock_outline_rounded,
                           size: 15,
                           color: theme.colorScheme.primary,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Endpoint: $target',
+                            state.isLoadedFromCache && !state.isConnected
+                                ? 'Loaded from local cache (offline)'
+                                : 'Endpoint: $target',
                             style: const TextStyle(
                               fontSize: 11,
                               fontFamily: 'monospace',
