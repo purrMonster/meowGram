@@ -72,6 +72,7 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Message Ordering Guarantee** | **Persistence Before Broadcast** | `ReadPump` saves message to PostgreSQL *before* queueing into `hub.Broadcast`. If the database write fails or client drops mid-flight, uncommitted state never corrupts peer chat streams. |
 | **Socket Thread Safety** | Gorilla WebSocket `ReadPump` & `WritePump` Split | Gorilla `*websocket.Conn` forbids concurrent writer calls. Isolating socket writes exclusively to `WritePump` while reads run on `ReadPump` eliminates data races without coarse mutex locks. |
 | **Backpressure Protection** | Non-blocking Broadcast with Channel Eviction | `Hub` uses `select { case client.send <- msg: default: unregister }` with a 256-frame buffered channel. Slow or stalled clients cannot block the main broadcast loop or lag other peers. |
+| **Ingress Path-Based Routing** | Traefik Router Rules (`PathPrefix`) + Priority | Evaluates backend routes (`/ws`, `/api`, `/healthz`) with priority 100 before frontend catch-all router on shared host domains. |
 | **Database Migrations** | `golang-migrate/migrate/v4` | Automated `.up.sql` migrations executed on server container initialization. |
 
 ---
@@ -386,6 +387,7 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 | `POSTGRES_DB` | `meowgram` | `meowgram` | PostgreSQL database name. |
 | `DATABASE_URL` | `postgres://...` | `postgres://...` | Full connection string for Go backend. |
 | `CORS_ORIGINS` | *(Localhost list)* | `https://meowgram.purrbrews.cc` | Comma-separated list of allowed client origins. |
+| `TRAEFIK_ENTRYPOINTS` | `web` | `web` / `websecure` | Traefik entrypoint(s) bound to backend router (`meowgram-server`). |
 
 ### Flutter Client Environment Variables & `.env` Controllability
 
@@ -597,6 +599,9 @@ During Release 1 iOS UAT, four post-login blockers were identified and resolved:
 4. **Elimination of Hardcoded Presence Data**:
    - *Problem*: The drawer presence roster showed static mock cats (Mittens, Felix, Garfield, Luna).
    - *Fix*: The Go `Hub` broadcasts dynamic `presence` frames (`type: "presence"`, `users: []UserPresence`) whenever clients connect or disconnect. `ChatBloc` tracks `activeUsers` in state, and `Sidebar` renders live member counts, loading states, and active users.
+5. **Traefik Path-Based Routing & Ingress Separation**:
+   - *Problem*: In deployments where the Flutter frontend PWA and Go backend share the same domain (e.g. `meow.whiskertreat.fyi`), Traefik's default host routing routed all traffic to the frontend container, silently dropping WebSocket handshake (`/ws`) and API requests.
+   - *Fix*: Updated `meowgram-server` Traefik router labels in `deploy/docker-compose.yml` with rule `Host(\`${APP_DOMAIN:-localhost}\`) && (PathPrefix(\`/ws\`) || PathPrefix(\`/api\`) || PathPrefix(\`/healthz\`))` and priority `100`, guaranteeing backend endpoints take precedence over the frontend catch-all router.
 
 ### 10.5 Windows Packaging & Signing
 1. Binary outputs compile to `build/windows/x64/runner/Release/meowGram.exe`.
@@ -661,3 +666,4 @@ During Release 1 iOS UAT, four post-login blockers were identified and resolved:
 - [x] Token storage persisted via `flutter_secure_storage` immediately upon PKCE exchange; rehydrated on startup and app foregrounding (`AppLifecycleState.resumed`).
 - [x] Authelia user profile extraction resolves `preferred_username` -> `name` -> `email prefix` -> `sub` to avoid raw UUID display in UI.
 - [x] Mock presence data removed from `Sidebar`; Go `Hub` presence frame (`type: "presence"`) drives dynamic active roster in `ChatBloc`.
+- [x] Traefik router labels in `deploy/docker-compose.yml` updated with path prefixes (`/ws`, `/api`, `/healthz`) and priority 100 to prevent shared-domain collision with frontend container.

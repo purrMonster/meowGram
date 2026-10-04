@@ -60,8 +60,9 @@ services:
       start_period: 5s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.meowgram-server.rule=Host(`${APP_DOMAIN:-localhost}`)"
-      - "traefik.http.routers.meowgram-server.entrypoints=web"
+      - "traefik.http.routers.meowgram-server.rule=Host(`${APP_DOMAIN:-localhost}`) && (PathPrefix(`/ws`) || PathPrefix(`/api`) || PathPrefix(`/healthz`))"
+      - "traefik.http.routers.meowgram-server.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.meowgram-server.priority=100"
       - "traefik.http.services.meowgram-server.loadbalancer.server.port=${HTTP_PORT:-8080}"
     networks:
       - meowgram-net
