@@ -36,19 +36,25 @@ Write-Host "  Target Environment: production" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # Production --dart-define parameters
-$DartDefines = @(
-    "--dart-define=APP_ENV=production",
-    "--dart-define=APP_DOMAIN=$AppDomain",
-    "--dart-define=HTTP_PORT=443",
-    "--dart-define=USE_SECURE_SCHEMES=true",
-    "--dart-define=AUTHELIA_DOMAIN=$AutheliaDomain",
-    "--dart-define=AUTHELIA_ISSUER_URL=$AutheliaIssuer",
-    "--dart-define=AUTHELIA_CLIENT_ID=$AutheliaClientId",
-    "--dart-define=API_BASE_URL=https://$AppDomain",
-    "--dart-define=WS_BASE_URL=wss://$AppDomain/ws",
-    "--dart-define=SYNC_ENDPOINT=/api/messages/sync",
-    "--dart-define=HEALTH_ENDPOINT=/healthz"
-)
+$ConfigFile = "$ClientDir\config\production.json"
+if (Test-Path $ConfigFile) {
+    Write-Host "Using configuration file: client/config/production.json" -ForegroundColor Cyan
+    $DartDefines = @("--dart-define-from-file=config/production.json")
+} else {
+    $DartDefines = @(
+        "--dart-define=APP_ENV=production",
+        "--dart-define=APP_DOMAIN=$AppDomain",
+        "--dart-define=HTTP_PORT=443",
+        "--dart-define=USE_SECURE_SCHEMES=true",
+        "--dart-define=AUTHELIA_DOMAIN=$AutheliaDomain",
+        "--dart-define=AUTHELIA_ISSUER_URL=$AutheliaIssuer",
+        "--dart-define=AUTHELIA_CLIENT_ID=$AutheliaClientId",
+        "--dart-define=API_BASE_URL=https://$AppDomain",
+        "--dart-define=WS_BASE_URL=wss://$AppDomain/ws",
+        "--dart-define=SYNC_ENDPOINT=/api/messages/sync",
+        "--dart-define=HEALTH_ENDPOINT=/healthz"
+    )
+}
 
 Set-Location $ClientDir
 

@@ -1,0 +1,13 @@
+{
+  "APP_ENV": "development",
+  "APP_DOMAIN": "localhost",
+  "HTTP_PORT": "8080",
+  "USE_SECURE_SCHEMES": false,
+  "AUTHELIA_DOMAIN": "localhost:9091",
+  "AUTHELIA_ISSUER_URL": "http://localhost:9091",
+  "AUTHELIA_CLIENT_ID": "meowgram-client",
+  "API_BASE_URL": "http://localhost:8080",
+  "WS_BASE_URL": "ws://localhost:8080/ws",
+  "SYNC_ENDPOINT": "/api/messages/sync",
+  "HEALTH_ENDPOINT": "/healthz"
+}

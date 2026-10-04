@@ -7,7 +7,20 @@ import 'package:meowgram_client/src/routes/app_router.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AppConfig.initialize();
+
+  // Print startup configuration banner for debug visibility
+  debugPrint('====================================================');
+  debugPrint('  meowGram Client Bootstrapping');
+  debugPrint('  Environment:       ${AppConfig.environment}');
+  debugPrint('  Domain:            ${AppConfig.appDomain}');
+  debugPrint('  HTTP Port:         ${AppConfig.port}');
+  debugPrint('  Secure Schemes:    ${AppConfig.useSecureSchemes}');
+  debugPrint('  API Base URL:      ${AppConfig.apiBaseUrl}');
+  debugPrint('  WebSocket URL:     ${AppConfig.wsBaseUrl}');
+  debugPrint('  Authelia Issuer:   ${AppConfig.autheliaIssuerUrl}');
+  debugPrint('  Authelia ClientID: ${AppConfig.autheliaClientId}');
+  debugPrint('====================================================');
+
   try {
     await Hive.initFlutter();
   } catch (e) {
