@@ -17,17 +17,19 @@ type Config struct {
 	Environment     string
 	LogLevel        string
 	DatabaseURL     string
-	AutheliaDomain  string
-	AutheliaIssuer  string
-	AutheliaJWKSURL string
-	SyncEndpoint    string
-	HealthEndpoint  string
-	WSEndpoint      string
-	ImmichDomain    string
-	ImmichAPIURL    string
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
-	IdleTimeout     time.Duration
+	AutheliaDomain   string
+	AutheliaIssuer   string
+	AutheliaJWKSURL  string
+	AutheliaClientID string
+	AutheliaAudience string
+	SyncEndpoint     string
+	HealthEndpoint   string
+	WSEndpoint       string
+	ImmichDomain     string
+	ImmichAPIURL     string
+	ReadTimeout      time.Duration
+	WriteTimeout     time.Duration
+	IdleTimeout      time.Duration
 }
 
 // Load populates and validates Config from process environment and candidate .env files.
@@ -115,6 +117,23 @@ func Load() (*Config, error) {
 		autheliaJWKSURL = autheliaIssuer + "/jwks.json"
 	}
 
+	// Authelia Client ID & Expected Audience
+	autheliaClientID := os.Getenv("AUTHELIA_CLIENT_ID")
+	if autheliaClientID == "" {
+		autheliaClientID = os.Getenv("OIDC_CLIENT_ID")
+	}
+	if autheliaClientID == "" {
+		autheliaClientID = os.Getenv("CLIENT_ID")
+	}
+	if autheliaClientID == "" {
+		autheliaClientID = "meowgram"
+	}
+
+	autheliaAudience := os.Getenv("AUTHELIA_AUDIENCE")
+	if autheliaAudience == "" {
+		autheliaAudience = os.Getenv("OIDC_AUDIENCE")
+	}
+
 	// Sourcing REST & WebSocket Service Endpoints
 	syncEndpoint := os.Getenv("SYNC_ENDPOINT")
 	if syncEndpoint == "" {
@@ -193,17 +212,19 @@ func Load() (*Config, error) {
 		Environment:     env,
 		LogLevel:        logLevel,
 		DatabaseURL:     dbURL,
-		AutheliaDomain:  autheliaDomain,
-		AutheliaIssuer:  autheliaIssuer,
-		AutheliaJWKSURL: autheliaJWKSURL,
-		SyncEndpoint:    syncEndpoint,
-		HealthEndpoint:  healthEndpoint,
-		WSEndpoint:      wsEndpoint,
-		ImmichDomain:    immichDomain,
-		ImmichAPIURL:    immichAPIURL,
-		ReadTimeout:     readTimeout,
-		WriteTimeout:    writeTimeout,
-		IdleTimeout:     idleTimeout,
+		AutheliaDomain:   autheliaDomain,
+		AutheliaIssuer:   autheliaIssuer,
+		AutheliaJWKSURL:  autheliaJWKSURL,
+		AutheliaClientID: autheliaClientID,
+		AutheliaAudience: autheliaAudience,
+		SyncEndpoint:     syncEndpoint,
+		HealthEndpoint:   healthEndpoint,
+		WSEndpoint:       wsEndpoint,
+		ImmichDomain:     immichDomain,
+		ImmichAPIURL:     immichAPIURL,
+		ReadTimeout:      readTimeout,
+		WriteTimeout:     writeTimeout,
+		IdleTimeout:      idleTimeout,
 	}, nil
 }
 
@@ -219,6 +240,14 @@ func (c *Config) IsAllowedOrigin(origin string) bool {
 	}
 
 	origin = strings.TrimRight(origin, "/")
+
+	if c.AppDomain != "" {
+		if strings.EqualFold(origin, "https://"+c.AppDomain) ||
+			strings.EqualFold(origin, "http://"+c.AppDomain) ||
+			strings.EqualFold(origin, c.AppDomain) {
+			return true
+		}
+	}
 
 	for _, allowed := range c.CORSOrigins {
 		if strings.EqualFold(origin, strings.TrimRight(allowed, "/")) {

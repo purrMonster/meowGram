@@ -3,6 +3,8 @@ package chat
 import (
 	"context"
 	"log/slog"
+	"sort"
+	"strings"
 	"time"
 
 	"meowgram/server/internal/model"
@@ -63,6 +65,9 @@ func (h *Hub) Run(ctx context.Context) {
 			// Notify lounge members of the new arrival
 			h.broadcastSystemNotice(client.user.Username + " pounced into the lounge! 🐾")
 
+			// Broadcast active presence roster to all connected clients
+			h.broadcastPresence()
+
 		// 2. Client Unregistration
 		case client := <-h.Unregister:
 			if _, ok := h.clients[client]; ok {
@@ -78,6 +83,9 @@ func (h *Hub) Run(ctx context.Context) {
 
 				// Notify lounge members that the user departed
 				h.broadcastSystemNotice(client.user.Username + " slinked away from the lounge. 💤")
+
+				// Broadcast updated presence roster
+				h.broadcastPresence()
 			}
 
 		// 3. Message Fan-Out / Broadcast
@@ -127,6 +135,46 @@ func (h *Hub) broadcastSystemNotice(content string) {
 	for client := range h.clients {
 		select {
 		case client.send <- notice:
+		default:
+		}
+	}
+}
+
+func (h *Hub) broadcastPresence() {
+	userMap := make(map[string]model.UserPresence)
+	for client := range h.clients {
+		if client.user != nil {
+			sub := client.user.AutheliaSub
+			username := client.user.Username
+			if strings.TrimSpace(username) == "" {
+				username = sub
+			}
+			userMap[sub] = model.UserPresence{
+				Username: username,
+				Sub:      sub,
+				IsOnline: true,
+			}
+		}
+	}
+
+	users := make([]model.UserPresence, 0, len(userMap))
+	for _, u := range userMap {
+		users = append(users, u)
+	}
+
+	sort.Slice(users, func(i, j int) bool {
+		return strings.ToLower(users[i].Username) < strings.ToLower(users[j].Username)
+	})
+
+	presenceMsg := &model.WSMessage{
+		Type:      "presence",
+		Users:     users,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	for client := range h.clients {
+		select {
+		case client.send <- presenceMsg:
 		default:
 		}
 	}

@@ -132,7 +132,9 @@ class ChatWebSocketService extends ChangeNotifier {
         );
       }
 
-      _messages.add(message);
+      if (message.type != 'presence') {
+        _messages.add(message);
+      }
       _messageStreamController.add(message);
     }
     notifyListeners();

@@ -38,7 +38,7 @@ func TestHubLifecycleAndBroadcast(t *testing.T) {
 	hub.Register <- client1
 	time.Sleep(50 * time.Millisecond)
 
-	// Client 1 should receive the arrival system notice
+	// Client 1 should receive the arrival system notice and initial presence roster
 	select {
 	case notice := <-client1.send:
 		if notice.Type != "system" {
@@ -48,19 +48,34 @@ func TestHubLifecycleAndBroadcast(t *testing.T) {
 		t.Fatal("timed out waiting for arrival notice on client 1")
 	}
 
+	select {
+	case pres := <-client1.send:
+		if pres.Type != "presence" {
+			t.Errorf("expected presence roster on registration, got %s", pres.Type)
+		}
+		if len(pres.Users) != 1 {
+			t.Errorf("expected 1 user in presence roster, got %d", len(pres.Users))
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for presence roster on client 1")
+	}
+
 	// 2. Register Client 2
 	hub.Register <- client2
 	time.Sleep(50 * time.Millisecond)
 
-	// Drain client 2 arrival notices
-	select {
-	case <-client1.send:
-	default:
+	// Helper to drain pending registration / presence notices before testing broadcast
+	drain := func(c *Client) {
+		for {
+			select {
+			case <-c.send:
+			default:
+				return
+			}
+		}
 	}
-	select {
-	case <-client2.send:
-	default:
-	}
+	drain(client1)
+	drain(client2)
 
 	// 3. Broadcast chat message from client 1
 	testMsg := &model.WSMessage{
@@ -93,7 +108,7 @@ func TestHubLifecycleAndBroadcast(t *testing.T) {
 	hub.Unregister <- client2
 	time.Sleep(50 * time.Millisecond)
 
-	// Client 1 should receive departure notice
+	// Client 1 should receive departure notice and updated presence roster
 	select {
 	case notice := <-client1.send:
 		if notice.Type != "system" {
@@ -101,5 +116,17 @@ func TestHubLifecycleAndBroadcast(t *testing.T) {
 		}
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timed out waiting for departure notice on client 1")
+	}
+
+	select {
+	case pres := <-client1.send:
+		if pres.Type != "presence" {
+			t.Errorf("expected presence roster on unregister, got %s", pres.Type)
+		}
+		if len(pres.Users) != 1 {
+			t.Errorf("expected 1 remaining user in presence roster, got %d", len(pres.Users))
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for updated presence roster on client 1")
 	}
 }

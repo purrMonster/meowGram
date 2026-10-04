@@ -4,6 +4,7 @@ import 'package:meowgram_client/src/auth/auth_state.dart';
 import 'package:meowgram_client/src/auth/oidc_platform.dart';
 import 'package:meowgram_client/src/auth/oidc_service.dart';
 import 'package:meowgram_client/src/auth/pkce_helper.dart';
+import 'package:meowgram_client/src/auth/token_storage.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -12,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 class AuthController extends ChangeNotifier {
   final OidcService _oidcService;
   final OidcPlatformHelper _platformHelper;
+  final TokenStorage _tokenStorage;
 
   AuthStatus _status = AuthStatus.unauthenticated;
   AuthStatus get status => _status;
@@ -43,8 +45,52 @@ class AuthController extends ChangeNotifier {
   AuthController({
     OidcService? oidcService,
     OidcPlatformHelper? platformHelper,
+    TokenStorage? tokenStorage,
   })  : _oidcService = oidcService ?? OidcService(),
-        _platformHelper = platformHelper ?? createPlatformHelper();
+        _platformHelper = platformHelper ?? createPlatformHelper(),
+        _tokenStorage = tokenStorage ?? TokenStorage();
+
+  /// Restores session state from secure storage on app launch or initialization.
+  Future<void> initialize() async {
+    try {
+      final storedTokens = await _tokenStorage.readTokens();
+      if (storedTokens == null || storedTokens.accessToken.isEmpty) {
+        return;
+      }
+
+      if (storedTokens.isExpired) {
+        // If expired but refresh token exists, attempt background refresh
+        if (storedTokens.refreshToken != null &&
+            storedTokens.refreshToken!.isNotEmpty) {
+          _tokens = storedTokens;
+          await refreshSession();
+        } else {
+          await _tokenStorage.clearTokens();
+          _tokens = null;
+          _status = AuthStatus.unauthenticated;
+          notifyListeners();
+        }
+      } else {
+        _setSession(storedTokens);
+      }
+    } catch (e) {
+      _lastError = 'Session restoration error: $e';
+      _tokens = null;
+      _status = AuthStatus.unauthenticated;
+    }
+  }
+
+  /// Checks the current session upon foregrounding.
+  Future<void> checkSession() async {
+    if (_tokens == null) {
+      await initialize();
+      return;
+    }
+
+    if (_tokens!.isExpired) {
+      await refreshSession();
+    }
+  }
 
   /// Executes the OAuth 2.0 Authorization Code flow with PKCE.
   ///
@@ -104,6 +150,9 @@ class AuthController extends ChangeNotifier {
         redirectUri: redirectUri,
       );
 
+      // Immediately commit tokens to secure storage before updating router / pushing chat screen
+      await _tokenStorage.saveTokens(tokens);
+
       _setSession(tokens);
     } catch (e) {
       _lastError = e.toString().replaceAll('Exception: ', '');
@@ -120,7 +169,7 @@ class AuthController extends ChangeNotifier {
   Future<void> refreshSession() async {
     final currentRefreshToken = _tokens?.refreshToken;
     if (currentRefreshToken == null || currentRefreshToken.isEmpty) {
-      logout();
+      await logout();
       return;
     }
 
@@ -128,15 +177,16 @@ class AuthController extends ChangeNotifier {
       final refreshedTokens = await _oidcService.refreshToken(
         refreshToken: currentRefreshToken,
       );
+      await _tokenStorage.saveTokens(refreshedTokens);
       _setSession(refreshedTokens);
     } catch (e) {
       // If refresh fails, invalidate session and force re-login
-      logout();
+      await logout();
     }
   }
 
   /// Invalidate local tokens and return to unauthenticated state.
-  void logout() {
+  Future<void> logout() async {
     _refreshTimer?.cancel();
     _refreshTimer = null;
     _tokens = null;
@@ -145,12 +195,18 @@ class AuthController extends ChangeNotifier {
     _pendingRedirectUri = null;
     _status = AuthStatus.unauthenticated;
     _lastError = null;
+    try {
+      await _tokenStorage.clearTokens();
+    } catch (_) {}
     notifyListeners();
   }
 
   void _setSession(TokenData tokens) {
     _tokens = tokens;
-    _userProfile = UserProfile.fromJwt(tokens.idToken ?? tokens.accessToken);
+    _userProfile = UserProfile.fromTokens(
+      accessToken: tokens.accessToken,
+      idToken: tokens.idToken,
+    );
     _status = AuthStatus.authenticated;
     _lastError = null;
 

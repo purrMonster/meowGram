@@ -1,6 +1,45 @@
 import 'dart:convert';
 import 'package:intl/intl.dart';
 
+/// Represents an active connected member in the presence roster broadcasted by the Hub.
+class UserPresence {
+  final String username;
+  final String sub;
+  final bool isOnline;
+
+  const UserPresence({
+    required this.username,
+    required this.sub,
+    this.isOnline = true,
+  });
+
+  factory UserPresence.fromJson(Map<String, dynamic> json) {
+    return UserPresence(
+      username: json['username'] as String? ?? 'Anonymous Cat',
+      sub: json['sub'] as String? ?? '',
+      isOnline: json['is_online'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'username': username,
+        'sub': sub,
+        'is_online': isOnline,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UserPresence &&
+          runtimeType == other.runtimeType &&
+          username == other.username &&
+          sub == other.sub &&
+          isOnline == other.isOnline;
+
+  @override
+  int get hashCode => username.hashCode ^ sub.hashCode ^ isOnline.hashCode;
+}
+
 /// Represents a realtime chat message in meowGram.
 ///
 /// Complies with the WebSocket wire protocol defined in Epic 1.3:
@@ -9,7 +48,8 @@ import 'package:intl/intl.dart';
 /// - [username]: Display name of the user.
 /// - [textContent]: Raw message body text.
 /// - [createdAt]: Timestamp recorded at PostgreSQL persistence time.
-/// - [type]: Frame type ("chat", "history", "system", "error").
+/// - [type]: Frame type ("chat", "history", "system", "presence", "error").
+/// - [users]: List of active connected users populated when [type] == "presence".
 class ChatMessage {
   final String? id;
   final String? senderId;
@@ -17,6 +57,7 @@ class ChatMessage {
   final String textContent;
   final DateTime createdAt;
   final String type;
+  final List<UserPresence> users;
 
   const ChatMessage({
     this.id,
@@ -25,6 +66,7 @@ class ChatMessage {
     required this.textContent,
     required this.createdAt,
     this.type = 'chat',
+    this.users = const [],
   });
 
   /// Backwards-compatibility getter for legacy ChatMessage callers.
@@ -45,6 +87,9 @@ class ChatMessage {
   /// Whether this is an error notification from the server.
   bool get isError => type == 'error';
 
+  /// Whether this is a presence roster broadcast from the Hub.
+  bool get isPresence => type == 'presence';
+
   /// Formatted localized time string (e.g., "6:30 PM").
   String get formattedTime {
     return DateFormat.jm().format(createdAt.toLocal());
@@ -60,6 +105,15 @@ class ChatMessage {
       parsedDate = DateTime.now();
     }
 
+    final usersList = <UserPresence>[];
+    if (json['users'] is List) {
+      for (final item in json['users'] as List) {
+        if (item is Map) {
+          usersList.add(UserPresence.fromJson(Map<String, dynamic>.from(item)));
+        }
+      }
+    }
+
     return ChatMessage(
       id: json['id'] as String?,
       senderId: json['sender_id'] as String?,
@@ -69,6 +123,7 @@ class ChatMessage {
           '',
       type: (json['type'] as String?) ?? 'chat',
       createdAt: parsedDate,
+      users: usersList,
     );
   }
 
@@ -81,6 +136,7 @@ class ChatMessage {
       'text_content': textContent,
       'type': type,
       'created_at': createdAt.toUtc().toIso8601String(),
+      if (users.isNotEmpty) 'users': users.map((u) => u.toJson()).toList(),
     };
   }
 
