@@ -529,6 +529,39 @@ To test on iOS devices without waiting for Apple Developer Team certificate prov
 2. Tap the Share button &rarr; **Add to Home Screen**.
 3. Launch **meowGram** from the Home Screen. The app runs in standalone fullscreen (`apple-mobile-web-app-capable: yes`, `black-translucent` status bar) with CanvasKit and core assets cached by `sw.js` for instant subsequent cold starts.
 
+#### 10.4.2 iOS Custom URL Scheme & Physical Device UAT Execution
+For native iOS UAT and Authelia OIDC callback interception:
+1. **Custom URL Scheme Registration (`CFBundleURLTypes`)**:
+   - `client/ios/Runner/Info.plist` registers the custom URL scheme `meowgram`:
+     ```xml
+     <key>CFBundleURLTypes</key>
+     <array>
+       <dict>
+         <key>CFBundleTypeRole</key>
+         <string>Editor</string>
+         <key>CFBundleURLSchemes</key>
+         <array>
+           <string>meowgram</string>
+         </array>
+       </dict>
+     </array>
+     ```
+   - This allows iOS to intercept `meowgram://` OAuth 2.0 authorization callbacks upon completion of Authelia browser authentication.
+2. **Physical Device Launch Script (`deploy/scripts/run_ios_physical.sh`)**:
+   - Launches meowGram on a connected iOS device using `--dart-define-from-file`.
+   - Supports `--clean` / `-c` (or `CLEAN=true`) to invalidate Flutter and Xcode build caches (`flutter clean && flutter pub get`), forcing Xcode to re-index the updated `Info.plist`.
+   - Usage:
+     ```bash
+     # Launch in production release mode with clean cache
+     ./deploy/scripts/run_ios_physical.sh production release --clean
+
+     # Launch on specific device ID
+     ./deploy/scripts/run_ios_physical.sh production release --clean -d <DEVICE_ID>
+     ```
+3. **Deep Link Verification**:
+   - **Simulator**: `xcrun simctl openurl booted "meowgram://callback?code=mock_code&state=mock_state"`
+   - **Physical Device**: Open Safari and navigate to `meowgram://callback?code=test`. Safari prompts to open "meowGram", confirming native scheme registration.
+
 ### 10.5 Windows Packaging & Signing
 1. Binary outputs compile to `build/windows/x64/runner/Release/meowGram.exe`.
 2. Sign with Authenticode EV certificate via `signtool.exe`:
