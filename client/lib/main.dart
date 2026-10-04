@@ -26,7 +26,10 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('Hive initialization notice: $e');
   }
+
   final authController = AuthController();
+  await authController.initialize();
+
   runApp(MeowGramApp(authController: authController));
 }
 
@@ -39,13 +42,27 @@ class MeowGramApp extends StatefulWidget {
   State<MeowGramApp> createState() => _MeowGramAppState();
 }
 
-class _MeowGramAppState extends State<MeowGramApp> {
+class _MeowGramAppState extends State<MeowGramApp> with WidgetsBindingObserver {
   late final GoRouter _router;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _router = createAppRouter(widget.authController);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      widget.authController.checkSession();
+    }
   }
 
   @override

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/bloc/chat_bloc.dart';
+import 'package:meowgram_client/src/models/chat_message.dart';
+import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/widgets/connection_badge.dart';
 
 /// Desktop & Tablet sidebar displaying chat rooms, active members, and user profile status.
@@ -10,6 +12,8 @@ class Sidebar extends StatelessWidget {
   final String selectedRoom;
   final ValueChanged<String>? onRoomSelected;
   final VoidCallback? onLogoutPressed;
+  final List<UserPresence>? activeUsers;
+  final bool? isPresenceLoading;
 
   const Sidebar({
     super.key,
@@ -17,6 +21,8 @@ class Sidebar extends StatelessWidget {
     this.selectedRoom = 'general-lounge',
     this.onRoomSelected,
     this.onLogoutPressed,
+    this.activeUsers,
+    this.isPresenceLoading,
   });
 
   static const List<Map<String, dynamic>> _rooms = [
@@ -27,19 +33,22 @@ class Sidebar extends StatelessWidget {
     {'id': 'yarn-and-toys', 'name': 'yarn-and-toys', 'icon': Icons.sports_tennis_rounded, 'unread': 0},
   ];
 
-  static const List<Map<String, dynamic>> _activeUsers = [
-    {'name': 'Mittens', 'status': 'Playing with yarn', 'isOnline': true},
-    {'name': 'Felix', 'status': 'Eating tuna 🐟', 'isOnline': true},
-    {'name': 'Garfield', 'status': 'Napping 💤', 'isOnline': false},
-    {'name': 'Luna', 'status': 'Chasing lasers ✨', 'isOnline': true},
-  ];
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final profile = authController.userProfile;
     final username = profile?.username ?? 'Whiskers';
     final sub = profile?.sub ?? '';
+
+    // Dynamically retrieve presence roster from ChatBloc if available
+    ChatState? chatState;
+    try {
+      chatState = context.watch<ChatBloc>().state;
+    } catch (_) {}
+
+    final presenceList = activeUsers ?? chatState?.activeUsers ?? const <UserPresence>[];
+    final isLoading = isPresenceLoading ?? (chatState == null ? false : chatState.isPresenceLoading);
+    final onlineCount = presenceList.where((u) => u.isOnline).length;
 
     return Container(
       width: 270,
@@ -100,11 +109,7 @@ class Sidebar extends StatelessWidget {
                     ],
                   ),
                 ),
-                BlocBuilder<ChatBloc, ChatState>(
-                  builder: (context, state) {
-                    return ConnectionBadge(status: state.status);
-                  },
-                ),
+                ConnectionBadge(status: chatState?.status ?? SocketStatus.disconnected),
               ],
             ),
           ),
@@ -143,25 +148,29 @@ class Sidebar extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'LOUNGE MEMBERS',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
-                          letterSpacing: 1.0,
+                      Flexible(
+                        child: Text(
+                          'LOUNGE MEMBERS',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                            letterSpacing: 1.0,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.15),
+                          color: onlineCount > 0 ? Colors.green.withOpacity(0.15) : Colors.grey.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Text(
-                          '3 online',
+                        child: Text(
+                          '$onlineCount online',
                           style: TextStyle(
                             fontSize: 10,
-                            color: Colors.green,
+                            color: onlineCount > 0 ? Colors.green : Colors.grey,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -169,13 +178,52 @@ class Sidebar extends StatelessWidget {
                     ],
                   ),
                 ),
-                for (final user in _activeUsers)
-                  _buildUserTile(
-                    context: context,
-                    name: user['name'] as String,
-                    statusText: user['status'] as String,
-                    isOnline: user['isOnline'] as bool,
-                  ),
+                if (isLoading && presenceList.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.sync_rounded,
+                          size: 14,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Connecting to lounge...',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontSize: 11,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (presenceList.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                    child: Text(
+                      'No other cats online yet',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  )
+                else
+                  for (final user in presenceList)
+                    _buildUserTile(
+                      context: context,
+                      name: user.username,
+                      statusText: user.sub == sub
+                          ? 'You (Purring)'
+                          : (user.isOnline ? 'Online in lounge' : 'Away'),
+                      isOnline: user.isOnline,
+                    ),
               ],
             ),
           ),
@@ -317,7 +365,7 @@ class Sidebar extends StatelessWidget {
                 radius: 13,
                 backgroundColor: theme.colorScheme.surfaceContainerHighest,
                 child: Text(
-                  name[0],
+                  name.isNotEmpty ? name[0].toUpperCase() : '?',
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),

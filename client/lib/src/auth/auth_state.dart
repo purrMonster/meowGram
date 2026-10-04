@@ -31,17 +31,34 @@ class TokenData {
     required this.expiresAt,
   });
 
-  /// Factory deserializer from standard OAuth 2.0 token response JSON.
+  /// Factory deserializer from OAuth 2.0 token response or cached secure storage.
   factory TokenData.fromJson(Map<String, dynamic> json) {
-    final expiresInSec = (json['expires_in'] as num?)?.toInt() ?? 3600;
+    DateTime parsedExpiresAt;
+    if (json['expires_at'] != null) {
+      parsedExpiresAt = DateTime.tryParse(json['expires_at'].toString()) ??
+          DateTime.now().add(const Duration(hours: 1));
+    } else {
+      final expiresInSec = (json['expires_in'] as num?)?.toInt() ?? 3600;
+      parsedExpiresAt = DateTime.now().add(Duration(seconds: expiresInSec));
+    }
+
     return TokenData(
       accessToken: json['access_token'] as String? ?? '',
       idToken: json['id_token'] as String?,
       refreshToken: json['refresh_token'] as String?,
       tokenType: json['token_type'] as String? ?? 'Bearer',
-      expiresAt: DateTime.now().add(Duration(seconds: expiresInSec)),
+      expiresAt: parsedExpiresAt,
     );
   }
+
+  /// Serializes token metadata to JSON for secure persistent storage.
+  Map<String, dynamic> toJson() => {
+        'access_token': accessToken,
+        if (idToken != null) 'id_token': idToken,
+        if (refreshToken != null) 'refresh_token': refreshToken,
+        'token_type': tokenType,
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+      };
 
   /// Whether the access token is close to expiry or already expired (within 60 second buffer).
   bool get isExpired =>
@@ -51,7 +68,7 @@ class TokenData {
   Duration get timeUntilExpiry => expiresAt.difference(DateTime.now());
 }
 
-/// User identity claims parsed from Authelia's OIDC ID token or access token.
+/// User identity claims parsed from Authelia's OIDC access token or ID token.
 class UserProfile {
   final String sub;
   final String username;
@@ -65,18 +82,11 @@ class UserProfile {
     this.name,
   });
 
-  /// Extracts claims by decoding JWT payload segments without external signature verification
-  /// (backend verifies signature cryptographically; client only reads display metadata).
-  factory UserProfile.fromJwt(String? jwtString) {
-    if (jwtString == null || jwtString.isEmpty) {
-      return const UserProfile(sub: 'anonymous', username: 'Anonymous Cat');
-    }
-
+  static Map<String, dynamic>? _decodeJwtPayload(String? jwtString) {
+    if (jwtString == null || jwtString.isEmpty) return null;
     try {
       final parts = jwtString.split('.');
-      if (parts.length != 3) {
-        return const UserProfile(sub: 'unknown', username: 'purrUser');
-      }
+      if (parts.length != 3) return null;
 
       // Base64URL decode middle payload segment with normalized padding
       var normalized = parts[1].replaceAll('-', '+').replaceAll('_', '/');
@@ -85,31 +95,60 @@ class UserProfile {
       }
 
       final payloadBytes = base64.decode(normalized);
-      final payloadMap =
-          jsonDecode(utf8.decode(payloadBytes)) as Map<String, dynamic>;
-
-      final sub = payloadMap['sub']?.toString() ?? 'unknown';
-      final preferred = payloadMap['preferred_username']?.toString();
-      final name = payloadMap['name']?.toString();
-      final email = payloadMap['email']?.toString();
-
-      // Resolve username hierarchy: preferred_username -> name -> email prefix -> sub
-      final resolvedUsername = (preferred != null && preferred.isNotEmpty)
-          ? preferred
-          : (name != null && name.isNotEmpty)
-              ? name
-              : (email != null && email.contains('@'))
-                  ? email.split('@')[0]
-                  : sub;
-
-      return UserProfile(
-        sub: sub,
-        username: resolvedUsername,
-        email: email,
-        name: name,
-      );
+      return jsonDecode(utf8.decode(payloadBytes)) as Map<String, dynamic>;
     } catch (_) {
-      return const UserProfile(sub: 'unknown', username: 'purrUser');
+      return null;
     }
+  }
+
+  /// Extracts user claims, prioritizing the Authelia access token claims first,
+  /// then ID token, resolving: preferred_username -> name -> email prefix -> sub UUID.
+  factory UserProfile.fromTokens({
+    required String? accessToken,
+    String? idToken,
+  }) {
+    final accessClaims = _decodeJwtPayload(accessToken) ?? {};
+    final idClaims = _decodeJwtPayload(idToken) ?? {};
+
+    // 1. Subject extraction (fallback: access -> id -> anonymous)
+    final sub = accessClaims['sub']?.toString() ??
+        idClaims['sub']?.toString() ??
+        'anonymous';
+
+    // 2. Candidate username fields prioritized from access token, then id token
+    final preferred = accessClaims['preferred_username']?.toString() ??
+        idClaims['preferred_username']?.toString();
+
+    final name = accessClaims['name']?.toString() ??
+        idClaims['name']?.toString();
+
+    final email = accessClaims['email']?.toString() ??
+        idClaims['email']?.toString();
+
+    // 3. Username hierarchy resolution:
+    // preferred_username -> name -> email prefix -> sub UUID
+    String resolvedUsername;
+    if (preferred != null && preferred.trim().isNotEmpty) {
+      resolvedUsername = preferred.trim();
+    } else if (name != null && name.trim().isNotEmpty) {
+      resolvedUsername = name.trim();
+    } else if (email != null && email.contains('@')) {
+      final prefix = email.split('@')[0].trim();
+      resolvedUsername = prefix.isNotEmpty ? prefix : sub;
+    } else {
+      resolvedUsername = sub;
+    }
+
+    return UserProfile(
+      sub: sub,
+      username: resolvedUsername,
+      email: email,
+      name: name,
+    );
+  }
+
+  /// Backwards-compatible factory delegating to [fromTokens].
+  factory UserProfile.fromJwt(String? jwtString) {
+    return UserProfile.fromTokens(accessToken: jwtString);
   }
 }

@@ -70,6 +70,8 @@ class ChatDisconnectRequested extends ChatEvent {
 class ChatState {
   final SocketStatus status;
   final List<ChatMessage> messages;
+  final List<UserPresence> activeUsers;
+  final bool isPresenceLoading;
   final String? lastError;
   final String? connectedUrl;
   final bool isLoadedFromCache;
@@ -77,6 +79,8 @@ class ChatState {
   const ChatState({
     this.status = SocketStatus.disconnected,
     this.messages = const [],
+    this.activeUsers = const [],
+    this.isPresenceLoading = true,
     this.lastError,
     this.connectedUrl,
     this.isLoadedFromCache = false,
@@ -88,6 +92,8 @@ class ChatState {
   ChatState copyWith({
     SocketStatus? status,
     List<ChatMessage>? messages,
+    List<UserPresence>? activeUsers,
+    bool? isPresenceLoading,
     String? lastError,
     String? connectedUrl,
     bool? isLoadedFromCache,
@@ -95,6 +101,8 @@ class ChatState {
     return ChatState(
       status: status ?? this.status,
       messages: messages ?? this.messages,
+      activeUsers: activeUsers ?? this.activeUsers,
+      isPresenceLoading: isPresenceLoading ?? this.isPresenceLoading,
       lastError: lastError,
       connectedUrl: connectedUrl ?? this.connectedUrl,
       isLoadedFromCache: isLoadedFromCache ?? this.isLoadedFromCache,
@@ -110,12 +118,16 @@ class ChatState {
           lastError == other.lastError &&
           connectedUrl == other.connectedUrl &&
           isLoadedFromCache == other.isLoadedFromCache &&
-          messages.length == other.messages.length;
+          messages.length == other.messages.length &&
+          activeUsers.length == other.activeUsers.length &&
+          isPresenceLoading == other.isPresenceLoading;
 
   @override
   int get hashCode =>
       status.hashCode ^
       messages.hashCode ^
+      activeUsers.hashCode ^
+      isPresenceLoading.hashCode ^
       lastError.hashCode ^
       connectedUrl.hashCode ^
       isLoadedFromCache.hashCode;
@@ -250,6 +262,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final incoming = event.message;
 
     // -------------------------------------------------------------------------
+    // Presence Roster Updates:
+    // Update active connected users without persisting to message history
+    // -------------------------------------------------------------------------
+    if (incoming.isPresence) {
+      emit(state.copyWith(
+        activeUsers: incoming.users,
+        isPresenceLoading: false,
+      ));
+      return;
+    }
+
+    // -------------------------------------------------------------------------
     // Synchronization & Deduplication Logic:
     // If incoming message has a PostgreSQL UUID, check if it already exists
     // (e.g., from local cache or prior broadcast).
@@ -340,10 +364,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatStatusChanged event,
     Emitter<ChatState> emit,
   ) {
+    final isConnected = event.status == SocketStatus.connected;
     emit(state.copyWith(
       status: event.status,
       lastError: event.error,
       connectedUrl: _socketService.connectedUrl,
+      activeUsers: isConnected ? state.activeUsers : const [],
+      isPresenceLoading: !isConnected,
     ));
   }
 
@@ -352,7 +379,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) {
     _socketService.disconnect();
-    emit(state.copyWith(status: SocketStatus.disconnected));
+    emit(state.copyWith(
+      status: SocketStatus.disconnected,
+      activeUsers: const [],
+      isPresenceLoading: true,
+    ));
   }
 
   @override

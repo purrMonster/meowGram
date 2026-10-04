@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"meowgram/server/internal/config"
 	"meowgram/server/internal/model"
@@ -31,10 +32,27 @@ type AutheliaClaims struct {
 	Email             string `json:"email"`
 }
 
-// OIDCVerifier wraps token verification against Authelia's JWKS and Issuer.
+// OIDCVerifier wraps token verification against Authelia's JWKS, Issuer, and Audience.
 type OIDCVerifier struct {
-	verifier *oidc.IDTokenVerifier
-	issuer   string
+	keySet         oidc.KeySet
+	issuer         string
+	autheliaDomain string
+	appDomain      string
+	clientID       string
+	audience       string
+}
+
+// rawTokenClaims models the complete set of standard claims in Authelia RS256 tokens.
+type rawTokenClaims struct {
+	Issuer            string          `json:"iss"`
+	Subject           string          `json:"sub"`
+	Audience          json.RawMessage `json:"aud"`
+	ExpiresAt         int64           `json:"exp"`
+	NotBefore         int64           `json:"nbf"`
+	IssuedAt          int64           `json:"iat"`
+	PreferredUsername string          `json:"preferred_username"`
+	Name              string          `json:"name"`
+	Email             string          `json:"email"`
 }
 
 // NewOIDCVerifier initializes an OIDC token verifier using Authelia's JWKS URL and Issuer.
@@ -44,33 +62,159 @@ func NewOIDCVerifier(ctx context.Context, cfg *config.Config) (*OIDCVerifier, er
 	}
 
 	keySet := oidc.NewRemoteKeySet(ctx, cfg.AutheliaJWKSURL)
-	verifier := oidc.NewVerifier(cfg.AutheliaIssuer, keySet, &oidc.Config{
-		SkipClientIDCheck: true,
-	})
-
-	return &OIDCVerifier{
-		verifier: verifier,
-		issuer:   cfg.AutheliaIssuer,
-	}, nil
+	return NewOIDCVerifierWithKeySet(keySet, cfg), nil
 }
 
-// Verify validates the raw token string and extracts Authelia claims.
+// NewOIDCVerifierWithKeySet constructs an OIDCVerifier with an explicit KeySet (for production or mock testing).
+func NewOIDCVerifierWithKeySet(keySet oidc.KeySet, cfg *config.Config) *OIDCVerifier {
+	return &OIDCVerifier{
+		keySet:         keySet,
+		issuer:         cfg.AutheliaIssuer,
+		autheliaDomain: cfg.AutheliaDomain,
+		appDomain:      cfg.AppDomain,
+		clientID:       cfg.AutheliaClientID,
+		audience:       cfg.AutheliaAudience,
+	}
+}
+
+// Verify validates the raw RS256 token signature against JWKS and validates issuer, audience, and expiry.
 func (v *OIDCVerifier) Verify(ctx context.Context, rawToken string) (*AutheliaClaims, error) {
-	token, err := v.verifier.Verify(ctx, rawToken)
-	if err != nil {
-		return nil, fmt.Errorf("token verification failed: %w", err)
+	if rawToken == "" {
+		return nil, errors.New("empty token")
 	}
 
-	var claims AutheliaClaims
-	if err := token.Claims(&claims); err != nil {
+	// 1. Verify cryptographic RS256 signature against Authelia JWKS
+	payload, err := v.keySet.VerifySignature(ctx, rawToken)
+	if err != nil {
+		return nil, fmt.Errorf("cryptographic signature verification failed: %w", err)
+	}
+
+	// 2. Unmarshal payload claims
+	var claims rawTokenClaims
+	if err := json.Unmarshal(payload, &claims); err != nil {
 		return nil, fmt.Errorf("failed to extract token claims: %w", err)
 	}
 
-	if claims.Subject == "" {
+	// 3. Validate mandatory subject
+	if strings.TrimSpace(claims.Subject) == "" {
 		return nil, errors.New("token is missing mandatory 'sub' claim")
 	}
 
-	return &claims, nil
+	// 4. Validate expiration with 1-minute clock skew tolerance
+	now := time.Now()
+	if claims.ExpiresAt > 0 {
+		if now.Add(-1 * time.Minute).Unix() > claims.ExpiresAt {
+			return nil, errors.New("token has expired")
+		}
+	}
+	if claims.NotBefore > 0 {
+		if now.Add(1 * time.Minute).Unix() < claims.NotBefore {
+			return nil, errors.New("token is not yet valid (nbf)")
+		}
+	}
+
+	// 5. Validate Issuer (handles trailing slash normalization and domain variants)
+	if err := v.validateIssuer(claims.Issuer); err != nil {
+		return nil, err
+	}
+
+	// 6. Validate Audience claim
+	if err := v.validateAudience(claims.Audience); err != nil {
+		return nil, err
+	}
+
+	return &AutheliaClaims{
+		Subject:           claims.Subject,
+		PreferredUsername: claims.PreferredUsername,
+		Name:              claims.Name,
+		Email:             claims.Email,
+	}, nil
+}
+
+func (v *OIDCVerifier) validateIssuer(tokenIssuer string) error {
+	trimmedToken := strings.TrimRight(strings.TrimSpace(tokenIssuer), "/")
+	if trimmedToken == "" {
+		return errors.New("token is missing mandatory 'iss' claim")
+	}
+
+	candidates := []string{
+		strings.TrimRight(v.issuer, "/"),
+	}
+	if v.autheliaDomain != "" {
+		domain := strings.TrimRight(v.autheliaDomain, "/")
+		candidates = append(candidates, "https://"+domain, "http://"+domain, domain)
+	}
+
+	for _, c := range candidates {
+		if c != "" && strings.EqualFold(trimmedToken, c) {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("token issuer %q does not match configured issuer %q", tokenIssuer, v.issuer)
+}
+
+func (v *OIDCVerifier) validateAudience(rawAud json.RawMessage) error {
+	tokenAudiences := extractAudiences(rawAud)
+
+	// Determine accepted audiences
+	allowedAudiences := []string{}
+	if v.audience != "" {
+		allowedAudiences = append(allowedAudiences, v.audience)
+	}
+	if v.clientID != "" {
+		allowedAudiences = append(allowedAudiences, v.clientID)
+	}
+	if v.appDomain != "" {
+		domain := strings.TrimRight(v.appDomain, "/")
+		allowedAudiences = append(allowedAudiences,
+			domain,
+			"https://"+domain,
+			"http://"+domain,
+			"https://"+domain+"/",
+			"http://"+domain+"/",
+		)
+	}
+	allowedAudiences = append(allowedAudiences, "meowgram", "meowgram-client")
+
+	// If token has aud claims, verify at least one matches our allowed audiences
+	if len(tokenAudiences) > 0 {
+		for _, tokenAud := range tokenAudiences {
+			normTokenAud := strings.TrimRight(strings.TrimSpace(tokenAud), "/")
+			for _, allowed := range allowedAudiences {
+				normAllowed := strings.TrimRight(strings.TrimSpace(allowed), "/")
+				if strings.EqualFold(normTokenAud, normAllowed) {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("token audience %v does not match allowed audiences", tokenAudiences)
+	}
+
+	// If token has no aud claim but audience is explicitly enforced by config
+	if v.audience != "" {
+		return errors.New("token is missing mandatory 'aud' claim required by configuration")
+	}
+
+	return nil
+}
+
+func extractAudiences(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var single string
+	if err := json.Unmarshal(raw, &single); err == nil {
+		if single != "" {
+			return []string{single}
+		}
+		return nil
+	}
+	var list []string
+	if err := json.Unmarshal(raw, &list); err == nil {
+		return list
+	}
+	return nil
 }
 
 // Middleware enforces Authelia OIDC authentication and auto-provisions user records.

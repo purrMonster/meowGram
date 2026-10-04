@@ -1,9 +1,9 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.8.0  
-> **Status**: APPROVED (Release 1 Feature-Frozen: Packaging Sprint & Production Distribution Complete)  
+> **Document Version**: 1.9.0  
+> **Status**: APPROVED (Release 1 Feature-Frozen: Packaging Sprint & Post-Login UAT Hardening Complete)  
 > **Author**: Lead Developer / Antigravity IDE  
-> **Last Updated**: 2026-10-03  
+> **Last Updated**: 2026-10-04  
 
 ---
 
@@ -18,6 +18,7 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
   - In-memory Go `Hub` manages active client registries via synchronized channels (`register`, `unregister`, `broadcast`).
   - Strict **Persistence Before Broadcast**: Inbound messages are committed to PostgreSQL (`messages` table) before entering the broadcast pipeline, guaranteeing zero dropped messages.
   - Goroutine Isolation: Per-client `ReadPump` and `WritePump` goroutines guarantee Gorilla WebSocket concurrency safety and prevent head-of-line blocking.
+  - **Dynamic Presence Broadcast**: `Hub` broadcasts active connected user rosters (`type: "presence"`) on client registration and unregistration.
 - **Basic Chat UI Shell (UST-1.3.2)**:
   - Responsive Flutter UI powered by `flutter_bloc` managing the real-time message timeline, 50-message initial history hydration, and deduplication.
   - Mobile software keyboard safety with `SafeArea` and `MediaQuery.viewInsetsOf(context)`.
@@ -32,6 +33,11 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
   - Client-side `SyncService` triggered automatically upon WebSocket reconnection, retrieving the newest cached timestamp and requesting gap-fill messages.
   - Strict timezone standardization: timestamps are normalized to UTC (`toUtc().toIso8601String()`) and parsed to UTC before executing PostgreSQL `TIMESTAMPTZ` comparisons.
   - Deduplicating merge in `ChatBloc`: incoming messages are deduplicated by PostgreSQL UUID against live WebSocket hydration bursts and active state, sorted chronologically, and persisted to Hive.
+- **Post-Login UAT Hardening (Release 1)**:
+  - **WebSocket Handshake Resilience**: Token signature verification directly against Authelia JWKS with trailing-slash normalization on `iss` and flexible audience verification (`aud`).
+  - **Persistent Token Storage**: `flutter_secure_storage` encrypted Keychain/Keystore persistence with `first_unlock` accessibility, persisting across app backgrounding, termination, and device reboots.
+  - **Friendly Username Extraction**: Prioritized hierarchy parsing `preferred_username` -> `name` -> `email prefix` -> `sub` from Authelia access tokens.
+  - **Mock Data Elimination**: Ripped out hardcoded dummy presence members in favor of live presence rosters broadcasted over WebSocket.
 
 ---
 
@@ -42,8 +48,11 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Client Auth Flow** | OAuth 2.0 Authorization Code with PKCE (RFC 7636) | Required for public clients where credentials cannot be embedded securely. Replaces legacy implicit flows with cryptographically bound `code_challenge` (S256). |
 | **Desktop Redirect URI** | RFC 8252 Loopback HTTP (`http://127.0.0.1:8088/callback`) | Standard for native desktop apps on Windows/macOS/Linux. Eliminates OS custom URI scheme registry requirements during dev/testing. |
 | **Web Redirect URI** | Host Origin (`Uri.base.origin`) | Seamless in-browser redirect on Web. URL inspection captures `code` and `state` parameters without local socket binding. |
+| **Mobile Redirect URI** | Custom URL Scheme (`meowgram://callback`) | Deep link interception via `app_links` on iOS and Android. Replaces loopback sockets on mobile OSes. |
 | **Token Transport to WS** | URL Query Parameter (`?token={access_token}`) | Standard web browsers do not allow arbitrary HTTP headers (such as `Authorization`) during WebSocket handshake (`new WebSocket(...)`). |
 | **Auth State Management** | `AuthController` with `refreshListenable` GoRouter | Declarative route protection. Automatically redirects `/login` -> `/chat` on token acquisition and `/chat` -> `/login` on expiry/logout. |
+| **Secure Token Persistence** | `flutter_secure_storage` (`TokenStorage`) | Persists tokens to iOS Keychain (`first_unlock`) and Android KeyStore immediately upon PKCE exchange. Restores session on app startup and foregrounding (`WidgetsBindingObserver`). |
+| **Username Claim Resolution** | Token Claim Hierarchy | Resolves user display name from `preferred_username` -> `name` -> `email prefix` -> `sub` UUID fallback, preventing raw Authelia UUIDs in the UI. |
 | **Chat Timeline State** | `flutter_bloc` (`ChatBloc`) | Unidirectional data flow cleanly separating WebSocket stream listening from UI presentation. Decouples event handling (history bursts, real-time broadcasts) from rendering. |
 | **Responsive Breakpoint** | 800.0 Logical Pixels (`LayoutBuilder`) | Standard split point for tablets/desktops vs smartphones. Screens >= 800px show dual-pane (Sidebar + Chat); screens < 800px show single-pane with Drawer. |
 | **Local Cache Database** | `hive_flutter` (`HiveLocalMessageRepository`) | Chosen over `sqflite` for unified cross-platform support across Web (IndexedDB), Windows, macOS, Linux, Android, and iOS without requiring C/FFI toolchains or WebAssembly build glue. |
@@ -57,8 +66,9 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Mobile Keyboard Adaptation** | `SafeArea` + `viewInsets` in `ChatInputBar` | Prevents software keyboard from overlapping chat input bar on Android/iOS without double-padding on Web/Desktop. |
 | **Message Ordering Guarantee** | Chronological Sorting & In-Memory Deduplication | Re-sorts by `createdAt` ascending and deduplicates by PostgreSQL UUID to guarantee deterministic ordering across network jitters. |
 | **Token Refresh Lifecycle** | Proactive Background Timer (`expiresAt - 60s`) | Silently exchanges `refresh_token` for a fresh `access_token` prior to expiration, preventing WebSocket disconnects during active chat. |
-| **Backend OIDC Verifier** | `coreos/go-oidc/v3` with Remote KeySet | Cryptographically verifies incoming Bearer JWTs against Authelia's JWKS endpoint without handling user credentials. |
+| **Backend OIDC Verifier** | JWKS Remote KeySet + Normalized Claims | Cryptographically verifies incoming Bearer JWTs against Authelia's JWKS endpoint with trailing slash normalization and multi-audience matching. |
 | **Broadcast Engine** | Go In-Memory `Hub` with Goroutine Channels | Highly performant, zero external messaging broker (Redis/RabbitMQ) dependency needed for single-node core. Scales efficiently across tens of thousands of concurrent connections. |
+| **Real-Time Presence** | Hub Presence Frames (`type: "presence"`) | Dynamically tracks connected clients and broadcasts online roster on join/disconnect, eliminating hardcoded mock member lists. |
 | **Message Ordering Guarantee** | **Persistence Before Broadcast** | `ReadPump` saves message to PostgreSQL *before* queueing into `hub.Broadcast`. If the database write fails or client drops mid-flight, uncommitted state never corrupts peer chat streams. |
 | **Socket Thread Safety** | Gorilla WebSocket `ReadPump` & `WritePump` Split | Gorilla `*websocket.Conn` forbids concurrent writer calls. Isolating socket writes exclusively to `WritePump` while reads run on `ReadPump` eliminates data races without coarse mutex locks. |
 | **Backpressure Protection** | Non-blocking Broadcast with Channel Eviction | `Hub` uses `select { case client.send <- msg: default: unregister }` with a 256-frame buffered channel. Slow or stalled clients cannot block the main broadcast loop or lag other peers. |
@@ -368,6 +378,8 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 | `AUTHELIA_DOMAIN` | `localhost:9091` | `auth.purrbrews.cc` | FQDN or host:port for Authelia OIDC identity provider. |
 | `AUTHELIA_ISSUER` | *(Derived)* | `https://auth.purrbrews.cc` | Base Issuer URL for Authelia OIDC provider. Derived from `AUTHELIA_DOMAIN`. |
 | `AUTHELIA_ISSUER_URL` | *(Derived)* | `https://auth.purrbrews.cc` | Alias for `AUTHELIA_ISSUER`. |
+| `AUTHELIA_CLIENT_ID` | `meowgram` | `meowgram` / `meowgram-client` | Client ID expected in JWT aud or token validation. |
+| `AUTHELIA_AUDIENCE` | *(Optional)* | `https://meowgram.purrbrews.cc` | Expected audience (`aud`) in access tokens. Defaults to `AUTHELIA_CLIENT_ID` or `APP_DOMAIN`. |
 | `AUTHELIA_JWKS_URL` | *(Derived)* | `https://auth.purrbrews.cc/jwks.json` | URL for Authelia public keys (JWKS). Derived from `AUTHELIA_ISSUER`. |
 | `POSTGRES_USER` | `meowgram` | `meowgram_prod` | PostgreSQL user account. |
 | `POSTGRES_PASSWORD` | `meowgram_secret_dev...` | *(Strong secret)* | PostgreSQL password. |
@@ -554,7 +566,7 @@ For native mobile (iOS & Android) UAT and Authelia OIDC callback interception:
 3. **Cross-Platform Discrepancies & Background Survival**:
    - **Browser Launch Mode**: `AuthController` uses `LaunchMode.externalApplication` to open the system browser (Safari on iOS, Chrome on Android) outside of an embedded webview, allowing clean session isolation and automatic callback bounce.
    - **Background Survival**: `AuthController` retains `_pendingPkce` and `_pendingRedirectUri` on the controller instance, preventing state loss during OS app suspension while Safari is in the foreground.
-   - **Token Storage Parity**: Tokens are securely maintained in-memory within `AuthController` across all platforms with automated background refresh timers (`expiresAt - 60s`), eliminating Keychain entitlement and App Sandbox hurdles on iOS and macOS.
+   - **Persistent Token Storage**: Tokens are immediately persisted to secure native storage (`flutter_secure_storage` with Keychain `first_unlock` accessibility on iOS/macOS and EncryptedSharedPreferences on Android) upon PKCE token exchange, prior to routing to `/chat`. Rehydration occurs on app cold start and when returning to the foreground (`AppLifecycleState.resumed`).
    - **Redirect URI Auto-Resolution**: `AppConfig.authRedirectUri` automatically resolves to `meowgram://callback` on iOS/Android, and `http://127.0.0.1:8088/callback` on Desktop.
 4. **Physical Device Launch Script (`deploy/scripts/run_ios_physical.sh`)**:
    - Launches meowGram on a connected iOS device using `--dart-define-from-file`.
@@ -570,6 +582,21 @@ For native mobile (iOS & Android) UAT and Authelia OIDC callback interception:
 5. **Deep Link Verification**:
    - **Simulator**: `xcrun simctl openurl booted "meowgram://callback?code=mock_code&state=mock_state"`
    - **Physical Device**: Open Safari and navigate to `meowgram://callback?code=test&state=test_state`. Safari prompts to open "meowGram", confirming native scheme registration and deep link routing.
+
+#### 10.4.3 Post-Login UAT Hardening & Release 1 Fixes
+During Release 1 iOS UAT, four post-login blockers were identified and resolved:
+1. **WebSocket Handshake Validation (RS256 & Claim Normalization)**:
+   - *Problem*: Authelia signs JWTs with RS256 and often includes trailing slashes in the issuer (`https://auth.domain/`), causing strict string match verification to fail with HTTP 401 during the WebSocket upgrade handshake. Additionally, audience (`aud`) claims were rejected if not strictly matched.
+   - *Fix*: The Go backend `OIDCVerifier` leverages `keySet.VerifySignature(ctx, rawToken)` against Authelia's JWKS for cryptographic integrity, followed by explicit normalized claim validation (`validateIssuer` with trailing-slash tolerance, `validateAudience` accepting client ID, audience, or backend domain, and 1-minute expiration clock skew).
+2. **App Backgrounding & Session Persistence**:
+   - *Problem*: Backgrounding the app on iOS cleared transient in-memory state or prompted route guards to redirect back to `/login`.
+   - *Fix*: Integrated `flutter_secure_storage` via `TokenStorage`. Tokens are written immediately after PKCE exchange completion, before navigation to `/chat`. `MeowGramApp` observes `WidgetsBindingObserver.didChangeAppLifecycleState` to trigger `authController.checkSession()` when resuming foreground activity.
+3. **Friendly Username Resolution**:
+   - *Problem*: Authelia access tokens use raw UUIDs in the `sub` claim (e.g. `@141a5dfa...`), which rendered directly in the UI instead of the user's nickname.
+   - *Fix*: `UserProfile.fromTokens()` and `fromJwt()` decode access token payload claims hierarchically: `preferred_username` -> `name` -> `email prefix` -> `sub`, providing human-friendly chat identities.
+4. **Elimination of Hardcoded Presence Data**:
+   - *Problem*: The drawer presence roster showed static mock cats (Mittens, Felix, Garfield, Luna).
+   - *Fix*: The Go `Hub` broadcasts dynamic `presence` frames (`type: "presence"`, `users: []UserPresence`) whenever clients connect or disconnect. `ChatBloc` tracks `activeUsers` in state, and `Sidebar` renders live member counts, loading states, and active users.
 
 ### 10.5 Windows Packaging & Signing
 1. Binary outputs compile to `build/windows/x64/runner/Release/meowGram.exe`.
@@ -627,6 +654,10 @@ For native mobile (iOS & Android) UAT and Authelia OIDC callback interception:
 - [x] Android release signing configured with `key.properties` and keystore documentation provided.
 - [x] Backend Docker image `meowgram:1.0.0` built and verified (8.7MB static Alpine binary).
 - [x] Manual Xcode code signing steps documented for iOS/macOS App Store and TestFlight distribution.
-- [x] Full client test suite (22/22 tests across `chat_ui_test.dart`, `responsive_layout_test.dart`, `sync_service_test.dart`, and `widget_test.dart`) passing with 100% success rate.
-- [x] Go backend test suite (`sync_test.go`, `hub_test.go`) passing with 100% success rate.
+- [x] Full client test suite (40/40 tests across `chat_ui_test.dart`, `responsive_layout_test.dart`, `sync_service_test.dart`, `widget_test.dart`, and `post_login_uat_test.dart`) passing with 100% success rate.
+- [x] Go backend test suite (`sync_test.go`, `hub_test.go`, `oidc_test.go`) passing with 100% success rate.
 - [x] Production Web build compiled successfully to `client/build/web`.
+- [x] Go backend `OIDCVerifier` cryptographically verifies RS256 Authelia tokens against remote JWKS, with trailing slash normalization and multi-audience tolerance.
+- [x] Token storage persisted via `flutter_secure_storage` immediately upon PKCE exchange; rehydrated on startup and app foregrounding (`AppLifecycleState.resumed`).
+- [x] Authelia user profile extraction resolves `preferred_username` -> `name` -> `email prefix` -> `sub` to avoid raw UUID display in UI.
+- [x] Mock presence data removed from `Sidebar`; Go `Hub` presence frame (`type: "presence"`) drives dynamic active roster in `ChatBloc`.
