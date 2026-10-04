@@ -1,24 +1,142 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:meowgram_client/src/auth/oidc_platform_stub.dart';
 
-/// Desktop & IO implementation of [OidcPlatformHelper] implementing RFC 8252 Section 7.3
-/// (OAuth 2.0 for Native Apps - Loopback Interface Redirection).
+/// Desktop & Mobile IO implementation of [OidcPlatformHelper].
 ///
 /// Mechanics:
-/// Native desktop applications on Windows, macOS, and Linux do not share a single browser
-/// security context. Per RFC 8252, the application binds an ephemeral or fixed loopback HTTP server
-/// on `127.0.0.1`, launches the default system browser to Authelia's authorization endpoint,
-/// and awaits the redirect on the loopback port.
+/// - Desktop (macOS, Windows, Linux): Implements RFC 8252 Section 7.3 loopback interface
+///   redirection by binding an ephemeral or fixed loopback HTTP server on `127.0.0.1:8088`.
+/// - Mobile (iOS, Android): Implements native deep link interception using [AppLinks]
+///   to capture `meowgram://` custom URL scheme callbacks from the system browser (Safari/Chrome).
 class OidcPlatformIoHelper implements OidcPlatformHelper {
   HttpServer? _server;
+  StreamSubscription<Uri>? _linkSubscription;
+  final AppLinks _appLinks;
+  final bool? _isMobileOverride;
+
+  OidcPlatformIoHelper({
+    AppLinks? appLinks,
+    bool? isMobileOverride,
+  })  : _appLinks = appLinks ?? AppLinks(),
+        _isMobileOverride = isMobileOverride;
+
+  bool get _isMobile =>
+      _isMobileOverride ?? (Platform.isIOS || Platform.isAndroid);
 
   @override
   Future<String?> listenForAuthCode(String redirectUri,
       {required String expectedState}) async {
     cancel();
 
+    if (_isMobile) {
+      return _listenForMobileAuthCode(
+        redirectUri,
+        expectedState: expectedState,
+      );
+    }
+
+    return _listenForDesktopAuthCode(
+      redirectUri,
+      expectedState: expectedState,
+    );
+  }
+
+  /// Mobile deep link listener using [AppLinks].
+  ///
+  /// Intercepts `meowgram://callback?code=...&state=...` returned by Authelia via the system browser.
+  Future<String?> _listenForMobileAuthCode(
+    String redirectUri, {
+    required String expectedState,
+  }) async {
+    final completer = Completer<String?>();
+    final targetUri = Uri.parse(redirectUri);
+
+    void handleIncomingUri(Uri uri) {
+      final isMeowgramScheme = uri.scheme.toLowerCase() == 'meowgram';
+      final matchesTargetScheme =
+          uri.scheme.toLowerCase() == targetUri.scheme.toLowerCase();
+
+      // Only inspect URIs matching either the app scheme or explicit redirectUri scheme
+      if (!isMeowgramScheme && !matchesTargetScheme) return;
+
+      final query = uri.queryParameters.isNotEmpty
+          ? uri.queryParameters
+          : (uri.hasFragment
+              ? Uri.splitQueryString(uri.fragment)
+              : const <String, String>{});
+
+      final state = query['state'];
+
+      // Crucial: Only process callbacks matching this specific PKCE session's state.
+      // Ignore stale links from previous sessions or unrelated intents.
+      if (state != expectedState) {
+        return;
+      }
+
+      final error = query['error'];
+      if (error != null) {
+        debugPrint('Mobile OIDC auth error returned: $error');
+        if (!completer.isCompleted) completer.complete(null);
+        cancel();
+        return;
+      }
+
+      final code = query['code'];
+      if (code != null && code.isNotEmpty) {
+        if (!completer.isCompleted) completer.complete(code);
+        cancel();
+        return;
+      }
+
+      if (!completer.isCompleted) completer.complete(null);
+      cancel();
+    }
+
+    // 1. Subscribe to real-time incoming deep links
+    _linkSubscription = _appLinks.uriLinkStream.listen(
+      (Uri uri) {
+        handleIncomingUri(uri);
+      },
+      onError: (Object err) {
+        debugPrint('AppLinks stream error: $err');
+      },
+    );
+
+    // 2. Also check if the app was launched directly with the redirect URI
+    try {
+      final latestLink = await _appLinks.getLatestLink();
+      if (latestLink != null) {
+        handleIncomingUri(latestLink);
+      } else {
+        final initialLink = await _appLinks.getInitialLink();
+        if (initialLink != null) {
+          handleIncomingUri(initialLink);
+        }
+      }
+    } catch (e) {
+      debugPrint('AppLinks initial link inspection notice: $e');
+    }
+
+    // 3. Timeout after 180 seconds to prevent lingering resources
+    Timer(const Duration(seconds: 180), () {
+      if (!completer.isCompleted) {
+        completer.complete(null);
+        cancel();
+      }
+    });
+
+    return await completer.future;
+  }
+
+  /// Desktop RFC 8252 loopback HTTP listener.
+  Future<String?> _listenForDesktopAuthCode(
+    String redirectUri, {
+    required String expectedState,
+  }) async {
     final uri = Uri.parse(redirectUri);
     final port = uri.hasPort ? uri.port : 8088;
     final path = uri.path.isEmpty ? '/callback' : uri.path;
@@ -152,6 +270,8 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
   void cancel() {
     _server?.close(force: true);
     _server = null;
+    _linkSubscription?.cancel();
+    _linkSubscription = null;
   }
 }
 
