@@ -163,6 +163,11 @@ class AppConfig {
       final uri = Uri.base;
       return '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
     }
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.android)) {
+      return 'meowgram://callback';
+    }
     return 'http://127.0.0.1:8088/callback';
   }
 

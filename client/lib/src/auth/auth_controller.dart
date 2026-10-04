@@ -34,6 +34,12 @@ class AuthController extends ChangeNotifier {
 
   Timer? _refreshTimer;
 
+  PkcePair? _pendingPkce;
+  PkcePair? get pendingPkce => _pendingPkce;
+
+  String? _pendingRedirectUri;
+  String? get pendingRedirectUri => _pendingRedirectUri;
+
   AuthController({
     OidcService? oidcService,
     OidcPlatformHelper? platformHelper,
@@ -44,8 +50,8 @@ class AuthController extends ChangeNotifier {
   ///
   /// Flow:
   /// 1. Generates cryptographic PKCE code_verifier, code_challenge (S256), state, and nonce.
-  /// 2. Binds platform redirect listener (RFC 8252 loopback server on Desktop, URL inspector on Web).
-  /// 3. Launches the system browser to the Authelia authorization endpoint.
+  /// 2. Binds platform redirect listener (RFC 8252 loopback server on Desktop, URL inspector on Web, AppLinks on Mobile).
+  /// 3. Launches the system browser to the Authelia authorization endpoint using [LaunchMode.externalApplication].
   /// 4. Captures the authorization code callback.
   /// 5. Exchanges the code and code_verifier for an Access Token and Refresh Token.
   /// 6. Decodes user claims and schedules an automated token refresh.
@@ -60,6 +66,9 @@ class AuthController extends ChangeNotifier {
       final pkce = PkcePair.generate();
       final redirectUri = AppConfig.authRedirectUri;
 
+      _pendingPkce = pkce;
+      _pendingRedirectUri = redirectUri;
+
       // 1. Start listening for incoming redirect callback
       final codeFuture = _platformHelper.listenForAuthCode(
         redirectUri,
@@ -72,7 +81,7 @@ class AuthController extends ChangeNotifier {
         redirectUri: redirectUri,
       );
 
-      // 3. Open system browser
+      // 3. Open system browser (Safari / Chrome) in external application mode
       final launched = await launchUrl(
         authUri,
         mode: LaunchMode.externalApplication,
@@ -101,6 +110,8 @@ class AuthController extends ChangeNotifier {
       _status = AuthStatus.error;
       notifyListeners();
     } finally {
+      _pendingPkce = null;
+      _pendingRedirectUri = null;
       _platformHelper.cancel();
     }
   }
@@ -130,6 +141,8 @@ class AuthController extends ChangeNotifier {
     _refreshTimer = null;
     _tokens = null;
     _userProfile = null;
+    _pendingPkce = null;
+    _pendingRedirectUri = null;
     _status = AuthStatus.unauthenticated;
     _lastError = null;
     notifyListeners();
