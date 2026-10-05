@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
 import 'package:meowgram_client/src/routes/app_router.dart';
+import 'package:meowgram_client/src/services/background_message_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,13 @@ Future<void> main() async {
     await Hive.initFlutter();
   } catch (e) {
     debugPrint('Hive initialization notice: $e');
+  }
+
+  try {
+    await BackgroundMessageService.initialize();
+    await BackgroundMessageService.registerPeriodicSync();
+  } catch (e) {
+    debugPrint('Background sync initialization notice: $e');
   }
 
   final authController = AuthController();
