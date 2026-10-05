@@ -22,6 +22,7 @@ type Config struct {
 	AutheliaJWKSURL  string
 	AutheliaClientID string
 	AutheliaAudience string
+	GoogleCredentials string
 	SyncEndpoint     string
 	HealthEndpoint   string
 	WSEndpoint       string
@@ -205,6 +206,8 @@ func Load() (*Config, error) {
 	writeTimeout := parseDurationSeconds(os.Getenv("WRITE_TIMEOUT_SECONDS"), 15*time.Second)
 	idleTimeout := parseDurationSeconds(os.Getenv("IDLE_TIMEOUT_SECONDS"), 60*time.Second)
 
+	googleCredentials := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
 	return &Config{
 		Port:            port,
 		AppDomain:       appDomain,
@@ -222,6 +225,7 @@ func Load() (*Config, error) {
 		WSEndpoint:       wsEndpoint,
 		ImmichDomain:     immichDomain,
 		ImmichAPIURL:     immichAPIURL,
+		GoogleCredentials: googleCredentials,
 		ReadTimeout:      readTimeout,
 		WriteTimeout:     writeTimeout,
 		IdleTimeout:      idleTimeout,

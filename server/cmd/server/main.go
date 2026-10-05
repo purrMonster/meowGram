@@ -17,6 +17,7 @@ import (
 	"meowgram/server/internal/handler"
 	"meowgram/server/internal/middleware"
 	"meowgram/server/internal/repository"
+	"meowgram/server/internal/fcm"
 )
 
 func main() {
@@ -70,8 +71,22 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	messageRepo := repository.NewMessageRepository(db)
 
+	// Initialize FCM service if credentials are provided
+	var fcmService *fcm.Service
+	if cfg.GoogleCredentials != "" {
+		svc, err := fcm.NewService(context.Background(), logger, cfg.GoogleCredentials)
+		if err != nil {
+			logger.Warn("Failed to initialize FCM service, push notifications will be disabled", "error", err)
+		} else {
+			fcmService = svc
+			logger.Info("FCM Service initialized successfully")
+		}
+	} else {
+		logger.Warn("GOOGLE_APPLICATION_CREDENTIALS not set; push notifications disabled")
+	}
+
 	// Initialize the Real-Time Broadcast Hub
-	hub := chat.NewHub(logger)
+	hub := chat.NewHub(logger, fcmService)
 	hubCtx, hubCancel := context.WithCancel(context.Background())
 	defer hubCancel()
 
