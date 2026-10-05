@@ -80,7 +80,7 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
       final error = query['error'];
       if (error != null) {
         debugPrint('Mobile OIDC auth error returned: $error');
-        if (!completer.isCompleted) completer.complete(null);
+        if (!completer.isCompleted) completer.completeError(Exception('OIDC Error: $error'));
         cancel();
         return;
       }
@@ -121,8 +121,8 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
       debugPrint('AppLinks initial link inspection notice: $e');
     }
 
-    // 3. Timeout after 180 seconds to prevent lingering resources
-    Timer(const Duration(seconds: 180), () {
+    // Timeout after 600 seconds (10 minutes) to prevent lingering resources
+    Timer(const Duration(seconds: 600), () {
       if (!completer.isCompleted) {
         completer.complete(null);
         cancel();
@@ -156,7 +156,7 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
 
           if (error != null) {
             _respondWithError(request, error);
-            if (!completer.isCompleted) completer.complete(null);
+            if (!completer.isCompleted) completer.completeError(Exception('OIDC Error: $error'));
             cancel();
             return;
           }
@@ -185,8 +185,8 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
         }
       });
 
-      // Automatic timeout after 180 seconds to avoid lingering socket
-      Timer(const Duration(seconds: 180), () {
+      // Automatic timeout after 600 seconds (10 minutes) to avoid lingering socket
+      Timer(const Duration(seconds: 600), () {
         if (!completer.isCompleted) {
           subscription.cancel();
           completer.complete(null);
