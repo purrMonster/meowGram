@@ -1,13 +1,13 @@
 {
   "APP_ENV": "production",
-  "APP_DOMAIN": "meowgram.purrbrews.cc",
+  "APP_DOMAIN": "meow.whiskertreat.fyi",
   "HTTP_PORT": "443",
   "USE_SECURE_SCHEMES": true,
-  "AUTHELIA_DOMAIN": "auth.purrbrews.cc",
-  "AUTHELIA_ISSUER_URL": "https://auth.purrbrews.cc",
+  "AUTHELIA_DOMAIN": "authelia.whiskertreat.fyi",
+  "AUTHELIA_ISSUER_URL": "https://authelia.whiskertreat.fyi",
   "AUTHELIA_CLIENT_ID": "meowgram-client",
-  "API_BASE_URL": "https://meowgram.purrbrews.cc",
-  "WS_BASE_URL": "wss://meowgram.purrbrews.cc/ws",
+  "API_BASE_URL": "https://meow.whiskertreat.fyi",
+  "WS_BASE_URL": "wss://meow.whiskertreat.fyi/ws",
   "SYNC_ENDPOINT": "/api/messages/sync",
   "HEALTH_ENDPOINT": "/healthz"
 }

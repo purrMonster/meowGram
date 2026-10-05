@@ -18,15 +18,15 @@ GoRouter createAppRouter(AuthController authController) {
     refreshListenable: authController,
     redirect: (BuildContext context, GoRouterState state) {
       final isAuthenticated = authController.isAuthenticated;
-      final isLoggingIn = state.matchedLocation == '/login';
+      final isLoggingIn = state.uri.path == '/login';
 
       // 1. Guard: If not authenticated and trying to access protected route -> /login
       if (!isAuthenticated && !isLoggingIn) {
         return '/login';
       }
 
-      // 2. Auto-route: If authenticated and currently on login -> /chat
-      if (isAuthenticated && isLoggingIn) {
+      // 2. Auto-route: If authenticated and currently on login or root -> /chat
+      if (isAuthenticated && (isLoggingIn || state.uri.path == '/')) {
         return '/chat';
       }
 
