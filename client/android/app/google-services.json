@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "216232414413",
+    "project_id": "purrbrews-meowgram",
+    "storage_bucket": "purrbrews-meowgram.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:216232414413:android:08c2ac958c0963533aad84",
+        "android_client_info": {
+          "package_name": "com.purrbrews.meowgram"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBh6JkeCypyMQBC4HbRb1D85tWeIYj4IDU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
