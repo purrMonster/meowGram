@@ -5,6 +5,8 @@ import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
 import 'package:meowgram_client/src/routes/app_router.dart';
 
+import 'package:meowgram_client/src/services/notification_service.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -20,6 +22,12 @@ Future<void> main() async {
   debugPrint('  Authelia Issuer:   ${AppConfig.autheliaIssuerUrl}');
   debugPrint('  Authelia ClientID: ${AppConfig.autheliaClientId}');
   debugPrint('====================================================');
+
+  try {
+    await NotificationService().initialize();
+  } catch (e) {
+    debugPrint('Notification initialization notice: $e');
+  }
 
   try {
     await Hive.initFlutter();
