@@ -11,26 +11,26 @@ import (
 
 // Config represents runtime configuration loaded strictly from environment variables and .env files.
 type Config struct {
-	Port            string
-	AppDomain       string
-	CORSOrigins     []string
-	Environment     string
-	LogLevel        string
-	DatabaseURL     string
-	AutheliaDomain   string
-	AutheliaIssuer   string
-	AutheliaJWKSURL  string
-	AutheliaClientID string
-	AutheliaAudience string
+	Port              string
+	AppDomain         string
+	CORSOrigins       []string
+	Environment       string
+	LogLevel          string
+	DatabaseURL       string
+	AutheliaDomain    string
+	AutheliaIssuer    string
+	AutheliaJWKSURL   string
+	AutheliaClientID  string
+	AutheliaAudience  string
 	GoogleCredentials string
-	SyncEndpoint     string
-	HealthEndpoint   string
-	WSEndpoint       string
-	ImmichDomain     string
-	ImmichAPIURL     string
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
-	IdleTimeout      time.Duration
+	SyncEndpoint      string
+	HealthEndpoint    string
+	WSEndpoint        string
+	ImmichDomain      string
+	ImmichAPIURL      string
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
+	IdleTimeout       time.Duration
 }
 
 // Load populates and validates Config from process environment and candidate .env files.
@@ -127,7 +127,8 @@ func Load() (*Config, error) {
 		autheliaClientID = os.Getenv("CLIENT_ID")
 	}
 	if autheliaClientID == "" {
-		autheliaClientID = "meowgram"
+		// Matches the public client registered in Authelia and used by the Flutter app.
+		autheliaClientID = "meowgram-client"
 	}
 
 	autheliaAudience := os.Getenv("AUTHELIA_AUDIENCE")
@@ -166,11 +167,8 @@ func Load() (*Config, error) {
 		wsEndpoint = "/" + wsEndpoint
 	}
 
-	// Immich Endpoints (Release 2)
+	// Immich Endpoints (Release 2). No default: zero-hardcoding rule.
 	immichDomain := os.Getenv("IMMICH_DOMAIN")
-	if immichDomain == "" {
-		immichDomain = "immich.purrbrews.cc"
-	}
 	immichAPIURL := os.Getenv("IMMICH_API_URL")
 	if immichAPIURL == "" && immichDomain != "" {
 		immichAPIURL = "https://" + immichDomain + "/api"
@@ -209,26 +207,26 @@ func Load() (*Config, error) {
 	googleCredentials := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 	return &Config{
-		Port:            port,
-		AppDomain:       appDomain,
-		CORSOrigins:     corsOrigins,
-		Environment:     env,
-		LogLevel:        logLevel,
-		DatabaseURL:     dbURL,
-		AutheliaDomain:   autheliaDomain,
-		AutheliaIssuer:   autheliaIssuer,
-		AutheliaJWKSURL:  autheliaJWKSURL,
-		AutheliaClientID: autheliaClientID,
-		AutheliaAudience: autheliaAudience,
-		SyncEndpoint:     syncEndpoint,
-		HealthEndpoint:   healthEndpoint,
-		WSEndpoint:       wsEndpoint,
-		ImmichDomain:     immichDomain,
-		ImmichAPIURL:     immichAPIURL,
+		Port:              port,
+		AppDomain:         appDomain,
+		CORSOrigins:       corsOrigins,
+		Environment:       env,
+		LogLevel:          logLevel,
+		DatabaseURL:       dbURL,
+		AutheliaDomain:    autheliaDomain,
+		AutheliaIssuer:    autheliaIssuer,
+		AutheliaJWKSURL:   autheliaJWKSURL,
+		AutheliaClientID:  autheliaClientID,
+		AutheliaAudience:  autheliaAudience,
+		SyncEndpoint:      syncEndpoint,
+		HealthEndpoint:    healthEndpoint,
+		WSEndpoint:        wsEndpoint,
+		ImmichDomain:      immichDomain,
+		ImmichAPIURL:      immichAPIURL,
 		GoogleCredentials: googleCredentials,
-		ReadTimeout:      readTimeout,
-		WriteTimeout:     writeTimeout,
-		IdleTimeout:      idleTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}, nil
 }
 

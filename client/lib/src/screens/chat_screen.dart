@@ -43,9 +43,14 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _socketService = widget.socketService ?? ChatWebSocketService();
-    _chatBloc = widget.chatBloc ?? ChatBloc(socketService: _socketService);
+    _chatBloc = widget.chatBloc ??
+        ChatBloc(
+          socketService: _socketService,
+          tokenProvider: () => widget.authController.accessToken,
+          currentSubProvider: () => widget.authController.userProfile?.sub,
+        );
 
-    // Initial connection with cache-to-live handoff
+    // Initial connection with cache-to-live handoff (idempotent in ChatBloc)
     _chatBloc.add(
       ChatInitializeRequested(accessToken: widget.authController.accessToken),
     );
@@ -182,15 +187,14 @@ class _ChatScreenState extends State<ChatScreen> {
               // Connection & Offline Cache Status Banner
               BlocBuilder<ChatBloc, ChatState>(
                 builder: (context, state) {
-                  final target = state.connectedUrl ??
-                      AppConfig.authenticatedWsUrl(
-                        widget.authController.accessToken ?? '',
-                      );
+                  // Never render the access token: connectedUrl is redacted and
+                  // the fallback is the bare endpoint.
+                  final target = state.connectedUrl ?? AppConfig.wsBaseUrl;
                   return Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 6),
                     color: theme.colorScheme.surfaceContainerHighest
-                        .withOpacity(0.4),
+                        .withValues(alpha: 0.4),
                     child: Row(
                       children: [
                         Icon(
@@ -243,7 +247,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 Icons.chat_bubble_outline_rounded,
                                 size: 56,
                                 color:
-                                    theme.colorScheme.outline.withOpacity(0.5),
+                                    theme.colorScheme.outline.withValues(alpha: 0.5),
                               ),
                               const SizedBox(height: 16),
                               Text(

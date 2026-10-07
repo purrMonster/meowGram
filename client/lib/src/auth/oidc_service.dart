@@ -4,6 +4,21 @@ import 'package:meowgram_client/src/auth/auth_state.dart';
 import 'package:meowgram_client/src/auth/pkce_helper.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
 
+/// Thrown when the token endpoint definitively rejects a grant (HTTP 400/401,
+/// e.g. `invalid_grant` for an expired or revoked refresh token). Network errors
+/// and timeouts are *not* rejections and must not end the session.
+class OidcTokenRejectedException implements Exception {
+  final int statusCode;
+  final String body;
+  const OidcTokenRejectedException(this.statusCode, this.body);
+
+  @override
+  String toString() => 'Token request rejected ($statusCode): $body';
+}
+
+/// Timeout applied to every request against Authelia.
+const Duration kOidcRequestTimeout = Duration(seconds: 15);
+
 /// Service responsible for executing OIDC discovery, PKCE authorization URL generation,
 /// code-for-token exchange, and token refreshes against Authelia.
 class OidcService {
@@ -72,52 +87,55 @@ class OidcService {
   }) async {
     await discoverEndpoints();
 
-    final tokenUri = Uri.parse(_tokenEndpoint!);
-    final response = await _httpClient.post(
-      tokenUri,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-      },
-      body: {
-        'grant_type': 'authorization_code',
-        'client_id': AppConfig.autheliaClientId,
-        'code': code,
-        'redirect_uri': redirectUri,
-        'code_verifier': codeVerifier,
-      },
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception(
-          'Token exchange failed (${response.statusCode}): ${response.body}');
-    }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return TokenData.fromJson(data);
+    return _tokenRequest({
+      'grant_type': 'authorization_code',
+      'client_id': AppConfig.autheliaClientId,
+      'code': code,
+      'redirect_uri': redirectUri,
+      'code_verifier': codeVerifier,
+    });
   }
 
   /// Refreshes an expired access token using the stored refresh token.
   Future<TokenData> refreshToken({required String refreshToken}) async {
     await discoverEndpoints();
 
-    final tokenUri = Uri.parse(_tokenEndpoint!);
-    final response = await _httpClient.post(
-      tokenUri,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-      },
-      body: {
-        'grant_type': 'refresh_token',
-        'client_id': AppConfig.autheliaClientId,
-        'refresh_token': refreshToken,
-      },
-    );
+    final refreshed = await _tokenRequest({
+      'grant_type': 'refresh_token',
+      'client_id': AppConfig.autheliaClientId,
+      'refresh_token': refreshToken,
+    });
+    // Authelia may omit refresh_token when rotation is disabled: keep the old one.
+    if (refreshed.refreshToken == null || refreshed.refreshToken!.isEmpty) {
+      return TokenData(
+        accessToken: refreshed.accessToken,
+        idToken: refreshed.idToken,
+        refreshToken: refreshToken,
+        tokenType: refreshed.tokenType,
+        expiresAt: refreshed.expiresAt,
+      );
+    }
+    return refreshed;
+  }
 
+  Future<TokenData> _tokenRequest(Map<String, String> body) async {
+    final response = await _httpClient
+        .post(
+          Uri.parse(_tokenEndpoint!),
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+          },
+          body: body,
+        )
+        .timeout(kOidcRequestTimeout);
+
+    if (response.statusCode == 400 || response.statusCode == 401) {
+      throw OidcTokenRejectedException(response.statusCode, response.body);
+    }
     if (response.statusCode != 200) {
       throw Exception(
-          'Token refresh failed (${response.statusCode}): ${response.body}');
+          'Token request failed (${response.statusCode}): ${response.body}');
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;

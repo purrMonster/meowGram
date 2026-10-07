@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show htmlEscape;
 import 'dart:io';
 
 import 'package:app_links/app_links.dart';
@@ -26,6 +27,15 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
 
   bool get _isMobile =>
       _isMobileOverride ?? (Platform.isIOS || Platform.isAndroid);
+
+  @override
+  bool get usesFullPageRedirect => false;
+
+  @override
+  Future<void> savePendingLogin(PendingLogin pending) async {}
+
+  @override
+  Future<RedirectResult?> takeRedirectResult() async => null;
 
   @override
   Future<String?> listenForAuthCode(String redirectUri,
@@ -80,7 +90,9 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
       final error = query['error'];
       if (error != null) {
         debugPrint('Mobile OIDC auth error returned: $error');
-        if (!completer.isCompleted) completer.completeError(Exception('OIDC Error: $error'));
+        if (!completer.isCompleted) {
+          completer.completeError(Exception('OIDC Error: $error'));
+        }
         cancel();
         return;
       }
@@ -154,17 +166,19 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
           final state = query['state'];
           final error = query['error'];
 
-          if (error != null) {
-            _respondWithError(request, error);
-            if (!completer.isCompleted) completer.completeError(Exception('OIDC Error: $error'));
-            cancel();
+          if (state != expectedState) {
+            // A stale or forged callback (including a forged `error=`) must not
+            // abort the real login in progress: reject it and keep listening.
+            _respondWithError(
+                request, 'Invalid state parameter (potential CSRF attempt)');
             return;
           }
 
-          if (state != expectedState) {
-            _respondWithError(
-                request, 'Invalid state parameter (potential CSRF attempt)');
-            if (!completer.isCompleted) completer.complete(null);
+          if (error != null) {
+            _respondWithError(request, error);
+            if (!completer.isCompleted) {
+              completer.completeError(Exception('OIDC Error: $error'));
+            }
             cancel();
             return;
           }
@@ -259,7 +273,7 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
   <head><title>Authentication Failed</title></head>
   <body style="font-family:sans-serif; text-align:center; padding: 40px; background:#1e1a2e; color:#ffb4ab;">
     <h2>Authentication Error</h2>
-    <p>$errorMsg</p>
+    <p>${htmlEscape.convert(errorMsg)}</p>
   </body>
 </html>
 ''');

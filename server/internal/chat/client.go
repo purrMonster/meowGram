@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"meowgram/server/internal/model"
 	"meowgram/server/internal/repository"
@@ -28,6 +29,10 @@ const (
 
 	// Client send channel buffer size to absorb traffic bursts without dropping frames.
 	sendBufferSize = 256
+
+	// MaxTextRunes caps a single chat message. It keeps frames, rows and push
+	// payloads small; longer messages are rejected with an error frame.
+	MaxTextRunes = 4000
 )
 
 // InboundPayload represents an incoming client message format.
@@ -72,8 +77,9 @@ func NewClient(
 // If the database write fails, the message is dropped and NOT broadcasted to peers.
 func (c *Client) ReadPump() {
 	defer func() {
-		// Signal Hub to unregister client and close connection upon reader termination
-		c.hub.Unregister <- c
+		// Signal Hub to unregister client and close connection upon reader termination.
+		// UnregisterClient never blocks once the Hub has shut down.
+		c.hub.UnregisterClient(c)
 		c.conn.Close()
 	}()
 
@@ -123,6 +129,11 @@ func (c *Client) ReadPump() {
 			continue
 		}
 
+		if utf8.RuneCountInString(textContent) > MaxTextRunes {
+			c.sendError("Message too long: the limit is 4000 characters.")
+			continue
+		}
+
 		// =====================================================================
 		// MANDATE: Message Persistence Before Broadcast
 		// Commit message to PostgreSQL ledger before pushing to Hub channel.
@@ -137,16 +148,8 @@ func (c *Client) ReadPump() {
 				"sub", c.user.AutheliaSub,
 			)
 
-			// Inform sender of write failure
-			errorNotice := &model.WSMessage{
-				Type:        "error",
-				TextContent: "Message delivery failed: could not persist to database.",
-				CreatedAt:   time.Now().UTC(),
-			}
-			select {
-			case c.send <- errorNotice:
-			default:
-			}
+			// Inform sender of write failure (routed through the Hub, which owns c.send)
+			c.sendError("Message delivery failed: could not persist to database.")
 			continue
 		}
 
@@ -166,8 +169,19 @@ func (c *Client) ReadPump() {
 			CreatedAt:   persistedMsg.CreatedAt,
 		}
 
-		c.hub.Broadcast <- broadcastMsg
+		if !c.hub.Publish(broadcastMsg) {
+			return // Hub stopped (server shutting down)
+		}
 	}
+}
+
+// sendError queues an error frame for this client only.
+func (c *Client) sendError(text string) {
+	c.hub.SendTo(c, &model.WSMessage{
+		Type:        "error",
+		TextContent: text,
+		CreatedAt:   time.Now().UTC(),
+	})
 }
 
 // WritePump continuously drains the client's send channel and pushes messages to the WebSocket.
@@ -231,7 +245,8 @@ func (c *Client) WritePump() {
 	}
 }
 
-// SendHistory loads recent persisted messages from PostgreSQL and streams them to this client.
+// SendHistory loads recent persisted messages from PostgreSQL and queues them for
+// this client via the Hub. Call it after the client has been registered.
 func (c *Client) SendHistory(ctx context.Context, limit int) {
 	messages, err := c.msgRepo.GetRecent(ctx, limit)
 	if err != nil {
@@ -249,9 +264,7 @@ func (c *Client) SendHistory(ctx context.Context, limit int) {
 			CreatedAt:   msg.CreatedAt,
 		}
 
-		select {
-		case c.send <- envelope:
-		default:
+		if !c.hub.SendTo(c, envelope) {
 			return
 		}
 	}

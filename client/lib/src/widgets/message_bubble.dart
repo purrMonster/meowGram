@@ -29,10 +29,10 @@ class MessageBubble extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 16.0),
           padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 6.0),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(16.0),
             border: Border.all(
-              color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
             ),
           ),
           child: Row(
@@ -41,7 +41,7 @@ class MessageBubble extends StatelessWidget {
               Icon(
                 Icons.pets_rounded,
                 size: 14,
-                color: theme.colorScheme.primary.withOpacity(0.8),
+                color: theme.colorScheme.primary.withValues(alpha: 0.8),
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -68,7 +68,7 @@ class MessageBubble extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 16.0),
           padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
           decoration: BoxDecoration(
-            color: theme.colorScheme.errorContainer.withOpacity(0.8),
+            color: theme.colorScheme.errorContainer.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(12.0),
           ),
           child: Row(
@@ -106,7 +106,7 @@ class MessageBubble extends StatelessWidget {
         : theme.colorScheme.onSurface;
 
     final subTextColor = isSelf
-        ? theme.colorScheme.onPrimary.withOpacity(0.75)
+        ? theme.colorScheme.onPrimary.withValues(alpha: 0.75)
         : theme.colorScheme.onSurfaceVariant;
 
     final displayName = isSelf
@@ -162,7 +162,7 @@ class MessageBubble extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),

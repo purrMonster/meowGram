@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/services/sync_service.dart';
 import 'package:meowgram_client/src/storage/local_message_repository.dart';
@@ -119,15 +119,15 @@ class ChatState {
           lastError == other.lastError &&
           connectedUrl == other.connectedUrl &&
           isLoadedFromCache == other.isLoadedFromCache &&
-          messages.length == other.messages.length &&
-          activeUsers.length == other.activeUsers.length &&
+          listEquals(messages, other.messages) &&
+          listEquals(activeUsers, other.activeUsers) &&
           isPresenceLoading == other.isPresenceLoading;
 
   @override
   int get hashCode =>
       status.hashCode ^
-      messages.hashCode ^
-      activeUsers.hashCode ^
+      Object.hashAll(messages) ^
+      Object.hashAll(activeUsers) ^
       isPresenceLoading.hashCode ^
       lastError.hashCode ^
       connectedUrl.hashCode ^
@@ -151,26 +151,57 @@ class ChatState {
 ///    chronologically by [ChatMessage.createdAt] ascending.
 /// 4. Background Sync: All incoming live and historical messages are written asynchronously to
 ///    the local database ([LocalMessageRepository.saveMessage]) without blocking the UI thread.
-class ChatBloc extends Bloc<ChatEvent, ChatState> {
-  final ChatWebSocketService _socketService;
-  final LocalMessageRepository _localRepo;
-  final SyncService _syncService;
-  StreamSubscription<ChatMessage>? _messageSub;
-  StreamSubscription<SocketStatus>? _statusSub;
-  StreamSubscription<List<ChatMessage>>? _syncSub;
+/// Shows an OS notification for a chat message. Injectable for tests.
+typedef MessageNotifier = Future<void> Function(ChatMessage message);
 
-  ChatBloc({
+Future<void> _defaultNotifier(ChatMessage message) =>
+    NotificationService().showMessageNotification(message);
+
+class ChatBloc extends Bloc<ChatEvent, ChatState> {
+  /// [tokenProvider] supplies a fresh access token for every (re)connect and sync.
+  /// [currentSubProvider] identifies the signed-in user so their own messages
+  /// don't raise notifications.
+  factory ChatBloc({
     required ChatWebSocketService socketService,
     LocalMessageRepository? localRepo,
     SyncService? syncService,
-  })  : _socketService = socketService,
-        _localRepo = localRepo ?? HiveLocalMessageRepository(),
-        _syncService = syncService ??
-            SyncService(
-              socketService: socketService,
-              localRepo: localRepo ?? HiveLocalMessageRepository(),
-            ),
-        super(const ChatState()) {
+    String? Function()? tokenProvider,
+    String? Function()? currentSubProvider,
+    MessageNotifier? notifier,
+  }) {
+    final repo = localRepo ?? HiveLocalMessageRepository();
+    final sync = syncService ??
+        SyncService(socketService: socketService, localRepo: repo);
+    if (tokenProvider != null) {
+      socketService.tokenProvider = tokenProvider;
+      sync.tokenProvider = tokenProvider;
+    }
+    return ChatBloc._(
+      socketService,
+      repo,
+      sync,
+      currentSubProvider,
+      notifier ?? _defaultNotifier,
+    );
+  }
+
+  final ChatWebSocketService _socketService;
+  final LocalMessageRepository _localRepo;
+  final SyncService _syncService;
+  final String? Function()? _currentSub;
+  final MessageNotifier _notify;
+  StreamSubscription<ChatMessage>? _messageSub;
+  StreamSubscription<SocketStatus>? _statusSub;
+  StreamSubscription<List<ChatMessage>>? _syncSub;
+  bool _initialized = false;
+
+  ChatBloc._(
+    this._socketService,
+    this._localRepo,
+    this._syncService,
+    this._currentSub,
+    this._notify,
+  ) : super(const ChatState()) {
     on<ChatInitializeRequested>(_onInitializeRequested);
     on<ChatConnectRequested>(_onConnectRequested);
     on<ChatMessageReceived>(_onMessageReceived);
@@ -199,11 +230,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatConnectRequested event,
     Emitter<ChatState> emit,
   ) async {
-    await _performCacheToLiveHandoff(
+    if (!_initialized) {
+      await _performCacheToLiveHandoff(
+        accessToken: event.accessToken,
+        customWsUrl: event.customWsUrl,
+        emit: emit,
+      );
+      return;
+    }
+    // Manual reconnect / token refreshed: reopen the socket with a fresh token.
+    _socketService.connect(
       accessToken: event.accessToken,
       customWsUrl: event.customWsUrl,
-      emit: emit,
     );
+    _socketService.reconnectNow();
   }
 
   /// Executes the two-stage cache-to-live handoff pipeline.
@@ -212,6 +252,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     String? customWsUrl,
     required Emitter<ChatState> emit,
   }) async {
+    // Idempotent: ResponsiveLayout and ChatScreen may both request initialization,
+    // and the layout rebuilds ChatScreen when crossing the 800 px breakpoint.
+    if (_initialized) return;
+    _initialized = true;
+
     // -------------------------------------------------------------------------
     // Stage 1: Instant Local Cache Rendering
     // Immediately load persisted messages from local storage (Hive/IndexedDB).
@@ -247,8 +292,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       connectedUrl: _socketService.connectedUrl,
     ));
 
-    // Configure sync service credentials
+    // Configure sync service credentials and snapshot the catch-up cursor
+    // *before* the history burst starts writing into the same cache.
     _syncService.setAccessToken(accessToken);
+    await _syncService.captureCursor();
 
     _socketService.connect(
       accessToken: accessToken,
@@ -292,11 +339,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final updatedList = List<ChatMessage>.from(state.messages)..add(incoming);
     updatedList.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
-    // Show a notification if the message is from someone else
-    // In a real app we'd check if the app is in the background, but this suffices for the feature.
-    try {
-      await NotificationService().showMessageNotification(incoming);
-    } catch (_) {}
+    // Notify only for live chat from other people (never for the history burst,
+    // join/leave notices or errors). NotificationService itself suppresses
+    // notifications while the app is in the foreground.
+    final mySub = _currentSub?.call();
+    if (incoming.type == 'chat' &&
+        incoming.id != null &&
+        (mySub == null || incoming.senderId != mySub)) {
+      unawaited(_notify(incoming).catchError((Object _) {}));
+    }
 
     emit(state.copyWith(
       messages: updatedList,

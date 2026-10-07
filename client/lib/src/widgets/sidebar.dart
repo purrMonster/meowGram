@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/bloc/chat_bloc.dart';
-import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/widgets/connection_badge.dart';
 
@@ -25,12 +24,10 @@ class Sidebar extends StatelessWidget {
     this.isPresenceLoading,
   });
 
+  // The backend has a single lounge. Rooms (and real unread counts) arrive with
+  // multi-room support; until then, don't show mock rooms or fake badges.
   static const List<Map<String, dynamic>> _rooms = [
     {'id': 'general-lounge', 'name': 'general-lounge', 'icon': Icons.pets_rounded, 'unread': 0},
-    {'id': 'cat-memes', 'name': 'cat-memes', 'icon': Icons.image_outlined, 'unread': 3},
-    {'id': 'paw-sitive-vibes', 'name': 'paw-sitive-vibes', 'icon': Icons.favorite_outline_rounded, 'unread': 0},
-    {'id': 'treat-discussions', 'name': 'treat-discussions', 'icon': Icons.restaurant_menu_rounded, 'unread': 1},
-    {'id': 'yarn-and-toys', 'name': 'yarn-and-toys', 'icon': Icons.sports_tennis_rounded, 'unread': 0},
   ];
 
   @override
@@ -56,7 +53,7 @@ class Sidebar extends StatelessWidget {
         color: theme.colorScheme.surfaceContainerLow,
         border: Border(
           right: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.4),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
       ),
@@ -69,7 +66,7 @@ class Sidebar extends StatelessWidget {
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
                 ),
               ),
             ),
@@ -125,7 +122,7 @@ class Sidebar extends StatelessWidget {
                     'CHANNELS',
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                       letterSpacing: 1.0,
                     ),
                   ),
@@ -153,7 +150,7 @@ class Sidebar extends StatelessWidget {
                           'LOUNGE MEMBERS',
                           style: theme.textTheme.labelSmall?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                             letterSpacing: 1.0,
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -163,7 +160,7 @@ class Sidebar extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: onlineCount > 0 ? Colors.green.withOpacity(0.15) : Colors.grey.withOpacity(0.15),
+                          color: onlineCount > 0 ? Colors.green.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -235,7 +232,7 @@ class Sidebar extends StatelessWidget {
               color: theme.colorScheme.surfaceContainer,
               border: Border(
                 top: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withOpacity(0.4),
+                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
                 ),
               ),
             ),
@@ -307,7 +304,7 @@ class Sidebar extends StatelessWidget {
         child: ListTile(
           dense: true,
           selected: isSelected,
-          selectedTileColor: theme.colorScheme.primaryContainer.withOpacity(0.5),
+          selectedTileColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10.0),
           ),

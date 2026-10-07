@@ -105,21 +105,24 @@ server; where the two disagree, the runbook wins.
 
 ## 4. Known gaps (fix these on their own branches)
 
-Where the code doesn't yet meet the parameters above:
+Where the code doesn't yet meet the parameters above (updated for release 1.0.1;
+details in runbook §12.9):
 
-- **Audience not checked:** `server/internal/auth/oidc.go` uses
-  `SkipClientIDCheck`, so any JWT Authelia signs is accepted, including other
-  apps' ID tokens. Verify `aud` against a configured value.
-- **Hardcoded production values:** `deploy/scripts/build_all.*` and the runbook
-  hardcode a domain that isn't the fleet's, an `auth.` host and client ID
-  `meowgram-client`. Read them from a gitignored `--dart-define-from-file` instead.
-- **Dev defaults in `deploy/docker-compose.yml`:** a default Postgres password and
-  ports on all interfaces. Make the password required (`${POSTGRES_PASSWORD:?}`)
-  and the default bindings `127.0.0.1`.
+- **Client ID:** the deployed Authelia client and the app use `meowgram-client`,
+  not `meowgram` as §2 says. The server default now follows the deployment. Decide
+  which name is canonical and align this file, Authelia and the defaults.
 - **Token in the WebSocket URL** (`/ws?token=`): visible to anything that logs
-  full URLs. Move it to `Sec-WebSocket-Protocol` or a short-lived ticket.
-- **Mobile sign-in:** the loopback redirect is desktop-only; Android and iOS need
-  an app link or custom scheme (registered in Authelia too).
+  full URLs (it is no longer shown in the UI). Move it to `Sec-WebSocket-Protocol`
+  or a short-lived ticket.
+- **Push via FCM topics:** payloads are content-free and devices subscribe only
+  while signed in, but topics have no access control. Replace with per-device
+  tokens registered through an authenticated endpoint.
+- **Mobile sign-in:** `meowgram://callback` custom scheme works; an App Link /
+  Universal Link is stronger and must also be registered in Authelia.
 - **Web build not served:** the backend serves no static files, so
-  `https://meow.<domain>/` is 404.
+  `https://meow.<domain>/` is 404 (web login itself works since 1.0.1).
 - **No backups** of the database while it runs on roastery.
+
+Resolved in 1.0.1: audience/expiry validation, hardcoded production values in
+tracked files (use gitignored `client/config/*.local.json`), compose dev defaults
+(password now required, ports on `127.0.0.1`).

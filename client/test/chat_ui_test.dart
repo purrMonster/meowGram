@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/bloc/chat_bloc.dart';
-import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/screens/chat_screen.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/storage/local_message_repository.dart';

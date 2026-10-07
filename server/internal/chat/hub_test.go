@@ -12,7 +12,7 @@ import (
 
 func TestHubLifecycleAndBroadcast(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub := NewHub(logger)
+	hub := NewHub(logger, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

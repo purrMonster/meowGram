@@ -54,7 +54,8 @@ void main() {
       expect(find.byType(Sidebar), findsOneWidget);
       expect(find.text('CHANNELS'), findsOneWidget);
       expect(find.text('# general-lounge'), findsWidgets);
-      expect(find.text('# cat-memes'), findsOneWidget);
+      // Only the real (single) lounge is listed; no mock rooms.
+      expect(find.text('# cat-memes'), findsNothing);
       expect(find.text('LOUNGE MEMBERS', skipOffstage: false), findsOneWidget);
 
       // Verify main chat screen is rendered alongside

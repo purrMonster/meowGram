@@ -5,6 +5,9 @@
   Monorepo containing Flutter cross-platform client and Go backend service.
 </p>
 
+> [!IMPORTANT]
+> **Release 1.0.1.** This README still describes the early echo-server phase in places. The current design, decisions, configuration and open issues live in [`runbook.md`](runbook.md) (see §12.9); agent and contributor rules are in [`AGENTS.md`](AGENTS.md).
+
 ---
 
 ## 🐾 Architectural Overview & Principles
@@ -94,9 +97,10 @@ meowGram/
 
 #### Option A: Running via Docker Compose (Recommended)
 
-1. Create your local `.env` file:
+1. Create your local `.env` file and set a database password (required; compose refuses to start without it):
    ```bash
    cp deploy/.env.example deploy/.env
+   # then edit deploy/.env:  POSTGRES_PASSWORD=$(openssl rand -hex 32)
    ```
 
 2. Start the Go backend container:

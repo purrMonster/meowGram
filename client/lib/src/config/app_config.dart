@@ -24,7 +24,7 @@ class AppConfig {
     defaultValue: 'development',
   );
 
-  /// Target application domain (e.g., 'localhost', 'meowgram.purrbrews.cc').
+  /// Target application domain (e.g., 'localhost', 'meow.example.home.arpa').
   /// Sourced strictly at compile-time from `--dart-define=APP_DOMAIN=...`
   static const String appDomain = String.fromEnvironment(
     'APP_DOMAIN',
@@ -66,7 +66,7 @@ class AppConfig {
     defaultValue: '',
   );
 
-  /// Authelia Domain (e.g., 'auth.purrbrews.cc', 'localhost:9091').
+  /// Authelia Domain (e.g., 'auth.example.home.arpa', 'localhost:9091').
   /// Sourced strictly at compile-time from `--dart-define=AUTHELIA_DOMAIN=...`
   static const String autheliaDomain = String.fromEnvironment(
     'AUTHELIA_DOMAIN',
@@ -277,14 +277,14 @@ class AppConfig {
   // Immich Integration Endpoints (Release 2 Preparation)
   // ===========================================================================
 
-  /// Immich instance domain name (e.g. 'immich.purrbrews.cc').
+  /// Immich instance domain name (e.g. 'immich.example.home.arpa').
   /// Sourced strictly at compile-time from `--dart-define=IMMICH_DOMAIN=...`
   static const String immichDomain = String.fromEnvironment(
     'IMMICH_DOMAIN',
-    defaultValue: 'immich.purrbrews.cc',
+    defaultValue: '',
   );
 
-  /// Immich REST API base URL (e.g. 'https://immich.purrbrews.cc/api').
+  /// Immich REST API base URL (e.g. 'https://immich.example.home.arpa/api').
   /// Sourced strictly at compile-time from `--dart-define=IMMICH_API_URL=...`
   static const String _rawImmichApiUrl = String.fromEnvironment(
     'IMMICH_API_URL',
@@ -294,15 +294,13 @@ class AppConfig {
     if (_rawImmichApiUrl.isNotEmpty) {
       return _rawImmichApiUrl.replaceAll(RegExp(r'/+$'), '');
     }
+    if (immichDomain.isEmpty) return '';
     final isSecure = useSecureSchemes || port == '443';
     final scheme = isSecure ? 'https' : 'http';
     return '$scheme://$immichDomain/api';
   }
 
-  /// Immich API Key used for server-side proxy authentication.
-  /// Sourced strictly at compile-time from `--dart-define=IMMICH_API_KEY=...`
-  static const String immichApiKey = String.fromEnvironment(
-    'IMMICH_API_KEY',
-    defaultValue: '',
-  );
+  // NOTE: there is intentionally no IMMICH_API_KEY here. Anything passed with
+  // --dart-define is compiled into every binary and the web bundle; the Immich
+  // key must stay on the server, which proxies Immich requests (Release 2).
 }

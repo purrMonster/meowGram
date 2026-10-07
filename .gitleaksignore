@@ -1,0 +1,18 @@
+# gitleaks baseline: findings reviewed 2026-10-07 and confirmed NOT secret (runbook.md §12.7).
+# Firebase client API keys are public by design; restrict them in Google Cloud console instead.
+72e311568a230590fe34a508d17952e7cee438c8:client/android/app/google-services.json:gcp-api-key:18
+72e311568a230590fe34a508d17952e7cee438c8:client/lib/firebase_options.dart:gcp-api-key:44
+72e311568a230590fe34a508d17952e7cee438c8:client/lib/firebase_options.dart:gcp-api-key:54
+72e311568a230590fe34a508d17952e7cee438c8:client/lib/firebase_options.dart:gcp-api-key:62
+72e311568a230590fe34a508d17952e7cee438c8:client/lib/firebase_options.dart:gcp-api-key:71
+72e311568a230590fe34a508d17952e7cee438c8:client/lib/firebase_options.dart:gcp-api-key:80
+# Fake JWT test fixture (signature is the literal string "dummySignature").
+df8a8ed25e66d4216dbc1cf8c057239824a3bf5d:client/test/widget_test.dart:jwt:43
+# Same findings when scanning the working tree (gitleaks dir .)
+client/android/app/google-services.json:gcp-api-key:18
+client/lib/firebase_options.dart:gcp-api-key:44
+client/lib/firebase_options.dart:gcp-api-key:54
+client/lib/firebase_options.dart:gcp-api-key:62
+client/lib/firebase_options.dart:gcp-api-key:71
+client/lib/firebase_options.dart:gcp-api-key:80
+client/test/widget_test.dart:jwt:70
