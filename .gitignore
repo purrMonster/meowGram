@@ -67,3 +67,22 @@ client/macos/Flutter/ephemeral/
 
 # Docker Compose overrides
 deploy/docker-compose.override.yml
+
+# ==============================================================================
+# Service credentials (never commit; mount at runtime from gitignored paths)
+# ==============================================================================
+# Firebase / Google service-account keys (GOOGLE_APPLICATION_CREDENTIALS)
+*service-account*.json
+*service_account*.json
+*firebase-adminsdk*.json
+# Apple push (APNs) auth keys, certificates and provisioning profiles
+*.p8
+*.p12
+*.mobileprovision
+# Local secret folders (deploy/secrets is mounted into the server container)
+/secrets/
+deploy/secrets/*
+!deploy/secrets/README.md
+
+# Real client build configs (tracked config/*.json hold placeholders only)
+client/config/*.local.json

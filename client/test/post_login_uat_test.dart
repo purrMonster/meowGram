@@ -117,7 +117,7 @@ void main() {
       final accessToken = _createMockJwt({
         'sub': '141a5dfa-67ef-4e4b-97e3-0599c1581451',
         'preferred_username': 'purrmonster',
-        'email': 'purr@whiskertreat.fyi',
+        'email': 'purr@example.home.arpa',
       });
 
       final profile = UserProfile.fromTokens(accessToken: accessToken);
@@ -129,7 +129,7 @@ void main() {
       final accessToken = _createMockJwt({
         'sub': '141a5dfa-uuid',
         'name': 'Lord Mittens',
-        'email': 'mittens@whiskertreat.fyi',
+        'email': 'mittens@example.home.arpa',
       });
 
       final profile = UserProfile.fromTokens(accessToken: accessToken);
@@ -139,7 +139,7 @@ void main() {
     test('Extracts email prefix when name and preferred_username are absent', () {
       final accessToken = _createMockJwt({
         'sub': '141a5dfa-uuid',
-        'email': 'whiskers_prime@whiskertreat.fyi',
+        'email': 'whiskers_prime@example.home.arpa',
       });
 
       final profile = UserProfile.fromTokens(accessToken: accessToken);

@@ -7,9 +7,9 @@
 set -euo pipefail
 
 TARGET="${1:-all}"
-APP_DOMAIN="${APP_DOMAIN:-meowgram.purrbrews.cc}"
-AUTHELIA_DOMAIN="${AUTHELIA_DOMAIN:-auth.purrbrews.cc}"
-AUTHELIA_ISSUER="${AUTHELIA_ISSUER:-https://auth.purrbrews.cc}"
+APP_DOMAIN="${APP_DOMAIN:-meow.example.home.arpa}"
+AUTHELIA_DOMAIN="${AUTHELIA_DOMAIN:-auth.example.home.arpa}"
+AUTHELIA_ISSUER="${AUTHELIA_ISSUER:-https://auth.example.home.arpa}"
 AUTHELIA_CLIENT_ID="${AUTHELIA_CLIENT_ID:-meowgram-client}"
 VERSION="1.0.0+1"
 
@@ -25,11 +25,18 @@ echo "  Authelia Domain: $AUTHELIA_DOMAIN"
 echo "  Target Environment: production"
 echo "=========================================================="
 
-if [ -f "$CLIENT_DIR/config/production.json" ]; then
-  echo "Using configuration file: client/config/production.json"
+# Real values live in the gitignored client/config/production.local.json
+# (AGENTS.md: no real domain in any tracked file). The tracked production.json
+# holds placeholders only.
+if [ -f "$CLIENT_DIR/config/production.local.json" ]; then
+  echo "Using configuration file: client/config/production.local.json"
   DART_DEFINES=(
-    "--dart-define-from-file=config/production.json"
+    "--dart-define-from-file=config/production.local.json"
   )
+elif [ "$APP_DOMAIN" = "meow.example.home.arpa" ]; then
+  echo "Error: create client/config/production.local.json (copy production.json and fill in real values)" >&2
+  echo "       or export APP_DOMAIN / AUTHELIA_DOMAIN / AUTHELIA_ISSUER." >&2
+  exit 1
 else
   DART_DEFINES=(
     "--dart-define=APP_ENV=production"

@@ -4,9 +4,9 @@
 # ==============================================================================
 param (
     [string]$Target = "all",
-    [string]$AppDomain = "meowgram.purrbrews.cc",
-    [string]$AutheliaDomain = "auth.purrbrews.cc",
-    [string]$AutheliaIssuer = "https://auth.purrbrews.cc",
+    [string]$AppDomain = "meow.example.home.arpa",
+    [string]$AutheliaDomain = "auth.example.home.arpa",
+    [string]$AutheliaIssuer = "https://auth.example.home.arpa",
     [string]$AutheliaClientId = "meowgram-client",
     [string]$Version = "1.0.0+1"
 )
@@ -23,8 +23,8 @@ $IsWin = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Syst
 # Locate Flutter executable
 $FlutterBin = "flutter"
 if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
-    if (Test-Path "C:\Users\jyotirmoyc\Documents\Tools\flutter\bin\flutter.bat") {
-        $FlutterBin = "C:\Users\jyotirmoyc\Documents\Tools\flutter\bin\flutter.bat"
+    if ($env:FLUTTER_BIN -and (Test-Path $env:FLUTTER_BIN)) {
+        $FlutterBin = $env:FLUTTER_BIN
     }
 }
 
@@ -36,10 +36,15 @@ Write-Host "  Target Environment: production" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # Production --dart-define parameters
-$ConfigFile = "$ClientDir\config\production.json"
+# Real values live in the gitignored client/config/production.local.json
+# (AGENTS.md: no real domain in any tracked file).
+$ConfigFile = "$ClientDir\config\production.local.json"
 if (Test-Path $ConfigFile) {
-    Write-Host "Using configuration file: client/config/production.json" -ForegroundColor Cyan
-    $DartDefines = @("--dart-define-from-file=config/production.json")
+    Write-Host "Using configuration file: client/config/production.local.json" -ForegroundColor Cyan
+    $DartDefines = @("--dart-define-from-file=config/production.local.json")
+} elseif ($AppDomain -eq "meow.example.home.arpa") {
+    Write-Error "Create client/config/production.local.json (copy production.json and fill in real values) or pass -AppDomain/-AutheliaDomain/-AutheliaIssuer."
+    exit 1
 } else {
     $DartDefines = @(
         "--dart-define=APP_ENV=production",

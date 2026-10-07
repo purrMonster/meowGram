@@ -1,13 +1,13 @@
 {
   "APP_ENV": "production",
-  "APP_DOMAIN": "meow.whiskertreat.fyi",
+  "APP_DOMAIN": "meow.example.home.arpa",
   "HTTP_PORT": "443",
   "USE_SECURE_SCHEMES": true,
-  "AUTHELIA_DOMAIN": "authelia.whiskertreat.fyi",
-  "AUTHELIA_ISSUER_URL": "https://authelia.whiskertreat.fyi",
+  "AUTHELIA_DOMAIN": "auth.example.home.arpa",
+  "AUTHELIA_ISSUER_URL": "https://auth.example.home.arpa",
   "AUTHELIA_CLIENT_ID": "meowgram-client",
-  "API_BASE_URL": "https://meow.whiskertreat.fyi",
-  "WS_BASE_URL": "wss://meow.whiskertreat.fyi/ws",
+  "API_BASE_URL": "https://meow.example.home.arpa",
+  "WS_BASE_URL": "wss://meow.example.home.arpa/ws",
   "SYNC_ENDPOINT": "/api/messages/sync",
   "HEALTH_ENDPOINT": "/healthz"
 }
