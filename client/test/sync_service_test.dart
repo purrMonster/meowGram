@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:meowgram_client/src/bloc/chat_bloc.dart';
-import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/services/sync_service.dart';
 import 'package:meowgram_client/src/storage/local_message_repository.dart';

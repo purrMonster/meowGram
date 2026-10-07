@@ -49,7 +49,7 @@ class LoginScreen extends StatelessWidget {
                             boxShadow: [
                               BoxShadow(
                                 color:
-                                    theme.colorScheme.primary.withOpacity(0.35),
+                                    theme.colorScheme.primary.withValues(alpha: 0.35),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -85,12 +85,12 @@ class LoginScreen extends StatelessWidget {
                       Card(
                         elevation: 0,
                         color: theme.colorScheme.surfaceContainerHighest
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                           side: BorderSide(
                             color: theme.colorScheme.outlineVariant
-                                .withOpacity(0.5),
+                                .withValues(alpha: 0.5),
                           ),
                         ),
                         child: Padding(
@@ -137,10 +137,10 @@ class LoginScreen extends StatelessWidget {
                                 ],
                               ),
                               const Divider(height: 20),
-                              _ConfigRow(
+                              const _ConfigRow(
                                   label: 'Domain', value: AppConfig.appDomain),
                               const SizedBox(height: 6),
-                              _ConfigRow(
+                              const _ConfigRow(
                                   label: 'Auth Domain',
                                   value: AppConfig.autheliaDomain),
                               const SizedBox(height: 6),
@@ -152,7 +152,7 @@ class LoginScreen extends StatelessWidget {
                                   label: 'API Base',
                                   value: AppConfig.apiBaseUrl),
                               const SizedBox(height: 6),
-                              _ConfigRow(
+                              const _ConfigRow(
                                   label: 'Client ID',
                                   value: AppConfig.autheliaClientId),
                               const SizedBox(height: 6),
@@ -174,7 +174,7 @@ class LoginScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                                 color:
-                                    theme.colorScheme.error.withOpacity(0.3)),
+                                    theme.colorScheme.error.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: [
@@ -202,7 +202,7 @@ class LoginScreen extends StatelessWidget {
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.surfaceContainerHighest
-                                .withOpacity(0.3),
+                                .withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                                 color: theme.colorScheme.outlineVariant),

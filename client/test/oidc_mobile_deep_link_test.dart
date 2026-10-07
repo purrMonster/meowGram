@@ -97,7 +97,7 @@ void main() {
       expect(code, equals('valid_code'));
     });
 
-    test('returns null when Authelia returns an error', () async {
+    test('surfaces the Authelia error to the caller (shown in the UI)', () async {
       const redirectUri = 'meowgram://callback';
       const expectedState = 'test_state_err';
 
@@ -109,8 +109,10 @@ void main() {
       fakeAppLinks.emitUri(Uri.parse(
           'meowgram://callback?error=access_denied&error_description=User+cancelled&state=$expectedState'));
 
-      final code = await codeFuture;
-      expect(code, isNull);
+      await expectLater(
+        codeFuture,
+        throwsA(predicate((e) => e.toString().contains('access_denied'))),
+      );
     });
 
     test('extracts authorization code from latest/initial link if available',

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
-import 'package:meowgram_client/src/screens/chat_screen.dart';
 import 'package:meowgram_client/src/screens/login_screen.dart';
 import 'package:meowgram_client/src/screens/responsive_layout.dart';
 

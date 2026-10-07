@@ -72,7 +72,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
         color: theme.colorScheme.surface,
         border: Border(
           top: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.4),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
       ),
@@ -92,11 +92,11 @@ class _ChatInputBarState extends State<ChatInputBar> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(24.0),
                     border: Border.all(
                       color: _focusNode.hasFocus
-                          ? theme.colorScheme.primary.withOpacity(0.5)
+                          ? theme.colorScheme.primary.withValues(alpha: 0.5)
                           : Colors.transparent,
                     ),
                   ),
@@ -106,7 +106,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
                       Icon(
                         Icons.pets_rounded,
                         size: 18,
-                        color: theme.colorScheme.primary.withOpacity(0.7),
+                        color: theme.colorScheme.primary.withValues(alpha: 0.7),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -124,7 +124,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
                                 : 'Connecting to WebSocket...',
                             hintStyle: TextStyle(
                               fontSize: 14,
-                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                             ),
                             border: InputBorder.none,
                             isDense: true,
@@ -159,7 +159,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
                     disabledBackgroundColor:
                         theme.colorScheme.surfaceContainerHighest,
                     disabledForegroundColor:
-                        theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+                        theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                     padding: const EdgeInsets.all(12),
                   ),
                 ),

@@ -39,7 +39,8 @@ class ResponsiveLayout extends StatefulWidget {
   State<ResponsiveLayout> createState() => _ResponsiveLayoutState();
 }
 
-class _ResponsiveLayoutState extends State<ResponsiveLayout> {
+class _ResponsiveLayoutState extends State<ResponsiveLayout>
+    with WidgetsBindingObserver {
   late final ChatWebSocketService _socketService;
   late final ChatBloc _chatBloc;
   String _selectedRoom = 'general-lounge';
@@ -52,16 +53,47 @@ class _ResponsiveLayoutState extends State<ResponsiveLayout> {
         ChatBloc(
           socketService: _socketService,
           localRepo: widget.localRepo,
+          tokenProvider: () => widget.authController.accessToken,
+          currentSubProvider: () => widget.authController.userProfile?.sub,
         );
 
     // Initial launch: loads local cache instantly, then connects live WebSocket in background
     _chatBloc.add(
       ChatInitializeRequested(accessToken: widget.authController.accessToken),
     );
+
+    WidgetsBinding.instance.addObserver(this);
+    widget.authController.addListener(_onAuthChanged);
+    _lastToken = widget.authController.accessToken;
+  }
+
+  String? _lastToken;
+
+  /// After a token refresh, reconnect a dropped socket with the new token.
+  void _onAuthChanged() {
+    final token = widget.authController.accessToken;
+    if (token == null || token == _lastToken) return;
+    _lastToken = token;
+    if (!_chatBloc.isClosed && !_chatBloc.state.isConnected) {
+      _chatBloc.add(ChatConnectRequested(accessToken: token));
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        !_chatBloc.isClosed &&
+        !_chatBloc.state.isConnected) {
+      _chatBloc.add(
+        ChatConnectRequested(accessToken: widget.authController.accessToken),
+      );
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.authController.removeListener(_onAuthChanged);
     if (widget.chatBloc == null) {
       _chatBloc.close();
     }

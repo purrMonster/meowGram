@@ -24,6 +24,7 @@ dependencies:
   intl: ^0.20.3
   openid_client: ^0.4.10+2
   url_launcher: ^6.3.3
+  web: ^1.1.1
   web_socket_channel: ^3.0.3
   workmanager: ^0.10.10
 

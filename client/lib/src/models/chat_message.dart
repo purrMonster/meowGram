@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:intl/intl.dart';
 
 /// Represents an active connected member in the presence roster broadcasted by the Hub.

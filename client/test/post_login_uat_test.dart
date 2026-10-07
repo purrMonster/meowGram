@@ -6,7 +6,6 @@ import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/auth/auth_state.dart';
 import 'package:meowgram_client/src/auth/token_storage.dart';
 import 'package:meowgram_client/src/bloc/chat_bloc.dart';
-import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/widgets/sidebar.dart';
 
