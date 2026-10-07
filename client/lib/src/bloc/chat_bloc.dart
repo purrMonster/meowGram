@@ -4,6 +4,7 @@ import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/services/sync_service.dart';
 import 'package:meowgram_client/src/storage/local_message_repository.dart';
+import 'package:meowgram_client/src/services/notification_service.dart';
 
 // =============================================================================
 // Chat Events
@@ -290,6 +291,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // Append and maintain ascending chronological order across cached + live messages
     final updatedList = List<ChatMessage>.from(state.messages)..add(incoming);
     updatedList.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    // Show a notification if the message is from someone else
+    // In a real app we'd check if the app is in the background, but this suffices for the feature.
+    try {
+      await NotificationService().showMessageNotification(incoming);
+    } catch (_) {}
 
     emit(state.copyWith(
       messages: updatedList,

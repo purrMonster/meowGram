@@ -9,6 +9,8 @@ import 'package:meowgram_client/src/push/fcm_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:meowgram_client/firebase_options.dart';
 
+import 'package:meowgram_client/src/services/notification_service.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -24,6 +26,12 @@ Future<void> main() async {
   debugPrint('  Authelia Issuer:   ${AppConfig.autheliaIssuerUrl}');
   debugPrint('  Authelia ClientID: ${AppConfig.autheliaClientId}');
   debugPrint('====================================================');
+
+  try {
+    await NotificationService().initialize();
+  } catch (e) {
+    debugPrint('Notification initialization notice: $e');
+  }
 
   try {
     await Hive.initFlutter();
