@@ -707,3 +707,9 @@ The Go backend integrates directly with Apple's servers using p8 certificates.
 
 ### Decision
 **Firebase Cloud Messaging (FCM)** was selected as the push notification infrastructure. The overhead of maintaining dual push implementations (APNs for Apple + FCM for Android/Web) in the Go backend significantly outweighed the privacy benefits of bypassing Google for iOS devices, especially given that meowGram already relies on FCM for Android devices anyway. FCM provides a unified cross-platform API and handles topic subscriptions natively, aligning with the project's requirement for a streamlined, maintainable core.
+### 10.7 FCM Push Notification Architecture
+During the transition from Apple Push Notifications (APN) direct integration to Firebase Cloud Messaging (FCM), several key decisions were made:
+- **FCM Over APN**: We chose FCM because it abstracts away Apple's strict background notification constraints and unifies our push notification code across Android, iOS, and Web platforms using a single publisher.
+- **Go Backend Publisher**: The Go backend utilizes the `firebase.google.com/go/v4/messaging` SDK. The Hub uses a separate goroutine to publish to the `room_lounge` topic whenever a message of type `chat` is broadcasted, ensuring no blocking of the main WebSocket fan-out loop.
+- **Zero Hardcoding Compliance**: The Go server reads `GOOGLE_APPLICATION_CREDENTIALS` for the Service Account JSON. This file is safely excluded from Git via `.gitignore` and must be injected into the Docker container via `deploy/docker-compose.yml`.
+- **Flutter Client Configuration**: The client employs `flutterfire_cli` to auto-generate `firebase_options.dart`, meaning API Keys are embedded publicly but do not compromise the backend's secret Service Account key. The client calls `FirebaseMessaging.instance.subscribeToTopic('room_lounge')` to receive messages, handling them in both foreground and background states.

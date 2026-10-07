@@ -4,6 +4,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
 import 'package:meowgram_client/src/routes/app_router.dart';
+import 'package:meowgram_client/src/push/fcm_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:meowgram_client/firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +28,16 @@ Future<void> main() async {
     await Hive.initFlutter();
   } catch (e) {
     debugPrint('Hive initialization notice: $e');
+  }
+
+  // Initialize Firebase & FCM
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await FCMService().initialize();
+  } catch (e) {
+    debugPrint('Firebase initialization failed: $e');
   }
 
   final authController = AuthController();
