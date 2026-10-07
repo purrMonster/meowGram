@@ -8,7 +8,7 @@ param (
     [string]$AutheliaDomain = "auth.example.home.arpa",
     [string]$AutheliaIssuer = "https://auth.example.home.arpa",
     [string]$AutheliaClientId = "meowgram-client",
-    [string]$Version = "1.0.0+1"
+    [string]$Version = "1.0.1+2"
 )
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -29,7 +29,7 @@ if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  meowGram Production Build Pipeline: Release 1.0.0" -ForegroundColor Cyan
+Write-Host "  meowGram Production Build Pipeline: Release 1.0.1" -ForegroundColor Cyan
 Write-Host "  Target Domain: $AppDomain" -ForegroundColor Cyan
 Write-Host "  Authelia Domain: $AutheliaDomain" -ForegroundColor Cyan
 Write-Host "  Target Environment: production" -ForegroundColor Cyan
@@ -119,9 +119,9 @@ if ($Target -eq "all" -or $Target -eq "ios") {
 # Backend Docker Image Build
 if ($Target -eq "all" -or $Target -eq "server" -or $Target -eq "docker") {
     Set-Location $ProjectRoot
-    Write-Host "`n[*] Building Backend Production Docker Image (meowgram:1.0.0)..." -ForegroundColor Cyan
-    docker build -t meowgram:1.0.0 -t meowgram:latest -f "$ServerDir/Dockerfile" "$ServerDir"
-    Write-Host "[OK] Docker image meowgram:1.0.0 built successfully." -ForegroundColor Green
+    Write-Host "`n[*] Building Backend Production Docker Image (meowgram:1.0.1)..." -ForegroundColor Cyan
+    docker build -t meowgram:1.0.1 -t meowgram:latest -f "$ServerDir/Dockerfile" "$ServerDir"
+    Write-Host "[OK] Docker image meowgram:1.0.1 built successfully." -ForegroundColor Green
 }
 
 Set-Location $ProjectRoot

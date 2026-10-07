@@ -11,7 +11,7 @@ APP_DOMAIN="${APP_DOMAIN:-meow.example.home.arpa}"
 AUTHELIA_DOMAIN="${AUTHELIA_DOMAIN:-auth.example.home.arpa}"
 AUTHELIA_ISSUER="${AUTHELIA_ISSUER:-https://auth.example.home.arpa}"
 AUTHELIA_CLIENT_ID="${AUTHELIA_CLIENT_ID:-meowgram-client}"
-VERSION="1.0.0+1"
+VERSION="1.0.1+2"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -19,7 +19,7 @@ CLIENT_DIR="$PROJECT_ROOT/client"
 SERVER_DIR="$PROJECT_ROOT/server"
 
 echo "=========================================================="
-echo "  meowGram Production Build Pipeline: Release 1.0.0"
+echo "  meowGram Production Build Pipeline: Release 1.0.1"
 echo "  Target Domain: $APP_DOMAIN"
 echo "  Authelia Domain: $AUTHELIA_DOMAIN"
 echo "  Target Environment: production"
@@ -119,9 +119,9 @@ fi
 if [[ "$TARGET" == "all" || "$TARGET" == "server" || "$TARGET" == "docker" ]]; then
   cd "$PROJECT_ROOT"
   echo ""
-  echo "[*] Building Backend Production Docker Image (meowgram:1.0.0)..."
-  docker build -t meowgram:1.0.0 -t meowgram:latest -f "$SERVER_DIR/Dockerfile" "$SERVER_DIR"
-  echo "✓ Docker image meowgram:1.0.0 built successfully."
+  echo "[*] Building Backend Production Docker Image (meowgram:1.0.1)..."
+  docker build -t meowgram:1.0.1 -t meowgram:latest -f "$SERVER_DIR/Dockerfile" "$SERVER_DIR"
+  echo "✓ Docker image meowgram:1.0.1 built successfully."
 fi
 
 echo ""

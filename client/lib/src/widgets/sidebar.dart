@@ -24,12 +24,10 @@ class Sidebar extends StatelessWidget {
     this.isPresenceLoading,
   });
 
+  // The backend has a single lounge. Rooms (and real unread counts) arrive with
+  // multi-room support; until then, don't show mock rooms or fake badges.
   static const List<Map<String, dynamic>> _rooms = [
     {'id': 'general-lounge', 'name': 'general-lounge', 'icon': Icons.pets_rounded, 'unread': 0},
-    {'id': 'cat-memes', 'name': 'cat-memes', 'icon': Icons.image_outlined, 'unread': 3},
-    {'id': 'paw-sitive-vibes', 'name': 'paw-sitive-vibes', 'icon': Icons.favorite_outline_rounded, 'unread': 0},
-    {'id': 'treat-discussions', 'name': 'treat-discussions', 'icon': Icons.restaurant_menu_rounded, 'unread': 1},
-    {'id': 'yarn-and-toys', 'name': 'yarn-and-toys', 'icon': Icons.sports_tennis_rounded, 'unread': 0},
   ];
 
   @override
