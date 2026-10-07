@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
-
 	"meowgram/server/internal/model"
+	"meowgram/server/internal/fcm"
 )
 
 // Hub maintains the set of active connected WebSocket clients and serializes
@@ -31,16 +31,18 @@ type Hub struct {
 	// Unregister requests from disconnecting or terminated clients.
 	Unregister chan *Client
 
-	logger *slog.Logger
+	fcmService *fcm.Service
+	logger     *slog.Logger
 }
 
 // NewHub initializes and returns a new Hub instance.
-func NewHub(logger *slog.Logger) *Hub {
+func NewHub(logger *slog.Logger, fcmService *fcm.Service) *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
 		Broadcast:  make(chan *model.WSMessage, 256),
 		Register:   make(chan *Client),
 		Unregister: make(chan *Client),
+		fcmService: fcmService,
 		logger:     logger,
 	}
 }
@@ -105,6 +107,25 @@ func (h *Hub) Run(ctx context.Context) {
 					close(client.send)
 					delete(h.clients, client)
 				}
+			}
+
+			// Publish push notification to FCM if it's a standard chat message
+			if message.Type == "chat" && h.fcmService != nil {
+				// We launch this in a separate goroutine to avoid blocking the Hub's broadcast loop
+				go func(msg *model.WSMessage) {
+					data := map[string]string{
+						"id":         msg.ID,
+						"sender_id":  msg.SenderID,
+						"username":   msg.Username,
+						"created_at": msg.CreatedAt.String(),
+					}
+					
+					// Assuming the topic is called "room_lounge"
+					err := h.fcmService.PublishToTopic(context.Background(), "room_lounge", msg.Username, msg.TextContent, data)
+					if err != nil {
+						h.logger.Error("Failed to push FCM notification", "error", err)
+					}
+				}(message)
 			}
 
 		// 4. Graceful Shutdown

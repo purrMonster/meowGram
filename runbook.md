@@ -74,6 +74,10 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Backpressure Protection** | Non-blocking Broadcast with Channel Eviction | `Hub` uses `select { case client.send <- msg: default: unregister }` with a 256-frame buffered channel. Slow or stalled clients cannot block the main broadcast loop or lag other peers. |
 | **Ingress Path-Based Routing** | Traefik Router Rules (`PathPrefix`) + Priority | Evaluates backend routes (`/ws`, `/api`, `/healthz`) with priority 100 before frontend catch-all router on shared host domains. |
 | **Database Migrations** | `golang-migrate/migrate/v4` | Automated `.up.sql` migrations executed on server container initialization. |
+| **Root Route Auto-Login** | `GoRouter` Redirect | Automatically routes authenticated users hitting `/` directly to `/chat`, preventing dead-ends. |
+| **Background Sync** | `workmanager` | Periodically wakes up to fetch gap messages via REST `sync` endpoint, keeping local cache warm. (Best-effort on iOS). |
+| **Local Notifications** | `flutter_local_notifications` | Fires local OS alerts on message receipt. Used as a fallback/foreground notification mechanism. |
+| **Push Notifications** | Firebase Cloud Messaging (FCM) | Chosen over direct APNs. Unifies Android, iOS, macOS, and Web under one backend API. Required due to Apple's strict background task and App Store restrictions against local polling for real-time chat. |
 
 ---
 
@@ -667,3 +671,45 @@ During Release 1 iOS UAT, four post-login blockers were identified and resolved:
 - [x] Authelia user profile extraction resolves `preferred_username` -> `name` -> `email prefix` -> `sub` to avoid raw UUID display in UI.
 - [x] Mock presence data removed from `Sidebar`; Go `Hub` presence frame (`type: "presence"`) drives dynamic active roster in `ChatBloc`.
 - [x] Traefik router labels in `deploy/docker-compose.yml` updated with path prefixes (`/ws`, `/api`, `/healthz`) and priority 100 to prevent shared-domain collision with frontend container.
+
+---
+
+## 12. Push Notifications ADR: FCM vs. APNs
+
+### Context
+meowGram is a real-time chat application requiring instant message delivery across all supported platforms (Web, Android, iOS, macOS, Windows). Initially, a background sync approach via `workmanager` combined with `flutter_local_notifications` was explored to simulate push notifications on mobile.
+
+### Problem
+Apple imposes strict restrictions on background execution on iOS:
+1. `BGAppRefreshTask` (used by `workmanager`) is scheduled based on proprietary OS heuristics (battery life, user habits) and does not guarantee execution intervals.
+2. If an app is force-quit, iOS suspends background execution entirely.
+3. Apple's App Store Guidelines prohibit using background execution purely to poll for notifications. 
+To achieve real-time alerts, Apple mandates the use of Remote Push Notifications.
+
+### Options Considered
+
+#### 1. Firebase Cloud Messaging (FCM)
+FCM provides a unified cross-platform push infrastructure. For iOS, it wraps APNs under the hood. For Android, it uses Google Play Services natively.
+- **Pros**:
+  - Unified Go backend API (one payload format).
+  - Built-in "Topics" (e.g., subscribing to a chat room), removing the need for complex device token fan-out logic in Go.
+  - Mature Flutter integration (`firebase_messaging`).
+- **Cons**:
+  - Adds a Google dependency and requires Firebase configuration (`google-services.json`, `GoogleService-Info.plist`).
+
+#### 2. Direct APNs (Apple Push Notification service)
+The Go backend integrates directly with Apple's servers using p8 certificates.
+- **Pros**:
+  - Eliminates Google as a middleman for Apple devices, maximizing privacy.
+- **Cons**:
+  - Because Android natively requires FCM, this approach forces the Go backend to implement and maintain **both** FCM and APNs.
+  - Requires maintaining device types in PostgreSQL and routing payloads manually (no Topics support for cross-platform broadcasts).
+
+### Decision
+**Firebase Cloud Messaging (FCM)** was selected as the push notification infrastructure. The overhead of maintaining dual push implementations (APNs for Apple + FCM for Android/Web) in the Go backend significantly outweighed the privacy benefits of bypassing Google for iOS devices, especially given that meowGram already relies on FCM for Android devices anyway. FCM provides a unified cross-platform API and handles topic subscriptions natively, aligning with the project's requirement for a streamlined, maintainable core.
+### 10.7 FCM Push Notification Architecture
+During the transition from Apple Push Notifications (APN) direct integration to Firebase Cloud Messaging (FCM), several key decisions were made:
+- **FCM Over APN**: We chose FCM because it abstracts away Apple's strict background notification constraints and unifies our push notification code across Android, iOS, and Web platforms using a single publisher.
+- **Go Backend Publisher**: The Go backend utilizes the `firebase.google.com/go/v4/messaging` SDK. The Hub uses a separate goroutine to publish to the `room_lounge` topic whenever a message of type `chat` is broadcasted, ensuring no blocking of the main WebSocket fan-out loop.
+- **Zero Hardcoding Compliance**: The Go server reads `GOOGLE_APPLICATION_CREDENTIALS` for the Service Account JSON. This file is safely excluded from Git via `.gitignore` and must be injected into the Docker container via `deploy/docker-compose.yml`.
+- **Flutter Client Configuration**: The client employs `flutterfire_cli` to auto-generate `firebase_options.dart`, meaning API Keys are embedded publicly but do not compromise the backend's secret Service Account key. The client calls `FirebaseMessaging.instance.subscribeToTopic('room_lounge')` to receive messages, handling them in both foreground and background states.
