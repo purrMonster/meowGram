@@ -17,7 +17,7 @@ class TokenStorage {
   TokenStorage({FlutterSecureStorage? storage})
       : _storage = storage ??
             const FlutterSecureStorage(
-              aOptions: AndroidOptions(),
+              aOptions: const AndroidOptions(),
               iOptions: IOSOptions(
                 accessibility: KeychainAccessibility.first_unlock,
               ),
