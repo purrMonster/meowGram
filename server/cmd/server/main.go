@@ -14,10 +14,10 @@ import (
 	"meowgram/server/internal/chat"
 	"meowgram/server/internal/config"
 	"meowgram/server/internal/database"
+	"meowgram/server/internal/fcm"
 	"meowgram/server/internal/handler"
 	"meowgram/server/internal/middleware"
 	"meowgram/server/internal/repository"
-	"meowgram/server/internal/fcm"
 )
 
 func main() {
@@ -86,7 +86,11 @@ func main() {
 	}
 
 	// Initialize the Real-Time Broadcast Hub
-	hub := chat.NewHub(logger, fcmService)
+	var publisher chat.PushPublisher
+	if fcmService != nil {
+		publisher = fcmService // avoid a non-nil interface wrapping a nil *fcm.Service
+	}
+	hub := chat.NewHub(logger, publisher)
 	hubCtx, hubCancel := context.WithCancel(context.Background())
 	defer hubCancel()
 
@@ -159,15 +163,20 @@ func main() {
 	case sig := <-shutdown:
 		logger.Info("Shutdown signal received", "signal", sig.String())
 
-		// Cancel Hub context to disconnect active clients
-		hubCancel()
-
+		// Stop accepting new connections first, then disconnect WebSocket clients.
+		// (Hijacked WebSocket connections are not tracked by srv.Shutdown.)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		if err := srv.Shutdown(ctx); err != nil {
 			logger.Error("Server forced shutdown with error", "error", err)
 			_ = srv.Close()
+		}
+
+		hubCancel()
+		select {
+		case <-hub.Done():
+		case <-ctx.Done():
 		}
 
 		logger.Info("meowGram server gracefully stopped")

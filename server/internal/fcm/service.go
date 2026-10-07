@@ -38,6 +38,8 @@ func NewService(ctx context.Context, logger *slog.Logger, credentialsFile string
 }
 
 func (s *Service) PublishToTopic(ctx context.Context, topic, title, body string, data map[string]string) error {
+	// Notifications for the same topic collapse into one on the device (Android tag /
+	// collapse key, APNs collapse id), so bursts of chat don't stack up alerts.
 	msg := &messaging.Message{
 		Notification: &messaging.Notification{
 			Title: title,
@@ -45,6 +47,23 @@ func (s *Service) PublishToTopic(ctx context.Context, topic, title, body string,
 		},
 		Data:  data,
 		Topic: topic,
+		Android: &messaging.AndroidConfig{
+			CollapseKey: topic,
+			Notification: &messaging.AndroidNotification{
+				Tag: topic,
+			},
+		},
+		APNS: &messaging.APNSConfig{
+			Headers: map[string]string{
+				"apns-collapse-id": topic,
+			},
+			Payload: &messaging.APNSPayload{
+				Aps: &messaging.Aps{
+					Sound:    "default",
+					ThreadID: topic,
+				},
+			},
+		},
 	}
 
 	id, err := s.client.Send(ctx, msg)

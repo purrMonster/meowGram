@@ -63,6 +63,18 @@ func TestParseSyncTimestamp(t *testing.T) {
 			expectedUTC: time.UnixMilli(1700000000000).UTC(),
 		},
 		{
+			name:        "Space-separated date and time (no offset)",
+			input:       "2026-10-03 13:40:00",
+			wantErr:     false,
+			expectedUTC: time.Date(2026, 10, 3, 13, 40, 0, 0, time.UTC),
+		},
+		{
+			name:        "URL-decoded space in place of plus sign with fractional seconds",
+			input:       "2026-10-03T19:10:00.250 05:30",
+			wantErr:     false,
+			expectedUTC: time.Date(2026, 10, 3, 13, 40, 0, 250000000, time.UTC),
+		},
+		{
 			name:    "Empty input",
 			input:   "   ",
 			wantErr: true,

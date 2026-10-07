@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,23 +19,28 @@ import (
 // SyncHandler serves the catch-up synchronization endpoint (UST-1.4.3).
 //
 // Endpoint Contract:
-//   GET /api/messages/sync?after={iso8601_timestamp}
+//
+//	GET /api/messages/sync?after={iso8601_timestamp}
 //
 // Architectural Rationale:
-// - When a client reconnects after an extended offline duration, the default
-//   50-message WebSocket hydration burst cannot guarantee complete timeline recovery.
-// - Instead of overloading the WebSocket handshake frame with complex pagination,
-//   a dedicated HTTP REST query allows deterministic, paginated gap-filling.
-// - Capped strictly at 500 messages per request to prevent server-side buffer bloat
-//   and mobile network latency degradation.
+//   - When a client reconnects after an extended offline duration, the default
+//     50-message WebSocket hydration burst cannot guarantee complete timeline recovery.
+//   - Instead of overloading the WebSocket handshake frame with complex pagination,
+//     a dedicated HTTP REST query allows deterministic, paginated gap-filling.
+//   - Capped strictly at 500 messages per request to prevent server-side buffer bloat
+//     and mobile network latency degradation.
 //
 // Timezone Standardization:
-// - PostgreSQL stores `messages.created_at` as `TIMESTAMPTZ` (stored internally in UTC).
-// - Client timestamps are parsed using RFC3339Nano / RFC3339 layouts.
-// - If the incoming query string contains an offset (e.g. `+05:30` or `-04:00`),
-//   it is normalized directly to UTC (`.UTC()`) before querying the database.
-// - If URL decoding turns `+` into a space ` ` (e.g. `2026-10-03T19:10:00 05:30`),
-//   the parser intelligently restores the `+` sign for seamless parsing.
+//   - PostgreSQL stores `messages.created_at` as `TIMESTAMPTZ` (stored internally in UTC).
+//   - Client timestamps are parsed using RFC3339Nano / RFC3339 layouts.
+//   - If the incoming query string contains an offset (e.g. `+05:30` or `-04:00`),
+//     it is normalized directly to UTC (`.UTC()`) before querying the database.
+//   - If URL decoding turns `+` into a space ` ` (e.g. `2026-10-03T19:10:00 05:30`),
+//     the parser intelligently restores the `+` sign for seamless parsing.
+//
+// SyncPageSize is the maximum number of messages returned per sync request.
+const SyncPageSize = 500
+
 func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 1. Enforce authenticated context from Authelia OIDC middleware
@@ -68,8 +74,8 @@ func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) htt
 			return
 		}
 
-		// 4. Query persistent storage for chronological gap fill (max 500 records)
-		messages, err := msgRepo.GetMessagesAfter(r.Context(), afterTime, 500)
+		// 4. Query persistent storage for chronological gap fill (max SyncPageSize records)
+		messages, err := msgRepo.GetMessagesAfter(r.Context(), afterTime, SyncPageSize)
 		if err != nil {
 			logger.Error("Failed to query messages for sync",
 				"sub", user.AutheliaSub,
@@ -92,8 +98,12 @@ func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) htt
 			"delivered_count", len(messages),
 		)
 
-		// 5. Respond with JSON message list
+		// 5. Respond with JSON message list. A full page means the client should
+		// request the next page using the last message's created_at as `after`.
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if len(messages) >= SyncPageSize {
+			w.Header().Set("X-Has-More", "true")
+		}
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(messages); err != nil {
 			logger.Error("Failed to encode sync response", "error", err)
@@ -123,12 +133,11 @@ func ParseSyncTimestamp(raw string) (time.Time, error) {
 		return time.Unix(unixVal, 0).UTC(), nil
 	}
 
-	// 2. Correct space-encoded '+' in timezone offsets (e.g. "2026-10-03T19:10:00 05:30")
-	if strings.Contains(raw, " ") && !strings.Contains(raw, "+") {
-		lastSpace := strings.LastIndex(raw, " ")
-		if lastSpace != -1 && len(raw[lastSpace:]) >= 3 {
-			raw = raw[:lastSpace] + "+" + raw[lastSpace+1:]
-		}
+	// 2. Correct space-encoded '+' in timezone offsets (e.g. "2026-10-03T19:10:00 05:30").
+	// Only a trailing " HH:MM" after a T-separated time is treated as an offset, so the
+	// space-separated "2006-01-02 15:04:05" layout below stays reachable.
+	if m := spaceOffsetPattern.FindStringSubmatch(raw); m != nil {
+		raw = m[1] + "+" + m[2]
 	}
 
 	// 3. Match against supported ISO 8601 / RFC 3339 layouts
@@ -148,6 +157,8 @@ func ParseSyncTimestamp(raw string) (time.Time, error) {
 
 	return time.Time{}, fmt.Errorf("expected RFC3339/ISO8601 format (e.g. '2026-10-03T13:40:00Z'), received %q", raw)
 }
+
+var spaceOffsetPattern = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?) (\d{2}:?\d{2})$`)
 
 func writeSyncJSONError(w http.ResponseWriter, statusCode int, errCode string, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

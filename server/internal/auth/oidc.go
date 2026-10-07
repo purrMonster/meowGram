@@ -100,15 +100,16 @@ func (v *OIDCVerifier) Verify(ctx context.Context, rawToken string) (*AutheliaCl
 		return nil, errors.New("token is missing mandatory 'sub' claim")
 	}
 
-	// 4. Validate expiration with 1-minute clock skew tolerance
+	// 4. Validate expiration (mandatory) with 1-minute clock skew tolerance
 	now := time.Now()
-	if claims.ExpiresAt > 0 {
-		if now.Add(-1 * time.Minute).Unix() > claims.ExpiresAt {
-			return nil, errors.New("token has expired")
-		}
+	if claims.ExpiresAt <= 0 {
+		return nil, errors.New("token is missing mandatory 'exp' claim")
+	}
+	if now.Add(-1*time.Minute).Unix() > claims.ExpiresAt {
+		return nil, errors.New("token has expired")
 	}
 	if claims.NotBefore > 0 {
-		if now.Add(1 * time.Minute).Unix() < claims.NotBefore {
+		if now.Add(1*time.Minute).Unix() < claims.NotBefore {
 			return nil, errors.New("token is not yet valid (nbf)")
 		}
 	}
@@ -154,49 +155,42 @@ func (v *OIDCVerifier) validateIssuer(tokenIssuer string) error {
 	return fmt.Errorf("token issuer %q does not match configured issuer %q", tokenIssuer, v.issuer)
 }
 
-func (v *OIDCVerifier) validateAudience(rawAud json.RawMessage) error {
-	tokenAudiences := extractAudiences(rawAud)
-
-	// Determine accepted audiences
-	allowedAudiences := []string{}
+// allowedAudiences returns the audiences this backend accepts.
+//
+// If AUTHELIA_AUDIENCE is configured, it is the only accepted audience. Otherwise
+// the client ID and the app's own URL (APP_DOMAIN) are accepted. There is no
+// hardcoded fallback list.
+func (v *OIDCVerifier) allowedAudiences() []string {
 	if v.audience != "" {
-		allowedAudiences = append(allowedAudiences, v.audience)
+		return []string{v.audience}
 	}
+	var allowed []string
 	if v.clientID != "" {
-		allowedAudiences = append(allowedAudiences, v.clientID)
+		allowed = append(allowed, v.clientID)
 	}
 	if v.appDomain != "" {
 		domain := strings.TrimRight(v.appDomain, "/")
-		allowedAudiences = append(allowedAudiences,
-			domain,
-			"https://"+domain,
-			"http://"+domain,
-			"https://"+domain+"/",
-			"http://"+domain+"/",
-		)
+		allowed = append(allowed, "https://"+domain, "http://"+domain)
 	}
-	allowedAudiences = append(allowedAudiences, "meowgram", "meowgram-client")
+	return allowed
+}
 
-	// If token has aud claims, verify at least one matches our allowed audiences
-	if len(tokenAudiences) > 0 {
-		for _, tokenAud := range tokenAudiences {
-			normTokenAud := strings.TrimRight(strings.TrimSpace(tokenAud), "/")
-			for _, allowed := range allowedAudiences {
-				normAllowed := strings.TrimRight(strings.TrimSpace(allowed), "/")
-				if strings.EqualFold(normTokenAud, normAllowed) {
-					return nil
-				}
+func (v *OIDCVerifier) validateAudience(rawAud json.RawMessage) error {
+	tokenAudiences := extractAudiences(rawAud)
+	if len(tokenAudiences) == 0 {
+		return errors.New("token is missing mandatory 'aud' claim")
+	}
+
+	allowed := v.allowedAudiences()
+	for _, tokenAud := range tokenAudiences {
+		normTokenAud := strings.TrimRight(strings.TrimSpace(tokenAud), "/")
+		for _, a := range allowed {
+			if strings.EqualFold(normTokenAud, strings.TrimRight(strings.TrimSpace(a), "/")) {
+				return nil
 			}
 		}
-		return fmt.Errorf("token audience %v does not match allowed audiences", tokenAudiences)
 	}
-
-	// If token has no aud claim but audience is explicitly enforced by config
-	if v.audience != "" {
-		return errors.New("token is missing mandatory 'aud' claim required by configuration")
-	}
-
-	return nil
+	return fmt.Errorf("token audience %v does not match allowed audiences", tokenAudiences)
 }
 
 func extractAudiences(raw json.RawMessage) []string {
@@ -223,7 +217,7 @@ func Middleware(verifier *OIDCVerifier, userRepo *repository.UserRepository, log
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rawToken := extractToken(r)
 			if rawToken == "" {
-				writeAuthError(w, http.StatusUnauthorized, "missing authentication token (Authorization header or ?token= query parameter required)")
+				writeAuthError(w, http.StatusUnauthorized, "missing authentication token")
 				return
 			}
 

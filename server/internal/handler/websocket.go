@@ -63,7 +63,11 @@ func WebSocketHandler(
 
 		// 3. Instantiate Client and register with the Broadcast Hub
 		client := chat.NewClient(hub, conn, user, msgRepo, logger)
-		hub.Register <- client
+		if !hub.RegisterClient(client) {
+			// Hub has stopped: the server is shutting down.
+			_ = conn.Close()
+			return
+		}
 
 		// 4. Stream recent message history to this newly connected client
 		client.SendHistory(r.Context(), 50)

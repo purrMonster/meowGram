@@ -30,6 +30,10 @@ func (r *UserRepository) GetOrCreateBySub(ctx context.Context, sub string, prefe
 	if username == "" {
 		username = sub
 	}
+	// users.username is VARCHAR(100); truncate (rune-safe) instead of failing login.
+	if r := []rune(username); len(r) > 100 {
+		username = string(r[:100])
+	}
 
 	query := `
 		INSERT INTO users (authelia_sub, username)

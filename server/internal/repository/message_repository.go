@@ -133,4 +133,3 @@ func (r *MessageRepository) GetMessagesAfter(ctx context.Context, after time.Tim
 
 	return messages, nil
 }
-
