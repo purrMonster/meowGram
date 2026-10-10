@@ -22,6 +22,10 @@ enum SocketStatus { disconnected, connecting, connected, error }
 ///   unexpected drop, fetching a fresh token from [tokenProvider] on every
 ///   attempt. [disconnect] stops reconnecting.
 class ChatWebSocketService extends ChangeNotifier {
+  final String? ticketUrl;
+
+  ChatWebSocketService({this.ticketUrl});
+
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _subscription;
   Timer? _reconnectTimer;
@@ -95,7 +99,9 @@ class ChatWebSocketService extends ChangeNotifier {
     final uri = Uri.tryParse(url);
     if (uri == null ||
         (!uri.queryParameters.containsKey('token') &&
-            !uri.queryParameters.containsKey('ticket'))) return url;
+            !uri.queryParameters.containsKey('ticket'))) {
+      return url;
+    }
     final params = Map<String, String>.from(uri.queryParameters)
       ..remove('token')
       ..remove('ticket');
@@ -137,16 +143,18 @@ class ChatWebSocketService extends ChangeNotifier {
       final channel = WebSocketChannel.connect(Uri.parse(targetUrl));
       _channel = channel;
 
-      channel.ready.then((_) {
-        if (generation != _generation) return;
-        _reconnectAttempt = 0;
-        _setStatus(SocketStatus.connected);
-      }).catchError((Object error) {
-        if (generation != _generation) return;
-        _lastError = error.toString();
-        _setStatus(SocketStatus.error);
-        _scheduleReconnect();
-      });
+      channel.ready
+          .then((_) {
+            if (generation != _generation) return;
+            _reconnectAttempt = 0;
+            _setStatus(SocketStatus.connected);
+          })
+          .catchError((Object error) {
+            if (generation != _generation) return;
+            _lastError = error.toString();
+            _setStatus(SocketStatus.error);
+            _scheduleReconnect();
+          });
 
       _subscription = channel.stream.listen(
         (dynamic data) {
@@ -183,7 +191,7 @@ class ChatWebSocketService extends ChangeNotifier {
     try {
       final response = await client
           .post(
-            Uri.parse(AppConfig.wsTicketUrl),
+            Uri.parse(ticketUrl ?? AppConfig.wsTicketUrl),
             headers: {
               'Accept': 'application/json',
               'Authorization': 'Bearer $accessToken',
@@ -191,7 +199,9 @@ class ChatWebSocketService extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 10));
       if (response.statusCode != 200) {
-        throw StateError('WebSocket ticket request failed (${response.statusCode}).');
+        throw StateError(
+          'WebSocket ticket request failed (${response.statusCode}).',
+        );
       }
       final decoded = jsonDecode(response.body);
       if (decoded is! Map ||
