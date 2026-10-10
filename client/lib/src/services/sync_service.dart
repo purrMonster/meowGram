@@ -139,7 +139,7 @@ class SyncService {
   Future<List<ChatMessage>?> _run({DateTime? after, String? afterId, String? token}) async {
     if (_isSyncing) {
       debugPrint('SyncService: Sync already in progress, skipping duplicate call.');
-      return const [];
+      return null;
     }
 
     _isSyncing = true;

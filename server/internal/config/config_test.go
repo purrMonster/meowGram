@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -87,6 +89,20 @@ func TestConfig_LocalhostAutheliaDomain(t *testing.T) {
 	}
 }
 
+func TestConfig_LocalhostLookalikeUsesHTTPS(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("AUTHELIA_DOMAIN", "localhost.attacker.example")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load to succeed, got: %v", err)
+	}
+	if cfg.AutheliaIssuer != "https://localhost.attacker.example" {
+		t.Fatalf("expected HTTPS for non-loopback hostname, got: %s", cfg.AutheliaIssuer)
+	}
+}
+
 func TestConfig_CustomEndpoints(t *testing.T) {
 	cleanEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://localhost/test")
@@ -127,5 +143,62 @@ func TestConfig_DefaultsHaveNoHardcodedDomainsAndMatchClientID(t *testing.T) {
 	}
 	if cfg.AutheliaClientID != "meowgram" {
 		t.Errorf("default client ID must match the Flutter client, got %q", cfg.AutheliaClientID)
+	}
+}
+
+func TestConfig_OriginPolicyUsesConfiguredOrigins(t *testing.T) {
+	cfg := &Config{
+		AppDomain:   "chat.example.home.arpa",
+		CORSOrigins: []string{"https://chat.example.home.arpa"},
+	}
+	if !cfg.IsAllowedOrigin("https://chat.example.home.arpa") {
+		t.Fatal("configured origin should be allowed")
+	}
+	if cfg.IsAllowedOrigin("http://chat.example.home.arpa") {
+		t.Fatal("an unconfigured insecure origin must not be implicitly allowed")
+	}
+}
+
+func TestConfig_ProductionOriginDefaultsUseHTTPS(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("AUTHELIA_ISSUER", "https://auth.example.home.arpa")
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("APP_DOMAIN", "chat.example.home.arpa")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.IsAllowedOrigin("https://chat.example.home.arpa") {
+		t.Fatal("production default should allow the configured HTTPS app origin")
+	}
+	if cfg.IsAllowedOrigin("http://chat.example.home.arpa") {
+		t.Fatal("production default must not allow plaintext HTTP")
+	}
+}
+
+func TestLoadDotenv_ExplicitEmptyEnvironmentValueWins(t *testing.T) {
+	t.Setenv("DOTENV_EMPTY_OVERRIDE_TEST", "")
+	workingDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workingDir, ".env"), []byte("DOTENV_EMPTY_OVERRIDE_TEST=from-file\n"), 0600); err != nil {
+		t.Fatalf("write dotenv fixture: %v", err)
+	}
+	previousDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(workingDir); err != nil {
+		t.Fatalf("change working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previousDir); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	loadDotenv()
+	if got := os.Getenv("DOTENV_EMPTY_OVERRIDE_TEST"); got != "" {
+		t.Fatalf("explicit empty environment value was overwritten by dotenv: %q", got)
 	}
 }

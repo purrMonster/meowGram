@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -251,7 +252,43 @@ func TestOIDCVerifier_StrictConfiguredAudience(t *testing.T) {
 	if err := verifyClaims(t, cfg, map[string]interface{}{
 		"iss": "https://auth.example.home.arpa", "sub": "u1", "exp": future,
 		"aud": []string{"https://meow.example.home.arpa/"},
-	}); err != nil {
-		t.Errorf("configured audience (with trailing slash) must be accepted: %v", err)
+	}); err == nil {
+		t.Error("audience comparison must be exact; trailing slash changes the value")
+	}
+}
+
+func TestOIDCVerifier_RejectsIssuerAliases(t *testing.T) {
+	cfg := &config.Config{
+		AutheliaIssuer:   "https://auth.example.home.arpa",
+		AutheliaDomain:   "auth.example.home.arpa",
+		AutheliaAudience: "https://meow.example.home.arpa",
+	}
+	future := time.Now().Add(time.Hour).Unix()
+
+	for _, issuer := range []string{
+		"http://auth.example.home.arpa",
+		"auth.example.home.arpa",
+		"https://auth.example.home.arpa/other",
+	} {
+		t.Run(issuer, func(t *testing.T) {
+			err := verifyClaims(t, cfg, map[string]interface{}{
+				"iss": issuer, "sub": "u1", "exp": future,
+				"aud": "https://meow.example.home.arpa",
+			})
+			if err == nil {
+				t.Errorf("issuer alias %q must be rejected", issuer)
+			}
+		})
+	}
+}
+
+func TestExtractToken_RequiresBearerHeader(t *testing.T) {
+	request := httptest.NewRequest("GET", "/api/messages/sync?token=query-secret", nil)
+	if got := extractToken(request); got != "" {
+		t.Fatalf("query token must not authenticate HTTP requests; got %q", got)
+	}
+	request.Header.Set("Authorization", "Bearer header-token")
+	if got := extractToken(request); got != "header-token" {
+		t.Fatalf("expected bearer header token, got %q", got)
 	}
 }

@@ -34,10 +34,9 @@ type AutheliaClaims struct {
 
 // OIDCVerifier wraps token verification against Authelia's JWKS, Issuer, and Audience.
 type OIDCVerifier struct {
-	keySet         oidc.KeySet
-	issuer         string
-	autheliaDomain string
-	audience       string
+	keySet   oidc.KeySet
+	issuer   string
+	audience string
 }
 
 // rawTokenClaims models the complete set of standard claims in Authelia RS256 tokens.
@@ -66,10 +65,9 @@ func NewOIDCVerifier(ctx context.Context, cfg *config.Config) (*OIDCVerifier, er
 // NewOIDCVerifierWithKeySet constructs an OIDCVerifier with an explicit KeySet (for production or mock testing).
 func NewOIDCVerifierWithKeySet(keySet oidc.KeySet, cfg *config.Config) *OIDCVerifier {
 	return &OIDCVerifier{
-		keySet:         keySet,
-		issuer:         cfg.AutheliaIssuer,
-		autheliaDomain: cfg.AutheliaDomain,
-		audience:       cfg.AutheliaAudience,
+		keySet:   keySet,
+		issuer:   cfg.AutheliaIssuer,
+		audience: cfg.AutheliaAudience,
 	}
 }
 
@@ -96,18 +94,22 @@ func (v *OIDCVerifier) Verify(ctx context.Context, rawToken string) (*AutheliaCl
 		return nil, errors.New("token is missing mandatory 'sub' claim")
 	}
 
-	// 4. Validate expiration (mandatory) with 1-minute clock skew tolerance
+	// 4. Validate time-based claims with a small clock-skew tolerance.
 	now := time.Now()
 	if claims.ExpiresAt <= 0 {
 		return nil, errors.New("token is missing mandatory 'exp' claim")
 	}
-	if now.Add(-1*time.Minute).Unix() > claims.ExpiresAt {
+	const clockSkew = time.Minute
+	if !time.Unix(claims.ExpiresAt, 0).Add(clockSkew).After(now) {
 		return nil, errors.New("token has expired")
 	}
 	if claims.NotBefore > 0 {
-		if now.Add(1*time.Minute).Unix() < claims.NotBefore {
+		if now.Add(clockSkew).Before(time.Unix(claims.NotBefore, 0)) {
 			return nil, errors.New("token is not yet valid (nbf)")
 		}
+	}
+	if claims.IssuedAt > 0 && now.Add(clockSkew).Before(time.Unix(claims.IssuedAt, 0)) {
+		return nil, errors.New("token was issued in the future (iat)")
 	}
 
 	// 5. Validate Issuer (handles trailing slash normalization and domain variants)
@@ -129,23 +131,13 @@ func (v *OIDCVerifier) Verify(ctx context.Context, rawToken string) (*AutheliaCl
 }
 
 func (v *OIDCVerifier) validateIssuer(tokenIssuer string) error {
-	trimmedToken := strings.TrimRight(strings.TrimSpace(tokenIssuer), "/")
+	trimmedToken := strings.TrimRight(tokenIssuer, "/")
 	if trimmedToken == "" {
 		return errors.New("token is missing mandatory 'iss' claim")
 	}
-
-	candidates := []string{
-		strings.TrimRight(v.issuer, "/"),
-	}
-	if v.autheliaDomain != "" {
-		domain := strings.TrimRight(v.autheliaDomain, "/")
-		candidates = append(candidates, "https://"+domain, "http://"+domain, domain)
-	}
-
-	for _, c := range candidates {
-		if c != "" && strings.EqualFold(trimmedToken, c) {
-			return nil
-		}
+	configuredIssuer := strings.TrimRight(strings.TrimSpace(v.issuer), "/")
+	if configuredIssuer != "" && trimmedToken == configuredIssuer {
+		return nil
 	}
 
 	return fmt.Errorf("token issuer %q does not match configured issuer %q", tokenIssuer, v.issuer)
@@ -170,9 +162,8 @@ func (v *OIDCVerifier) validateAudience(rawAud json.RawMessage) error {
 
 	allowed := v.allowedAudiences()
 	for _, tokenAud := range tokenAudiences {
-		normTokenAud := strings.TrimRight(strings.TrimSpace(tokenAud), "/")
 		for _, a := range allowed {
-			if strings.EqualFold(normTokenAud, strings.TrimRight(strings.TrimSpace(a), "/")) {
+			if tokenAud == strings.TrimSpace(a) {
 				return nil
 			}
 		}
@@ -257,19 +248,14 @@ func SubFromContext(ctx context.Context) (string, bool) {
 }
 
 func extractToken(r *http.Request) string {
-	// 1. Check Authorization Bearer header
+	// API credentials are accepted only in the Authorization header so proxies
+	// and request logs cannot accidentally capture access tokens in URLs.
 	authHeader := r.Header.Get("Authorization")
 	if authHeader != "" {
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
 			return strings.TrimSpace(parts[1])
 		}
-	}
-
-	// 2. Check 'token' query parameter (Standard for WebSocket handshakes)
-	queryToken := r.URL.Query().Get("token")
-	if queryToken != "" {
-		return strings.TrimSpace(queryToken)
 	}
 
 	return ""

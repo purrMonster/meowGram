@@ -1,12 +1,12 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.12.0
-> **Status**: Review hardening is in progress on `fix/review-hardening`; see [§12.10](#1210-review-hardening) for current changes and deployment prerequisites. Release 1.0.1 remains the latest deployed release.
+> **Document Version**: 1.13.0
+> **Status**: Full codebase re-audit is in progress on `refactor/full-codebase-audit`; see [§12.10](#1210-review-hardening) and [§12.11](#1211-full-codebase-re-audit) for changes and deployment prerequisites. Release 1.0.1 remains the latest deployed release.
 > **Author**: Lead Developer / Antigravity IDE; §12 and corrections by Claude  
 > **Last Updated**: 2026-10-10
 
 > [!IMPORTANT]
-> Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; §12.10 records current review-hardening changes, which are not yet deployed. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
+> Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; §§12.10–12.11 record code changes that are not yet deployed. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
 
 ---
 
@@ -424,7 +424,7 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 | `POSTGRES_PASSWORD` | `meowgram_secret_dev...` | *(Strong secret)* | PostgreSQL password. |
 | `POSTGRES_DB` | `meowgram` | `meowgram` | PostgreSQL database name. |
 | `DATABASE_URL` | `postgres://...` | `postgres://...` | Full connection string for Go backend. |
-| `CORS_ORIGINS` | *(Localhost list)* | `https://meow.example.home.arpa` | Comma-separated list of allowed client origins. |
+| `CORS_ORIGINS` | *(Derived: local origins in development; HTTPS app origin in staging/production)* | `https://meow.example.home.arpa` | Comma-separated allow-list. Set explicitly when serving the app from another origin. |
 | `TRAEFIK_ENTRYPOINTS` | `web` | `web` / `websecure` | Traefik entrypoint(s) used by the backend and web routers. |
 | `BACKUP_RETENTION_DAYS` | `14` | `14` or more | Number of days of local PostgreSQL backups to retain. |
 
@@ -978,14 +978,44 @@ deployed. They address the findings from the 2026-10-10 whole-codebase review.
 | Finding | Change in this branch | Remaining deployment action |
 |---|---|---|
 | Bearer token in WebSocket URL | `POST /api/ws-ticket` verifies the bearer token and issues a random, hashed-in-memory ticket that is one-use and expires after 30 seconds. The WebSocket consumes the ticket; the client redacts auth query values from displayed URLs. | Rebuild both client and server together. Existing access-token WebSocket URLs stop working. |
-| ID tokens accepted as API credentials | `AUTHELIA_AUDIENCE` is required at startup and is the only accepted audience; the OIDC client ID is no longer a fallback. | Configure Authelia to sign JWT access tokens for the app API audience. Authelia defaults to opaque access tokens, which this JWKS verifier cannot validate; see [Authelia OIDC integration](https://www.authelia.com/integration/openid-connect/introduction/). |
+| ID tokens accepted as API credentials or loose token matching | `AUTHELIA_AUDIENCE` is required at startup and is the only accepted audience. Issuer and audience claims are compared exactly (apart from a trailing issuer slash); alternate issuer schemes, domain aliases, and query-string bearer tokens are rejected. | Configure Authelia to sign JWT access tokens for the app API audience. Authelia defaults to opaque access tokens, which this JWKS verifier cannot validate; see [Authelia OIDC integration](https://www.authelia.com/integration/openid-connect/introduction/). |
 | Sync gaps at page boundaries and large catch-up windows | Sync cursor is `(created_at, id)`, and both foreground and Android background sync continue through full pages. | Existing background timestamp-only cursors are accepted and may replay same-time messages once; UUID deduplication makes that safe. |
 | Web frontend had no deployment route | Compose builds Flutter web assets from the repo, serves them with unprivileged Nginx, and routes the host catch-all to the frontend while backend paths retain priority. Local web bind defaults to `127.0.0.1:8081`. | Rebuild and start the `web` service. Configure production `APP_DOMAIN`, `API_BASE_URL`, `WS_BASE_URL`, and Authelia issuer in the ignored deploy environment. |
 | No scheduled database dump | Compose starts a daily `pg_dump` service with owner-only files and 14-day local retention by default. Restore instructions are in `deploy/backups/README.md`. | Backups share the deployment host; configure off-host copying and verify restores before relying on disaster recovery. |
 | Development proxy exposed insecure dashboard/socket | Optional development Traefik now uses static file routing, binds to loopback, disables the dashboard, and has no Docker socket mount. | None for the dev profile. Production continues to use the externally managed reverse proxy. |
+| CORS implicitly allowed the app hostname over HTTP | Origin checks now accept only configured origins; default production/staging origins use HTTPS, while development defaults include localhost ports used by the web client. | Set `CORS_ORIGINS` explicitly for every deployed web origin. |
+| Empty environment values could be overwritten by ignored `.env` files | Dotenv loading now respects environment-variable presence, even when the value is explicitly empty; this also keeps config tests isolated from local secrets. | None. |
+| Manual reconnect could be ignored while connected or start duplicate handshakes | Reconnect now updates the current token/endpoint and starts exactly one new ticket and socket attempt; stream errors also schedule recovery. A concurrent sync no longer clears its pending cursor. | None. |
 | PowerShell build could claim success after failure | The packaging script checks every Flutter/Docker native exit code and stops on error. | None. |
 | Client ID mismatch | Client, server, examples, and build defaults now use `meowgram`, as specified in AGENTS.md §2. | Update the Authelia client registration in `purrbrews-containers` before deploying; this branch does not alter that repo or the live deployment. |
 
-The review-hardening changes have not been tested in this turn. The Go and
-Flutter suites must pass before requesting a merge, per AGENTS.md §1.3. No live
+The original review-hardening commit was prepared without running the Go and
+Flutter suites. Follow-up verification for this branch is recorded in §12.11.
+Both suites must pass before requesting a merge, per AGENTS.md §1.3. No live
 deployment or external Authelia configuration was changed.
+
+### 12.11 Full codebase re-audit
+
+Follow-up refactors on `refactor/full-codebase-audit`:
+
+| Finding | Change | Remaining action |
+|---|---|---|
+| OIDC issuer aliases and audience normalization accepted values other than the configured claims | Issuer matching now requires the configured issuer (trailing slash normalized); audience matching is exact and case-sensitive. Future `iat` values outside clock skew are rejected. | Configure Authelia with the exact issuer and API audience values. |
+| HTTP auth still accepted access tokens in a query parameter | Protected HTTP routes now accept bearer tokens only in `Authorization`; URL query tokens no longer authenticate. | None. |
+| CORS automatically allowed the app hostname over HTTP, including in production | Only explicitly configured origins match. Production/staging defaults are HTTPS; Compose leaves an empty allow-list for environment-aware defaults. | Set `CORS_ORIGINS` explicitly for deployed origins. |
+| Empty environment variables were overwritten from ignored dotenv files | Dotenv loading now respects variables present in the process even when empty, making environment precedence predictable and config tests isolated. | None. |
+| Manual reconnect could be ignored or start duplicate ticket handshakes | Reconnect configures token and endpoint before starting one forced reconnect; stream errors schedule recovery. Concurrent sync attempts retain the pending cursor. | None. |
+| Sync SQL relied on implicit parameter type inference for an empty UUID cursor | The cursor parameter is explicitly treated as text and converted with `NULLIF` before UUID comparison. | None. |
+| Local OIDC issuer detection matched hostnames containing the word `localhost` | Development HTTP is now selected only for an exact loopback hostname/IP; lookalike public hostnames default to HTTPS in both client and server config. | Use an explicit issuer URL when Authelia is behind a nonstandard local proxy. |
+| User identity uniqueness had two equivalent indexes | Migration `000003` removes the standalone index while preserving the unique constraint and all rows; its down migration recreates the index. The Go builder image now pins its toolchain to 1.27.1. | The additive migration runs on normal server startup; no manual data operation is required. |
+
+Remaining gaps confirmed during the re-audit and still tracked in AGENTS.md/runbook: per-device FCM tokens (topic subscriptions remain public), OIDC nonce persistence and validation in the client, App Links / Universal Links registration with Authelia, off-host backup and restore drills, API rate limiting, and Android Google Services plugin compatibility. These need separate implementation or deployment work; no external identity configuration was changed here.
+
+Verification attempted for this audit: `go test ./...` and `flutter test` could
+not start because Go and Flutter are not installed or available on PATH in the
+review environment. Docker Compose configuration validation, PowerShell script
+parsing, and `git diff --check` passed. Shell syntax parsing could not run
+because the available Bash launcher was denied by the environment. The graph
+utility launcher also failed before extraction; the audit continued through
+direct source inspection. No deployment or external Authelia configuration was
+changed.

@@ -239,11 +239,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     // Manual reconnect / token refreshed: reopen the socket with a fresh token.
-    _socketService.connect(
+    _socketService.reconnectNow(
       accessToken: event.accessToken,
       customWsUrl: event.customWsUrl,
     );
-    _socketService.reconnectNow();
   }
 
   /// Executes the two-stage cache-to-live handoff pipeline.

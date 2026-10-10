@@ -57,7 +57,7 @@ services:
       # (gitignored) and set GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/fcm-service-account.json.
       # Left empty, push notifications are disabled.
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:8081,http://localhost:3000,http://127.0.0.1:8080,http://127.0.0.1:8081,http://localhost}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
       - READ_TIMEOUT_SECONDS=${READ_TIMEOUT_SECONDS:-15}
       - WRITE_TIMEOUT_SECONDS=${WRITE_TIMEOUT_SECONDS:-15}
       - IDLE_TIMEOUT_SECONDS=${IDLE_TIMEOUT_SECONDS:-60}
