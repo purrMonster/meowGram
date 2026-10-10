@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -102,7 +104,7 @@ func Load() (*Config, error) {
 	if autheliaIssuer == "" && autheliaDomain != "" {
 		if strings.HasPrefix(autheliaDomain, "http://") || strings.HasPrefix(autheliaDomain, "https://") {
 			autheliaIssuer = autheliaDomain
-		} else if strings.Contains(autheliaDomain, "localhost") || strings.HasPrefix(autheliaDomain, "127.") {
+		} else if isLoopbackDomain(autheliaDomain) {
 			autheliaIssuer = "http://" + autheliaDomain
 		} else {
 			autheliaIssuer = "https://" + autheliaDomain
@@ -112,7 +114,7 @@ func Load() (*Config, error) {
 	if autheliaIssuer == "" {
 		return nil, errors.New("environment variable AUTHELIA_ISSUER or AUTHELIA_DOMAIN is required")
 	}
-	autheliaIssuer = strings.TrimRight(autheliaIssuer, "/")
+	autheliaIssuer = strings.TrimRight(strings.TrimSpace(autheliaIssuer), "/")
 
 	autheliaJWKSURL := os.Getenv("AUTHELIA_JWKS_URL")
 	if autheliaJWKSURL == "" {
@@ -139,6 +141,7 @@ func Load() (*Config, error) {
 	if strings.TrimSpace(autheliaAudience) == "" {
 		return nil, errors.New("AUTHELIA_AUDIENCE is required (use the API audience configured for this app)")
 	}
+	autheliaAudience = strings.TrimSpace(autheliaAudience)
 
 	// Sourcing REST & WebSocket Service Endpoints
 	syncEndpoint := os.Getenv("SYNC_ENDPOINT")
@@ -200,15 +203,20 @@ func Load() (*Config, error) {
 
 	// Default fallback origins if none specified
 	if len(corsOrigins) == 0 {
-		corsOrigins = []string{
-			fmt.Sprintf("http://%s", appDomain),
-			fmt.Sprintf("http://%s:%s", appDomain, port),
-			fmt.Sprintf("https://%s", appDomain),
-			"http://localhost",
-			"http://localhost:8080",
-			"http://localhost:3000",
-			"http://127.0.0.1",
-			"http://127.0.0.1:8080",
+		if env == "production" || env == "staging" {
+			corsOrigins = []string{fmt.Sprintf("https://%s", appDomain)}
+		} else {
+			corsOrigins = []string{
+				fmt.Sprintf("http://%s", appDomain),
+				fmt.Sprintf("http://%s:%s", appDomain, port),
+				"http://localhost",
+				"http://localhost:8080",
+				"http://localhost:8081",
+				"http://localhost:3000",
+				"http://127.0.0.1",
+				"http://127.0.0.1:8080",
+				"http://127.0.0.1:8081",
+			}
 		}
 	}
 
@@ -243,27 +251,33 @@ func Load() (*Config, error) {
 	}, nil
 }
 
+func isLoopbackDomain(value string) bool {
+	if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
+		value = parsed.Host
+	}
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		value = host
+	}
+	value = strings.Trim(value, "[]")
+	if strings.EqualFold(value, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(value)
+	return ip != nil && ip.IsLoopback()
+}
+
 // Address returns the listen address string.
 func (c *Config) Address() string {
 	return ":" + c.Port
 }
 
-// IsAllowedOrigin checks if the provided origin header matches configured origins or app domain.
+// IsAllowedOrigin accepts only explicitly configured origins.
 func (c *Config) IsAllowedOrigin(origin string) bool {
 	if origin == "" {
 		return true // Allow requests without an origin (e.g. mobile apps, curl, non-browser clients)
 	}
 
 	origin = strings.TrimRight(origin, "/")
-
-	if c.AppDomain != "" {
-		if strings.EqualFold(origin, "https://"+c.AppDomain) ||
-			strings.EqualFold(origin, "http://"+c.AppDomain) ||
-			strings.EqualFold(origin, c.AppDomain) {
-			return true
-		}
-	}
-
 	for _, allowed := range c.CORSOrigins {
 		if strings.EqualFold(origin, strings.TrimRight(allowed, "/")) {
 			return true

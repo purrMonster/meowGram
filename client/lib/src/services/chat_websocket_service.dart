@@ -72,13 +72,16 @@ class ChatWebSocketService extends ChangeNotifier {
   }
 
   /// Forces a fresh connection (e.g. after a token refresh or app resume).
-  void reconnectNow() {
-    if (!_autoReconnect) return;
-    _reconnectTimer?.cancel();
-    _reconnectAttempt = 0;
-    if (_status != SocketStatus.connected) {
-      unawaited(_open());
+  void reconnectNow({String? customWsUrl, String? accessToken}) {
+    _autoReconnect = true;
+    if (customWsUrl != null) _customWsUrl = customWsUrl;
+    if (accessToken != null && accessToken.isNotEmpty) {
+      _explicitToken = accessToken;
     }
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempt = 0;
+    unawaited(_open());
   }
 
   String? _currentToken() {
@@ -163,6 +166,7 @@ class ChatWebSocketService extends ChangeNotifier {
           if (generation != _generation) return;
           _lastError = error.toString();
           _setStatus(SocketStatus.error);
+          _scheduleReconnect();
         },
         cancelOnError: false,
       );
