@@ -66,3 +66,52 @@ func TestPostgresPaginationAtEqualTimestamp(t *testing.T) {
 		t.Fatalf("identity unique constraint missing: %v", err)
 	}
 }
+
+func TestPostgresDeviceOwnershipAndExpiry(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("scratch PostgreSQL required")
+	}
+	db, err := database.Open(url, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	for _, sub := range []string{"device-user-a", "device-user-b"} {
+		if _, err := db.ExecContext(ctx, `INSERT INTO users (authelia_sub,username) VALUES ($1,'scratch') ON CONFLICT (authelia_sub) DO NOTHING`, sub); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo := NewDeviceRepository(db)
+	if err := repo.Register(ctx, "device-user-a", "scratch-device-active", time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Register(ctx, "device-user-a", "scratch-device-expired", time.Now().Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Unregister(ctx, "device-user-b", "scratch-device-active"); err != nil {
+		t.Fatal(err)
+	}
+	devices, err := repo.ActiveAfter(ctx, 0)
+	if err != nil || len(devices) != 1 || devices[0].Token != "scratch-device-active" {
+		t.Fatalf("expiry or owner isolation failed: count=%d err=%v", len(devices), err)
+	}
+	if err := repo.Register(ctx, "device-user-b", "scratch-device-active", time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Unregister(ctx, "device-user-a", "scratch-device-active"); err != nil {
+		t.Fatal(err)
+	}
+	devices, err = repo.ActiveAfter(ctx, 0)
+	if err != nil || len(devices) != 1 {
+		t.Fatal("old owner revoked transferred registration")
+	}
+	if err := repo.Unregister(ctx, "device-user-b", "scratch-device-active"); err != nil {
+		t.Fatal(err)
+	}
+	devices, err = repo.ActiveAfter(ctx, 0)
+	if err != nil || len(devices) != 0 {
+		t.Fatal("logout did not revoke registration")
+	}
+}

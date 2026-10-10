@@ -13,27 +13,28 @@ import (
 
 // Config represents runtime configuration loaded strictly from environment variables and .env files.
 type Config struct {
-	Port              string
-	AppDomain         string
-	CORSOrigins       []string
-	Environment       string
-	LogLevel          string
-	DatabaseURL       string
-	AutheliaDomain    string
-	AutheliaIssuer    string
-	AutheliaJWKSURL   string
-	AutheliaClientID  string
-	AutheliaAudience  string
-	GoogleCredentials string
-	SyncEndpoint      string
-	HealthEndpoint    string
-	WSEndpoint        string
-	WSTicketEndpoint  string
-	ImmichDomain      string
-	ImmichAPIURL      string
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
+	Port               string
+	AppDomain          string
+	CORSOrigins        []string
+	Environment        string
+	LogLevel           string
+	DatabaseURL        string
+	AutheliaDomain     string
+	AutheliaIssuer     string
+	AutheliaJWKSURL    string
+	AutheliaClientID   string
+	AutheliaAudience   string
+	GoogleCredentials  string
+	SyncEndpoint       string
+	HealthEndpoint     string
+	WSEndpoint         string
+	WSTicketEndpoint   string
+	PushDeviceEndpoint string
+	ImmichDomain       string
+	ImmichAPIURL       string
+	ReadTimeout        time.Duration
+	WriteTimeout       time.Duration
+	IdleTimeout        time.Duration
 }
 
 // Load populates and validates Config from process environment and candidate .env files.
@@ -227,28 +228,40 @@ func Load() (*Config, error) {
 	googleCredentials := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 	return &Config{
-		Port:              port,
-		AppDomain:         appDomain,
-		CORSOrigins:       corsOrigins,
-		Environment:       env,
-		LogLevel:          logLevel,
-		DatabaseURL:       dbURL,
-		AutheliaDomain:    autheliaDomain,
-		AutheliaIssuer:    autheliaIssuer,
-		AutheliaJWKSURL:   autheliaJWKSURL,
-		AutheliaClientID:  autheliaClientID,
-		AutheliaAudience:  autheliaAudience,
-		SyncEndpoint:      syncEndpoint,
-		HealthEndpoint:    healthEndpoint,
-		WSEndpoint:        wsEndpoint,
-		WSTicketEndpoint:  wsTicketEndpoint,
-		ImmichDomain:      immichDomain,
-		ImmichAPIURL:      immichAPIURL,
-		GoogleCredentials: googleCredentials,
-		ReadTimeout:       readTimeout,
-		WriteTimeout:      writeTimeout,
-		IdleTimeout:       idleTimeout,
+		Port:               port,
+		AppDomain:          appDomain,
+		CORSOrigins:        corsOrigins,
+		Environment:        env,
+		LogLevel:           logLevel,
+		DatabaseURL:        dbURL,
+		AutheliaDomain:     autheliaDomain,
+		AutheliaIssuer:     autheliaIssuer,
+		AutheliaJWKSURL:    autheliaJWKSURL,
+		AutheliaClientID:   autheliaClientID,
+		AutheliaAudience:   autheliaAudience,
+		SyncEndpoint:       syncEndpoint,
+		HealthEndpoint:     healthEndpoint,
+		WSEndpoint:         wsEndpoint,
+		WSTicketEndpoint:   wsTicketEndpoint,
+		PushDeviceEndpoint: normalizePath(os.Getenv("PUSH_DEVICE_ENDPOINT"), "/api/push/devices"),
+		ImmichDomain:       immichDomain,
+		ImmichAPIURL:       immichAPIURL,
+		GoogleCredentials:  googleCredentials,
+		ReadTimeout:        readTimeout,
+		WriteTimeout:       writeTimeout,
+		IdleTimeout:        idleTimeout,
 	}, nil
+}
+
+func normalizePath(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	if !strings.HasPrefix(value, "/") {
+		return "/" + value
+	}
+	return value
 }
 
 func isLoopbackDomain(value string) bool {

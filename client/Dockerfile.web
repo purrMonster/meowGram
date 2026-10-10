@@ -22,10 +22,12 @@ ARG APP_DOMAIN=localhost
 ARG HTTP_PORT=8080
 ARG USE_SECURE_SCHEMES=false
 ARG AUTHELIA_ISSUER_URL=http://localhost:9091
+ARG AUTHELIA_JWKS_URL=
 ARG AUTHELIA_CLIENT_ID=meowgram
 ARG API_BASE_URL=http://localhost:8080
 ARG WS_BASE_URL=ws://localhost:8080/ws
 ARG WS_TICKET_ENDPOINT=/api/ws-ticket
+ARG PUSH_DEVICE_ENDPOINT=/api/push/devices
 
 WORKDIR /app
 COPY . .
@@ -35,10 +37,12 @@ RUN flutter pub get && flutter build web --release \
     --dart-define=HTTP_PORT="${HTTP_PORT}" \
     --dart-define=USE_SECURE_SCHEMES="${USE_SECURE_SCHEMES}" \
     --dart-define=AUTHELIA_ISSUER_URL="${AUTHELIA_ISSUER_URL}" \
+    --dart-define=AUTHELIA_JWKS_URL="${AUTHELIA_JWKS_URL}" \
     --dart-define=AUTHELIA_CLIENT_ID="${AUTHELIA_CLIENT_ID}" \
     --dart-define=API_BASE_URL="${API_BASE_URL}" \
     --dart-define=WS_BASE_URL="${WS_BASE_URL}" \
-    --dart-define=WS_TICKET_ENDPOINT="${WS_TICKET_ENDPOINT}"
+    --dart-define=WS_TICKET_ENDPOINT="${WS_TICKET_ENDPOINT}" \
+    --dart-define=PUSH_DEVICE_ENDPOINT="${PUSH_DEVICE_ENDPOINT}"
 
 FROM nginx:1.29-alpine
 COPY nginx.web.conf /etc/nginx/nginx.conf

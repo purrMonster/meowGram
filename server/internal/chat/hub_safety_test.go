@@ -19,7 +19,7 @@ type fakePublisher struct {
 	body  string
 }
 
-func (f *fakePublisher) PublishToTopic(_ context.Context, topic, title, body string, data map[string]string) error {
+func (f *fakePublisher) PublishActivity(_ context.Context, title, body string, data map[string]string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, data)

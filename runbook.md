@@ -1068,3 +1068,33 @@ the app origin. Old in-flight web sign-ins without a saved nonce must restart.
 Tests generate ephemeral RSA keys and emulate token/JWKS responses, requiring no
 live provider. Flutter analysis is clean and all 66 tests pass.
 Release web build also passed with the nonce and signature checks enabled.
+
+### 12.14 Authenticated device notifications
+
+`feat/authenticated-device-push` removes all server topic sends. Authenticated
+PUT/DELETE requests to the configured device endpoint register/revoke a token;
+ownership comes exclusively from verified identity, never request JSON. Migration
+000004 adds a device table. Its down migration intentionally preserves rows and
+schema; removing that data requires separate owner authorization.
+
+| Setting | Server env / client define | Default |
+|---|---|---|
+| Device registration endpoint | `PUSH_DEVICE_ENDPOINT` | `/api/push/devices` |
+
+Registrations expire after 24 hours without renewal. The app renews at sign-in,
+access-token/device-token changes and every 12 hours while running. Logout queues
+revocation after any in-flight registration and invalidates the Firebase token,
+even if API revocation fails. Legacy public topic subscriptions are removed.
+The sender pages active registrations in batches of 500 and removes tokens the
+provider reports as unregistered. Notifications remain content-free and collapsed.
+Neither tokens nor provider error bodies are logged. Web/Windows push remains
+unsupported; their chat and local notification behavior is unchanged.
+
+Scratch verification covers anonymous rejection, owner spoofing, bounded request
+bodies, JSON validation, registration/expiry/ownership transfer/revocation against
+PostgreSQL, authenticated client requests and 1001 mocked provider recipients.
+It needs no Firebase project or service-account key. Live provider delivery and
+OS permission behavior still require device checks. Provider revocation is not
+instantaneous: queued OS notifications cannot be recalled, and a disabled account
+may receive content-free activity until its device lease expires (at most 24h).
+`nVerification: Go race tests and vet passed, Flutter analysis passed, all 68 Flutter tests passed, and the release web build passed.

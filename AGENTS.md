@@ -115,9 +115,9 @@ details in runbook §12.9):
 - **WebSocket token URL:** resolved in the review-hardening branch. The client
   exchanges its access token for an authenticated, one-use ticket that expires
   after 30 seconds.
-- **Push via FCM topics:** payloads are content-free and devices subscribe only
-  while signed in, but topics have no access control. Replace with per-device
-  tokens registered through an authenticated endpoint.
+- **Push:** authenticated per-device registration replaces public topics on
+  `feat/authenticated-device-push`. Provider delivery still needs a live-device
+  check after deployment; scratch tests emulate the provider without credentials.
 - **Mobile sign-in:** `meowgram://callback` custom scheme works; an App Link /
   Universal Link is stronger and must also be registered in Authelia.
 - **Web build:** a Flutter web container and frontend catch-all route were added

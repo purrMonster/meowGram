@@ -1,31 +1,26 @@
+import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
-
-/// FCM topic the server publishes lounge-activity pushes to.
-const String kLoungeTopic = 'room_lounge';
+import 'package:meowgram_client/src/push/device_registration_client.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Pushes are content-free notification messages; the OS displays them.
-  debugPrint('Background push received: ${message.messageId}');
+  // The OS displays content-free notification messages.
 }
 
-/// Push notifications via Firebase Cloud Messaging.
-///
-/// Privacy: FCM topics have no access control, so the server only sends a
-/// content-free "New messages in the lounge" notice. This service subscribes to
-/// the topic only while a user is signed in and unsubscribes on logout.
-///
-/// Supported on Android, iOS and macOS. Web needs a service worker + VAPID key and
-/// does not support topic subscription from the client; Windows has no FCM plugin.
+/// Authenticated per-device registrations; never subscribes to public topics.
 class FCMService {
   static final FCMService _instance = FCMService._internal();
   factory FCMService() => _instance;
   FCMService._internal();
 
-  bool _subscribed = false;
+  final _registry = DeviceRegistrationClient();
   AuthController? _auth;
+  String? _registeredToken;
+  String? _registeredBearer;
+  Future<void> _work = Future.value();
+  Timer? _retry;
 
   static bool get isSupportedPlatform =>
       !kIsWeb &&
@@ -33,65 +28,95 @@ class FCMService {
           defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.macOS);
 
-  /// Call after `Firebase.initializeApp`. Follows [auth] to (un)subscribe.
   Future<void> initialize(AuthController auth) async {
-    if (!isSupportedPlatform) return;
-
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      // In the foreground the WebSocket already delivers the message.
-      debugPrint('Foreground push ignored: ${message.messageId}');
-    });
-
+    if (!isSupportedPlatform || _auth != null) return;
     _auth = auth;
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    // Old app versions subscribed to this topic. Remove their subscriptions.
+    try {
+      await FirebaseMessaging.instance.unsubscribeFromTopic('room_lounge');
+    } catch (_) {}
+    FirebaseMessaging.instance.onTokenRefresh.listen(
+      (_) => _enqueueSync(force: true),
+    );
     auth.addListener(_onAuthChanged);
     auth.addLogoutHook(unsubscribe);
-    if (!auth.isAuthenticated) {
-      // Earlier builds subscribed before login and never unsubscribed; clear
-      // any such legacy subscription on a signed-out device.
-      await unsubscribe();
-    }
-    await _onAuthChangedAsync();
+    Timer.periodic(const Duration(hours: 12), (_) => _enqueueSync(force: true));
+    await _enqueueSync(force: true);
   }
 
   void _onAuthChanged() {
-    _onAuthChangedAsync();
+    unawaited(_enqueueSync());
   }
 
-  Future<void> _onAuthChangedAsync() async {
-    final auth = _auth;
-    if (auth == null) return;
+  Future<void> _enqueueSync({bool force = false}) {
+    _work = _work.then((_) => _sync(force: force)).catchError((Object _) {
+      // Provider errors can contain device tokens. Never print them.
+      _retry?.cancel();
+      _retry = Timer(
+        const Duration(minutes: 1),
+        () => _enqueueSync(force: true),
+      );
+    });
+    return _work;
+  }
+
+  Future<void> _sync({required bool force}) async {
+    final auth = _auth!;
+    if (!auth.isAuthenticated) {
+      await _remove();
+      return;
+    }
+    final bearer = auth.accessToken;
+    if (bearer == null || bearer.isEmpty) return;
+    final settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+        settings.authorizationStatus != AuthorizationStatus.provisional) {
+      await _remove();
+      return;
+    }
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token == null || !auth.isAuthenticated || auth.accessToken != bearer) {
+      return;
+    }
+    if (!force && token == _registeredToken && bearer == _registeredBearer) {
+      return;
+    }
+    if (_registeredToken != null && token != _registeredToken) {
+      try {
+        await _registry.unregister(_registeredToken!, _registeredBearer!);
+      } catch (_) {}
+    }
+    await _registry.register(token, bearer);
+    _registeredToken = token;
+    _registeredBearer = bearer;
+    // Logout may have happened while the HTTP request was in flight.
+    if (!auth.isAuthenticated) await _remove();
+  }
+
+  /// Serialized with registration so a late PUT cannot undo logout's DELETE.
+  Future<void> unsubscribe() {
+    _retry?.cancel();
+    _work = _work.then((_) => _remove()).catchError((Object _) {});
+    return _work;
+  }
+
+  Future<void> _remove() async {
+    final token = _registeredToken;
+    final bearer = _registeredBearer;
+    _registeredToken = null;
+    _registeredBearer = null;
     try {
-      if (auth.isAuthenticated && !_subscribed) {
-        final settings = await FirebaseMessaging.instance.requestPermission(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
-        final allowed =
-            settings.authorizationStatus == AuthorizationStatus.authorized ||
-                settings.authorizationStatus == AuthorizationStatus.provisional;
-        if (allowed) {
-          await FirebaseMessaging.instance.subscribeToTopic(kLoungeTopic);
-          _subscribed = true;
-          debugPrint('Subscribed to FCM topic: $kLoungeTopic');
-        }
-      } else if (!auth.isAuthenticated && _subscribed) {
-        await unsubscribe();
+      if (token != null && bearer != null) {
+        await _registry.unregister(token, bearer);
       }
-    } catch (e) {
-      debugPrint('FCM subscription update failed: $e');
+    } finally {
+      // Invalidates delivery even if the API is offline or the bearer expired.
+      await FirebaseMessaging.instance.deleteToken();
     }
-  }
-
-  /// Stops lounge pushes for this device (called on logout).
-  Future<void> unsubscribe() async {
-    if (!isSupportedPlatform) return;
-    try {
-      await FirebaseMessaging.instance.unsubscribeFromTopic(kLoungeTopic);
-    } catch (e) {
-      debugPrint('FCM unsubscribe failed: $e');
-    }
-    _subscribed = false;
   }
 }

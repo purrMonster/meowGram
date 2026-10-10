@@ -70,11 +70,12 @@ func main() {
 	// Initialize repository layers
 	userRepo := repository.NewUserRepository(db)
 	messageRepo := repository.NewMessageRepository(db)
+	deviceRepo := repository.NewDeviceRepository(db)
 
 	// Initialize FCM service if credentials are provided
 	var fcmService *fcm.Service
 	if cfg.GoogleCredentials != "" {
-		svc, err := fcm.NewService(context.Background(), logger, cfg.GoogleCredentials)
+		svc, err := fcm.NewService(context.Background(), logger, cfg.GoogleCredentials, deviceRepo)
 		if err != nil {
 			logger.Warn("Failed to initialize FCM service, push notifications will be disabled", "error", err)
 		} else {
@@ -131,6 +132,10 @@ func main() {
 	}
 
 	// Protected catch-up synchronization endpoint (UST-1.4.3)
+	deviceHandler := authMiddleware(handler.PushDeviceHandler(deviceRepo))
+	mux.Handle("PUT "+cfg.PushDeviceEndpoint, deviceHandler)
+	mux.Handle("DELETE "+cfg.PushDeviceEndpoint, deviceHandler)
+
 	mux.Handle("GET /api/messages/sync", authMiddleware(handler.SyncHandler(messageRepo, logger)))
 	if cfg.SyncEndpoint != "/api/messages/sync" {
 		mux.Handle("GET "+cfg.SyncEndpoint, authMiddleware(handler.SyncHandler(messageRepo, logger)))
