@@ -13,11 +13,12 @@ func cleanEnv(t *testing.T) {
 		"DATABASE_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB",
 		"AUTHELIA_DOMAIN", "AUTHELIA_ISSUER", "AUTHELIA_ISSUER_URL", "AUTHELIA_JWKS_URL",
 		"AUTHELIA_CLIENT_ID", "OIDC_CLIENT_ID", "CLIENT_ID", "AUTHELIA_AUDIENCE", "OIDC_AUDIENCE",
-		"SYNC_ENDPOINT", "MESSAGES_SYNC_ENDPOINT", "HEALTH_ENDPOINT", "WS_ENDPOINT", "WS_PATH",
+		"SYNC_ENDPOINT", "MESSAGES_SYNC_ENDPOINT", "HEALTH_ENDPOINT", "WS_ENDPOINT", "WS_PATH", "WS_TICKET_ENDPOINT",
 		"IMMICH_DOMAIN", "IMMICH_API_URL", "CORS_ORIGINS", "GOOGLE_APPLICATION_CREDENTIALS",
 	} {
 		t.Setenv(k, "")
 	}
+	t.Setenv("AUTHELIA_AUDIENCE", "http://localhost:8080")
 }
 
 func TestConfig_AutheliaDomainDerivation(t *testing.T) {
@@ -58,6 +59,9 @@ func TestConfig_AutheliaDomainDerivation(t *testing.T) {
 
 	if cfg.WSEndpoint != "/ws" {
 		t.Errorf("expected default WSEndpoint /ws, got: %s", cfg.WSEndpoint)
+	}
+	if cfg.WSTicketEndpoint != "/api/ws-ticket" {
+		t.Errorf("expected default WSTicketEndpoint /api/ws-ticket, got: %s", cfg.WSTicketEndpoint)
 	}
 }
 
@@ -121,7 +125,7 @@ func TestConfig_DefaultsHaveNoHardcodedDomainsAndMatchClientID(t *testing.T) {
 	if cfg.ImmichDomain != "" || cfg.ImmichAPIURL != "" {
 		t.Errorf("Immich must have no hardcoded default, got %q / %q", cfg.ImmichDomain, cfg.ImmichAPIURL)
 	}
-	if cfg.AutheliaClientID != "meowgram-client" {
+	if cfg.AutheliaClientID != "meowgram" {
 		t.Errorf("default client ID must match the Flutter client, got %q", cfg.AutheliaClientID)
 	}
 }

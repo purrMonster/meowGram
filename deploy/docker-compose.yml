@@ -49,13 +49,15 @@ services:
       - AUTHELIA_ISSUER=${AUTHELIA_ISSUER:-http://localhost:9091}
       - AUTHELIA_JWKS_URL=${AUTHELIA_JWKS_URL:-http://localhost:9091/jwks.json}
       - AUTHELIA_DOMAIN=${AUTHELIA_DOMAIN:-}
-      - AUTHELIA_CLIENT_ID=${AUTHELIA_CLIENT_ID:-meowgram-client}
-      - AUTHELIA_AUDIENCE=${AUTHELIA_AUDIENCE:-}
+      - AUTHELIA_CLIENT_ID=${AUTHELIA_CLIENT_ID:-meowgram}
+      - AUTHELIA_AUDIENCE=${AUTHELIA_AUDIENCE:?AUTHELIA_AUDIENCE must be set to the API audience}
+      - WS_TICKET_ENDPOINT=${WS_TICKET_ENDPOINT:-/api/ws-ticket}
+      - USE_SECURE_SCHEMES=${USE_SECURE_SCHEMES:-false}
       # FCM service account: place the JSON at deploy/secrets/fcm-service-account.json
       # (gitignored) and set GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/fcm-service-account.json.
       # Left empty, push notifications are disabled.
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:3000,http://127.0.0.1:8080,http://localhost}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8080,http://localhost:8081,http://localhost:3000,http://127.0.0.1:8080,http://127.0.0.1:8081,http://localhost}
       - READ_TIMEOUT_SECONDS=${READ_TIMEOUT_SECONDS:-15}
       - WRITE_TIMEOUT_SECONDS=${WRITE_TIMEOUT_SECONDS:-15}
       - IDLE_TIMEOUT_SECONDS=${IDLE_TIMEOUT_SECONDS:-60}
@@ -80,8 +82,64 @@ services:
       - meowgram-net
 
   # ============================================================================
-  # Traefik Reverse Proxy (Optional Development Profile)
-  # Run with: docker compose --profile proxy up
+  # Flutter Web Client
+  # ============================================================================
+  web:
+    build:
+      context: ../client
+      dockerfile: Dockerfile.web
+      args:
+        APP_ENV: ${ENVIRONMENT:-production}
+        APP_DOMAIN: ${APP_DOMAIN:-localhost}
+        HTTP_PORT: ${HTTP_PORT:-8080}
+        USE_SECURE_SCHEMES: ${USE_SECURE_SCHEMES:-false}
+        AUTHELIA_ISSUER_URL: ${AUTHELIA_ISSUER:-http://localhost:9091}
+        AUTHELIA_CLIENT_ID: ${AUTHELIA_CLIENT_ID:-meowgram}
+        API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
+        WS_BASE_URL: ${WS_BASE_URL:-ws://localhost:8080/ws}
+        WS_TICKET_ENDPOINT: ${WS_TICKET_ENDPOINT:-/api/ws-ticket}
+    image: meowgram-web:latest
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "${HOST_WEB_PORT:-127.0.0.1:8081}:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.meowgram-web.rule=Host(`${APP_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.meowgram-web.entrypoints=${TRAEFIK_ENTRYPOINTS:-web}"
+      - "traefik.http.routers.meowgram-web.priority=1"
+      - "traefik.http.services.meowgram-web.loadbalancer.server.port=8080"
+    networks:
+      - meowgram-net
+
+  # ============================================================================
+  # Scheduled PostgreSQL Backups (daily, 14-day local retention by default)
+  # ============================================================================
+  db-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-meowgram}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in deploy/.env}
+      PGDATABASE: ${POSTGRES_DB:-meowgram}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./scripts/db_backup.sh:/usr/local/bin/db_backup.sh:ro
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "/usr/local/bin/db_backup.sh"]
+    networks:
+      - meowgram-net
+
+  # ============================================================================
+  # Traefik Reverse Proxy (Optional local development profile)
+  # Uses static routing so it needs no Docker socket access.
   # ============================================================================
   traefik:
     image: traefik:v3.3
@@ -90,16 +148,13 @@ services:
     profiles:
       - proxy
     command:
-      - "--api.insecure=true"
-      - "--api.dashboard=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+      - "--providers.file.watch=true"
       - "--entrypoints.web.address=:${TRAEFIK_HTTP_PORT:-80}"
     ports:
-      - "${TRAEFIK_HTTP_PORT:-80}:${TRAEFIK_HTTP_PORT:-80}"
-      - "${TRAEFIK_DASHBOARD_PORT:-8081}:8080"
+      - "${TRAEFIK_HOST:-127.0.0.1}:${TRAEFIK_HTTP_PORT:-80}:${TRAEFIK_HTTP_PORT:-80}"
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik-dev.yml:/etc/traefik/dynamic.yml:ro"
     networks:
       - meowgram-net
 

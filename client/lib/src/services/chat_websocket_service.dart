@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:meowgram_client/src/config/app_config.dart';
 import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:web_socket_channel/status.dart' as ws_status;
@@ -13,9 +14,8 @@ enum SocketStatus { disconnected, connecting, connected, error }
 
 /// Service managing the realtime WebSocket channel with Bearer token authentication.
 ///
-/// - Injects the access token into the `?token=` query parameter because browser
-///   WebSockets cannot attach custom HTTP `Authorization` headers during handshake.
-///   The token is never exposed through [connectedUrl] (shown in the UI).
+/// - Exchanges the access token for a short-lived, one-use ticket before opening
+///   the socket. Only the ticket appears in the handshake URL.
 /// - Parses incoming text frames as JSON envelopes; handles newline-delimited
 ///   batches flushed by the Gorilla WebSocket write pump.
 /// - Reconnects automatically with exponential backoff (1 s → 30 s) after an
@@ -44,7 +44,7 @@ class ChatWebSocketService extends ChangeNotifier {
 
   String? _connectedUrl;
 
-  /// Endpoint URL for display, with the token query parameter removed.
+  /// Endpoint URL for display, with authentication query parameters removed.
   String? get connectedUrl => _connectedUrl;
 
   final StreamController<ChatMessage> _messageStreamController =
@@ -68,7 +68,7 @@ class ChatWebSocketService extends ChangeNotifier {
       return;
     }
     _reconnectTimer?.cancel();
-    _open();
+    unawaited(_open());
   }
 
   /// Forces a fresh connection (e.g. after a token refresh or app resume).
@@ -77,7 +77,7 @@ class ChatWebSocketService extends ChangeNotifier {
     _reconnectTimer?.cancel();
     _reconnectAttempt = 0;
     if (_status != SocketStatus.connected) {
-      _open();
+      unawaited(_open());
     }
   }
 
@@ -87,14 +87,17 @@ class ChatWebSocketService extends ChangeNotifier {
     return _explicitToken;
   }
 
-  /// Removes the `token` query parameter so the URL is safe to display or log.
+  /// Removes credentials from the URL so it is safe to display or log.
   static String redactToken(String url) {
     final uri = Uri.tryParse(url);
-    if (uri == null || !uri.queryParameters.containsKey('token')) return url;
+    if (uri == null ||
+        (!uri.queryParameters.containsKey('token') &&
+            !uri.queryParameters.containsKey('ticket'))) return url;
     final params = Map<String, String>.from(uri.queryParameters)
-      ..remove('token');
+      ..remove('token')
+      ..remove('ticket');
     // Rebuild instead of Uri.replace: replace(queryParameters: null) keeps the
-    // original query (and with it the token).
+    // original query (and with it the ticket).
     return Uri(
       scheme: uri.scheme,
       userInfo: uri.userInfo.isEmpty ? null : uri.userInfo,
@@ -106,7 +109,7 @@ class ChatWebSocketService extends ChangeNotifier {
     ).toString();
   }
 
-  void _open() {
+  Future<void> _open() async {
     _closeChannel();
     final generation = ++_generation;
     _setStatus(SocketStatus.connecting);
@@ -114,18 +117,18 @@ class ChatWebSocketService extends ChangeNotifier {
 
     try {
       final token = _currentToken();
-      String targetUrl;
-      if (_customWsUrl != null && _customWsUrl!.isNotEmpty) {
-        targetUrl = _customWsUrl!;
-        if (token != null && token.isNotEmpty && !targetUrl.contains('token=')) {
-          final sep = targetUrl.contains('?') ? '&' : '?';
-          targetUrl = '$targetUrl${sep}token=${Uri.encodeComponent(token)}';
-        }
-      } else if (token != null && token.isNotEmpty) {
-        targetUrl = AppConfig.authenticatedWsUrl(token);
-      } else {
-        targetUrl = AppConfig.wsBaseUrl;
+      if (token == null || token.isEmpty) {
+        throw StateError('A signed-in session is required to connect.');
       }
+      final ticket = await _createTicket(token);
+      if (generation != _generation) return;
+      final base = _customWsUrl?.isNotEmpty == true
+          ? Uri.parse(_customWsUrl!)
+          : Uri.parse(AppConfig.wsBaseUrl);
+      final query = Map<String, String>.from(base.queryParameters)
+        ..remove('token')
+        ..['ticket'] = ticket;
+      final targetUrl = base.replace(queryParameters: query).toString();
 
       _connectedUrl = redactToken(targetUrl);
       final channel = WebSocketChannel.connect(Uri.parse(targetUrl));
@@ -164,9 +167,37 @@ class ChatWebSocketService extends ChangeNotifier {
         cancelOnError: false,
       );
     } catch (e) {
+      if (generation != _generation) return;
       _lastError = e.toString();
       _setStatus(SocketStatus.error);
       _scheduleReconnect();
+    }
+  }
+
+  Future<String> _createTicket(String accessToken) async {
+    final client = http.Client();
+    try {
+      final response = await client
+          .post(
+            Uri.parse(AppConfig.wsTicketUrl),
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $accessToken',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) {
+        throw StateError('WebSocket ticket request failed (${response.statusCode}).');
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map ||
+          decoded['ticket'] is! String ||
+          (decoded['ticket'] as String).isEmpty) {
+        throw const FormatException('WebSocket ticket response was invalid.');
+      }
+      return decoded['ticket'] as String;
+    } finally {
+      client.close();
     }
   }
 
@@ -179,7 +210,9 @@ class ChatWebSocketService extends ChangeNotifier {
     _reconnectTimer = Timer(
       Duration(seconds: base, milliseconds: jitterMs),
       () {
-        if (_autoReconnect && _status != SocketStatus.connected) _open();
+        if (_autoReconnect && _status != SocketStatus.connected) {
+          unawaited(_open());
+        }
       },
     );
   }
