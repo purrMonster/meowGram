@@ -12,10 +12,10 @@ import 'package:url_launcher/url_launcher.dart';
 typedef UrlLauncher = Future<bool> Function(Uri uri, {required bool sameTab});
 
 Future<bool> _defaultLauncher(Uri uri, {required bool sameTab}) => launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-      webOnlyWindowName: sameTab ? '_self' : null,
-    );
+  uri,
+  mode: LaunchMode.externalApplication,
+  webOnlyWindowName: sameTab ? '_self' : null,
+);
 
 /// Central authentication state controller managing the OIDC PKCE lifecycle,
 /// active token storage, token auto-refresh timers, and user profile state.
@@ -72,10 +72,10 @@ class AuthController extends ChangeNotifier {
     OidcPlatformHelper? platformHelper,
     TokenStorage? tokenStorage,
     UrlLauncher? launcher,
-  })  : _oidcService = oidcService ?? OidcService(),
-        _platformHelper = platformHelper ?? createPlatformHelper(),
-        _tokenStorage = tokenStorage ?? TokenStorage(),
-        _launch = launcher ?? _defaultLauncher;
+  }) : _oidcService = oidcService ?? OidcService(),
+       _platformHelper = platformHelper ?? createPlatformHelper(),
+       _tokenStorage = tokenStorage ?? TokenStorage(),
+       _launch = launcher ?? _defaultLauncher;
 
   /// Registers work to run on logout (e.g. clearing the local message cache,
   /// unsubscribing from push).
@@ -98,7 +98,8 @@ class AuthController extends ChangeNotifier {
         return;
       }
 
-      final hasRefreshToken = storedTokens.refreshToken != null &&
+      final hasRefreshToken =
+          storedTokens.refreshToken != null &&
           storedTokens.refreshToken!.isNotEmpty;
 
       if (storedTokens.isExpired && !hasRefreshToken) {
@@ -158,11 +159,14 @@ class AuthController extends ChangeNotifier {
       );
 
       if (_platformHelper.usesFullPageRedirect) {
-        await _platformHelper.savePendingLogin(PendingLogin(
-          codeVerifier: pkce.codeVerifier,
-          state: pkce.state,
-          redirectUri: redirectUri,
-        ));
+        await _platformHelper.savePendingLogin(
+          PendingLogin(
+            codeVerifier: pkce.codeVerifier,
+            state: pkce.state,
+            nonce: pkce.nonce,
+            redirectUri: redirectUri,
+          ),
+        );
         final launched = await _launch(authUri, sameTab: true);
         if (!launched) {
           throw Exception('Failed to open the sign-in page');
@@ -193,6 +197,7 @@ class AuthController extends ChangeNotifier {
       final tokens = await _oidcService.exchangeCodeForToken(
         code: code,
         codeVerifier: pkce.codeVerifier,
+        expectedNonce: pkce.nonce,
         redirectUri: redirectUri,
       );
 
@@ -223,6 +228,7 @@ class AuthController extends ChangeNotifier {
       final tokens = await _oidcService.exchangeCodeForToken(
         code: result.code!,
         codeVerifier: result.pending.codeVerifier,
+        expectedNonce: result.pending.nonce,
         redirectUri: result.pending.redirectUri,
       );
       await _tokenStorage.saveTokens(tokens);
@@ -237,8 +243,9 @@ class AuthController extends ChangeNotifier {
   /// Refreshes the access token using the stored refresh token. Concurrent calls
   /// share one in-flight request.
   Future<void> refreshSession() {
-    return _refreshInFlight ??=
-        _doRefresh().whenComplete(() => _refreshInFlight = null);
+    return _refreshInFlight ??= _doRefresh().whenComplete(
+      () => _refreshInFlight = null,
+    );
   }
 
   Future<void> _doRefresh() async {

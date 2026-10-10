@@ -35,7 +35,8 @@ class TokenData {
   factory TokenData.fromJson(Map<String, dynamic> json) {
     DateTime parsedExpiresAt;
     if (json['expires_at'] != null) {
-      parsedExpiresAt = DateTime.tryParse(json['expires_at'].toString()) ??
+      parsedExpiresAt =
+          DateTime.tryParse(json['expires_at'].toString()) ??
           DateTime.now().add(const Duration(hours: 1));
     } else {
       final expiresInSec = (json['expires_in'] as num?)?.toInt() ?? 3600;
@@ -53,12 +54,12 @@ class TokenData {
 
   /// Serializes token metadata to JSON for secure persistent storage.
   Map<String, dynamic> toJson() => {
-        'access_token': accessToken,
-        if (idToken != null) 'id_token': idToken,
-        if (refreshToken != null) 'refresh_token': refreshToken,
-        'token_type': tokenType,
-        'expires_at': expiresAt.toUtc().toIso8601String(),
-      };
+    'access_token': accessToken,
+    if (idToken != null) 'id_token': idToken,
+    if (refreshToken != null) 'refresh_token': refreshToken,
+    'token_type': tokenType,
+    'expires_at': expiresAt.toUtc().toIso8601String(),
+  };
 
   /// Whether the access token is close to expiry or already expired (within 60 second buffer).
   bool get isExpired =>
@@ -111,19 +112,21 @@ class UserProfile {
     final idClaims = _decodeJwtPayload(idToken) ?? {};
 
     // 1. Subject extraction (fallback: access -> id -> anonymous)
-    final sub = accessClaims['sub']?.toString() ??
+    final sub =
+        accessClaims['sub']?.toString() ??
         idClaims['sub']?.toString() ??
         'anonymous';
 
     // 2. Candidate username fields prioritized from access token, then id token
-    final preferred = accessClaims['preferred_username']?.toString() ??
+    final preferred =
+        accessClaims['preferred_username']?.toString() ??
         idClaims['preferred_username']?.toString();
 
-    final name = accessClaims['name']?.toString() ??
-        idClaims['name']?.toString();
+    final name =
+        accessClaims['name']?.toString() ?? idClaims['name']?.toString();
 
-    final email = accessClaims['email']?.toString() ??
-        idClaims['email']?.toString();
+    final email =
+        accessClaims['email']?.toString() ?? idClaims['email']?.toString();
 
     // 3. Username hierarchy resolution:
     // preferred_username -> name -> email prefix -> sub UUID

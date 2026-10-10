@@ -16,6 +16,7 @@ import 'package:meowgram_client/src/services/background_message_service.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/services/sync_service.dart';
 import 'package:meowgram_client/src/storage/local_message_repository.dart';
+import 'support/oidc_fixture.dart';
 
 class MemSecureStorage extends FlutterSecureStorage {
   final Map<String, String> store = {};
@@ -47,8 +48,7 @@ class MemSecureStorage extends FlutterSecureStorage {
     WebOptions? webOptions,
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
-  }) async =>
-      store[key];
+  }) async => store[key];
 
   @override
   Future<void> delete({
@@ -74,9 +74,10 @@ class FakeRedirectHelper implements OidcPlatformHelper {
   bool get usesFullPageRedirect => fullPage;
 
   @override
-  Future<String?> listenForAuthCode(String redirectUri,
-          {required String expectedState}) async =>
-      null;
+  Future<String?> listenForAuthCode(
+    String redirectUri, {
+    required String expectedState,
+  }) async => null;
 
   @override
   Future<void> savePendingLogin(PendingLogin pending) async => saved = pending;
@@ -99,36 +100,46 @@ String jwt(Map<String, dynamic> claims) {
 }
 
 TokenData expiredTokens() => TokenData(
-      accessToken: jwt({'sub': 'me', 'preferred_username': 'whiskers'}),
-      refreshToken: 'refresh-1',
-      expiresAt: DateTime.now().subtract(const Duration(hours: 1)),
-    );
+  accessToken: jwt({'sub': 'me', 'preferred_username': 'whiskers'}),
+  refreshToken: 'refresh-1',
+  expiresAt: DateTime.now().subtract(const Duration(hours: 1)),
+);
 
-String tokenResponse({String access = 'new-access', String? refresh}) =>
-    jsonEncode({
-      'access_token': access,
-      'expires_in': 3600,
-      if (refresh != null) 'refresh_token': refresh,
-    });
+String tokenResponse({
+  String access = 'new-access',
+  String? refresh,
+  String? idToken,
+}) => jsonEncode({
+  'access_token': access,
+  'expires_in': 3600,
+  if (idToken != null) 'id_token': idToken,
+  if (refresh != null) 'refresh_token': refresh,
+});
 
 /// MockClient that 404s discovery (falls back to configured endpoints) and
 /// delegates token requests to [onToken].
 MockClient oidcClient(Future<http.Response> Function(http.Request) onToken) =>
     MockClient((req) async {
+      if (req.url.path.endsWith('/jwks.json')) {
+        return http.Response(publicKeys(), 200);
+      }
       if (req.method == 'GET') return http.Response('not found', 404);
       return onToken(req);
     });
 
-ChatMessage chat(String id, DateTime at,
-        {String type = 'chat', String sender = 'other'}) =>
-    ChatMessage(
-      id: id,
-      senderId: sender,
-      username: sender,
-      textContent: 'msg $id',
-      createdAt: at,
-      type: type,
-    );
+ChatMessage chat(
+  String id,
+  DateTime at, {
+  String type = 'chat',
+  String sender = 'other',
+}) => ChatMessage(
+  id: id,
+  senderId: sender,
+  username: sender,
+  textContent: 'msg $id',
+  createdAt: at,
+  type: type,
+);
 
 class FakeSocket extends ChatWebSocketService {
   final StreamController<ChatMessage> msgs =
@@ -154,28 +165,38 @@ class FakeSocket extends ChatWebSocketService {
 
 void main() {
   group('AuthController offline-first session handling', () {
-    test('restores an expired session immediately and keeps it when offline',
-        () async {
-      final storage = TokenStorage(storage: MemSecureStorage());
-      await storage.saveTokens(expiredTokens());
-      final auth = AuthController(
-        oidcService: OidcService(
-          httpClient: oidcClient((_) async => throw const SocketTimeoutLike()),
-        ),
-        platformHelper: FakeRedirectHelper(),
-        tokenStorage: storage,
-      );
+    test(
+      'restores an expired session immediately and keeps it when offline',
+      () async {
+        final storage = TokenStorage(storage: MemSecureStorage());
+        await storage.saveTokens(expiredTokens());
+        final auth = AuthController(
+          oidcService: OidcService(
+            httpClient: oidcClient(
+              (_) async => throw const SocketTimeoutLike(),
+            ),
+          ),
+          platformHelper: FakeRedirectHelper(),
+          tokenStorage: storage,
+        );
 
-      await auth.initialize();
-      expect(auth.isAuthenticated, isTrue,
-          reason: 'cached session must open without network');
+        await auth.initialize();
+        expect(
+          auth.isAuthenticated,
+          isTrue,
+          reason: 'cached session must open without network',
+        );
 
-      await auth.refreshSession();
-      expect(auth.isAuthenticated, isTrue,
-          reason: 'a network failure must not log the user out');
-      expect(await storage.readTokens(), isNotNull);
-      auth.dispose();
-    });
+        await auth.refreshSession();
+        expect(
+          auth.isAuthenticated,
+          isTrue,
+          reason: 'a network failure must not log the user out',
+        );
+        expect(await storage.readTokens(), isNotNull);
+        auth.dispose();
+      },
+    );
 
     test('logs out only when Authelia rejects the refresh token', () async {
       final storage = TokenStorage(storage: MemSecureStorage());
@@ -184,7 +205,8 @@ void main() {
       final auth = AuthController(
         oidcService: OidcService(
           httpClient: oidcClient(
-              (_) async => http.Response('{"error":"invalid_grant"}', 400)),
+            (_) async => http.Response('{"error":"invalid_grant"}', 400),
+          ),
         ),
         platformHelper: FakeRedirectHelper(),
         tokenStorage: storage,
@@ -234,7 +256,10 @@ void main() {
         oidcService: OidcService(
           httpClient: oidcClient((req) async {
             sentVerifier = req.bodyFields['code_verifier'];
-            return http.Response(tokenResponse(refresh: 'r'), 200);
+            return http.Response(
+              tokenResponse(refresh: 'r', idToken: signedIdToken()),
+              200,
+            );
           }),
         ),
         platformHelper: FakeRedirectHelper(
@@ -244,6 +269,7 @@ void main() {
             pending: PendingLogin(
               codeVerifier: 'stored-verifier',
               state: 's',
+              nonce: 'expected-nonce',
               redirectUri: 'https://meow.example.home.arpa',
             ),
           ),
@@ -261,9 +287,11 @@ void main() {
       final helper = FakeRedirectHelper(fullPage: true);
       bool? usedSameTab;
       final auth = AuthController(
-        oidcService: OidcService(httpClient: oidcClient((_) async {
-          fail('no token request expected before redirect');
-        })),
+        oidcService: OidcService(
+          httpClient: oidcClient((_) async {
+            fail('no token request expected before redirect');
+          }),
+        ),
         platformHelper: helper,
         tokenStorage: TokenStorage(storage: MemSecureStorage()),
         launcher: (uri, {required bool sameTab}) async {
@@ -276,6 +304,7 @@ void main() {
       expect(usedSameTab, isTrue);
       expect(helper.saved, isNotNull);
       expect(helper.saved!.codeVerifier.length, greaterThanOrEqualTo(43));
+      expect(helper.saved!.nonce, auth.pendingPkce!.nonce);
       auth.dispose();
     });
   });
@@ -284,7 +313,8 @@ void main() {
     test('redactToken strips credential query parameters', () {
       expect(
         ChatWebSocketService.redactToken(
-            'wss://meow.example.home.arpa/ws?token=eyJ.secret.jwt'),
+          'wss://meow.example.home.arpa/ws?token=eyJ.secret.jwt',
+        ),
         'wss://meow.example.home.arpa/ws',
       );
       expect(
@@ -326,18 +356,24 @@ void main() {
         final after = DateTime.parse(req.url.queryParameters['after']!);
         final remaining = 1200 - afters.length * 0; // total messages available
         final offset = after.difference(start).inSeconds;
-        final count =
-            (remaining - offset).clamp(0, SyncService.pageSize).toInt();
+        final count = (remaining - offset)
+            .clamp(0, SyncService.pageSize)
+            .toInt();
         final page = [
           for (var i = 1; i <= count; i++)
-            chat('m${offset + i}', start.add(Duration(seconds: offset + i)))
-                .toJson()
+            chat(
+              'm${offset + i}',
+              start.add(Duration(seconds: offset + i)),
+            ).toJson(),
         ];
         return http.Response(jsonEncode(page), 200);
       });
 
       final sync = SyncService(
-          socketService: socket, localRepo: repo, httpClient: client);
+        socketService: socket,
+        localRepo: repo,
+        httpClient: client,
+      );
       final got = await sync.sync();
 
       expect(got.length, 1200);
@@ -345,30 +381,35 @@ void main() {
       sync.dispose();
     });
 
-    test('cursor is captured before the history burst refills the cache',
-        () async {
-      final socket = FakeSocket();
-      final repo = MemoryLocalMessageRepository();
-      final old = DateTime.utc(2026, 10, 7, 8);
-      await repo.saveMessage(chat('old', old));
+    test(
+      'cursor is captured before the history burst refills the cache',
+      () async {
+        final socket = FakeSocket();
+        final repo = MemoryLocalMessageRepository();
+        final old = DateTime.utc(2026, 10, 7, 8);
+        await repo.saveMessage(chat('old', old));
 
-      String? requestedAfter;
-      final client = MockClient((req) async {
-        requestedAfter = req.url.queryParameters['after'];
-        return http.Response('[]', 200);
-      });
-      final sync = SyncService(
-          socketService: socket, localRepo: repo, httpClient: client);
+        String? requestedAfter;
+        final client = MockClient((req) async {
+          requestedAfter = req.url.queryParameters['after'];
+          return http.Response('[]', 200);
+        });
+        final sync = SyncService(
+          socketService: socket,
+          localRepo: repo,
+          httpClient: client,
+        );
 
-      await sync.captureCursor(); // before connecting
-      // History burst lands in the cache before the sync request goes out.
-      await repo.saveMessage(chat('fresh', DateTime.utc(2026, 10, 7, 12)));
-      socket.emitStatus(SocketStatus.connected);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+        await sync.captureCursor(); // before connecting
+        // History burst lands in the cache before the sync request goes out.
+        await repo.saveMessage(chat('fresh', DateTime.utc(2026, 10, 7, 12)));
+        socket.emitStatus(SocketStatus.connected);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(requestedAfter, old.toIso8601String());
-      sync.dispose();
-    });
+        expect(requestedAfter, old.toIso8601String());
+        sync.dispose();
+      },
+    );
   });
 
   group('ChatBloc', () {
@@ -387,7 +428,9 @@ void main() {
       final t = DateTime.utc(2026, 10, 7);
       socket.msgs
         ..add(chat('h1', t, type: 'history'))
-        ..add(ChatMessage(textContent: 'x joined', type: 'system', createdAt: t))
+        ..add(
+          ChatMessage(textContent: 'x joined', type: 'system', createdAt: t),
+        )
         ..add(chat('mine', t, sender: 'me'))
         ..add(chat('theirs', t, sender: 'other'));
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -396,25 +439,30 @@ void main() {
       await bloc.close();
     });
 
-    test('initialization is idempotent (layout + screen both request it)',
-        () async {
-      final socket = FakeSocket();
-      final bloc = ChatBloc(
-        socketService: socket,
-        localRepo: MemoryLocalMessageRepository(),
-        notifier: (_) async {},
-      );
-      bloc
-        ..add(const ChatInitializeRequested(accessToken: 't'))
-        ..add(const ChatInitializeRequested(accessToken: 't'));
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+    test(
+      'initialization is idempotent (layout + screen both request it)',
+      () async {
+        final socket = FakeSocket();
+        final bloc = ChatBloc(
+          socketService: socket,
+          localRepo: MemoryLocalMessageRepository(),
+          notifier: (_) async {},
+        );
+        bloc
+          ..add(const ChatInitializeRequested(accessToken: 't'))
+          ..add(const ChatInitializeRequested(accessToken: 't'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      socket.msgs.add(chat('one', DateTime.utc(2026, 10, 7)));
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(bloc.state.messages.length, 1,
-          reason: 'a duplicate subscription would deliver it twice');
-      await bloc.close();
-    });
+        socket.msgs.add(chat('one', DateTime.utc(2026, 10, 7)));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(
+          bloc.state.messages.length,
+          1,
+          reason: 'a duplicate subscription would deliver it twice',
+        );
+        await bloc.close();
+      },
+    );
 
     test('same-length roster changes are emitted', () async {
       final socket = FakeSocket();
@@ -427,11 +475,11 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
       ChatMessage roster(String name) => ChatMessage(
-            textContent: '',
-            type: 'presence',
-            createdAt: DateTime.now(),
-            users: [UserPresence(username: name, sub: name)],
-          );
+        textContent: '',
+        type: 'presence',
+        createdAt: DateTime.now(),
+        users: [UserPresence(username: name, sub: name)],
+      );
       socket.msgs.add(roster('mittens'));
       await Future<void>.delayed(const Duration(milliseconds: 20));
       socket.msgs.add(roster('felix'));
@@ -443,46 +491,54 @@ void main() {
   });
 
   group('Background check (opt-in)', () {
-    test('first run only records a cursor; later runs notify for others',
-        () async {
-      final tokens = TokenStorage(storage: MemSecureStorage());
-      await tokens.saveTokens(TokenData(
-        accessToken: jwt({'sub': 'me'}),
-        expiresAt: DateTime.now().add(const Duration(hours: 1)),
-      ));
-      final cursorStore = MemSecureStorage();
-      var requests = 0;
-      final client = MockClient((req) async {
-        requests++;
-        return http.Response(
-          jsonEncode([
-            chat('1', DateTime.utc(2026, 10, 7, 9), sender: 'me').toJson(),
-            chat('2', DateTime.utc(2026, 10, 7, 10), sender: 'felix').toJson(),
-          ]),
-          200,
+    test(
+      'first run only records a cursor; later runs notify for others',
+      () async {
+        final tokens = TokenStorage(storage: MemSecureStorage());
+        await tokens.saveTokens(
+          TokenData(
+            accessToken: jwt({'sub': 'me'}),
+            expiresAt: DateTime.now().add(const Duration(hours: 1)),
+          ),
         );
-      });
-      int? notifiedCount;
-
-      Future<void> run() => runBackgroundCheck(
-            tokenStorage: tokens,
-            cursorStorage: cursorStore,
-            httpClient: client,
-            notify: (count, latest) async => notifiedCount = count,
+        final cursorStore = MemSecureStorage();
+        var requests = 0;
+        final client = MockClient((req) async {
+          requests++;
+          return http.Response(
+            jsonEncode([
+              chat('1', DateTime.utc(2026, 10, 7, 9), sender: 'me').toJson(),
+              chat(
+                '2',
+                DateTime.utc(2026, 10, 7, 10),
+                sender: 'felix',
+              ).toJson(),
+            ]),
+            200,
           );
+        });
+        int? notifiedCount;
 
-      await run();
-      expect(requests, 0);
-      expect(cursorStore.store, isNotEmpty);
+        Future<void> run() => runBackgroundCheck(
+          tokenStorage: tokens,
+          cursorStorage: cursorStore,
+          httpClient: client,
+          notify: (count, latest) async => notifiedCount = count,
+        );
 
-      await run();
-      expect(requests, 1);
-      expect(notifiedCount, 1, reason: 'own message excluded');
-      expect(jsonDecode(cursorStore.store.values.single), {
-        'created_at': '2026-10-07T10:00:00.000Z',
-        'id': '2',
-      });
-    });
+        await run();
+        expect(requests, 0);
+        expect(cursorStore.store, isNotEmpty);
+
+        await run();
+        expect(requests, 1);
+        expect(notifiedCount, 1, reason: 'own message excluded');
+        expect(jsonDecode(cursorStore.store.values.single), {
+          'created_at': '2026-10-07T10:00:00.000Z',
+          'id': '2',
+        });
+      },
+    );
   });
 }
 
