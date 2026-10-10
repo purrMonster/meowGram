@@ -83,16 +83,17 @@ class AppConfig {
       return _rawAutheliaIssuerUrl.replaceAll(RegExp(r'/+$'), '');
     }
     if (autheliaDomain.isNotEmpty && autheliaDomain != 'localhost:9091') {
-      if (autheliaDomain.startsWith('http://') || autheliaDomain.startsWith('https://')) {
+      if (autheliaDomain.startsWith('http://') ||
+          autheliaDomain.startsWith('https://')) {
         return autheliaDomain.replaceAll(RegExp(r'/+$'), '');
       }
       final candidate = Uri.tryParse('http://$autheliaDomain');
       final host = candidate?.host.toLowerCase() ?? '';
-      final isLocal = host == 'localhost' ||
-          host == '127.0.0.1' ||
-          host == '::1';
-      final scheme =
-          (useSecureSchemes || port == '443' || !isLocal) ? 'https' : 'http';
+      final isLocal =
+          host == 'localhost' || host == '127.0.0.1' || host == '::1';
+      final scheme = (useSecureSchemes || port == '443' || !isLocal)
+          ? 'https'
+          : 'http';
       return '$scheme://$autheliaDomain';
     }
     return 'http://localhost:9091';
@@ -121,7 +122,8 @@ class AppConfig {
     'AUTHELIA_AUTHORIZATION_ENDPOINT',
     defaultValue: '',
   );
-  static String get autheliaAuthorizationEndpoint => _rawAutheliaAuthEndpoint.isNotEmpty
+  static String get autheliaAuthorizationEndpoint =>
+      _rawAutheliaAuthEndpoint.isNotEmpty
       ? _rawAutheliaAuthEndpoint
       : '$autheliaIssuerUrl/api/oidc/authorization';
 
@@ -130,7 +132,8 @@ class AppConfig {
     'AUTHELIA_TOKEN_ENDPOINT',
     defaultValue: '',
   );
-  static String get autheliaTokenEndpoint => _rawAutheliaTokenEndpoint.isNotEmpty
+  static String get autheliaTokenEndpoint =>
+      _rawAutheliaTokenEndpoint.isNotEmpty
       ? _rawAutheliaTokenEndpoint
       : '$autheliaIssuerUrl/api/oidc/token';
 
@@ -139,7 +142,8 @@ class AppConfig {
     'AUTHELIA_USERINFO_ENDPOINT',
     defaultValue: '',
   );
-  static String get autheliaUserinfoEndpoint => _rawAutheliaUserinfoEndpoint.isNotEmpty
+  static String get autheliaUserinfoEndpoint =>
+      _rawAutheliaUserinfoEndpoint.isNotEmpty
       ? _rawAutheliaUserinfoEndpoint
       : '$autheliaIssuerUrl/api/oidc/userinfo';
 
@@ -148,7 +152,8 @@ class AppConfig {
     'AUTHELIA_REVOCATION_ENDPOINT',
     defaultValue: '',
   );
-  static String get autheliaRevocationEndpoint => _rawAutheliaRevocationEndpoint.isNotEmpty
+  static String get autheliaRevocationEndpoint =>
+      _rawAutheliaRevocationEndpoint.isNotEmpty
       ? _rawAutheliaRevocationEndpoint
       : '$autheliaIssuerUrl/api/oidc/revocation';
 
@@ -243,7 +248,8 @@ class AppConfig {
   );
 
   static String get wsTicketUrl {
-    if (wsTicketPath.startsWith('http://') || wsTicketPath.startsWith('https://')) {
+    if (wsTicketPath.startsWith('http://') ||
+        wsTicketPath.startsWith('https://')) {
       return wsTicketPath;
     }
     final path = wsTicketPath.startsWith('/') ? wsTicketPath : '/$wsTicketPath';
@@ -256,6 +262,13 @@ class AppConfig {
     'SYNC_ENDPOINT',
     defaultValue: '/api/messages/sync',
   );
+
+  static const String pushDevicePath = String.fromEnvironment(
+    'PUSH_DEVICE_ENDPOINT',
+    defaultValue: '/api/push/devices',
+  );
+  static String get pushDeviceUrl =>
+      Uri.parse('$apiBaseUrl/').resolve(pushDevicePath).toString();
 
   /// Resolves the full URL for the catch-up synchronization REST service.
   static String syncUrl({String? baseUrlOverride}) {

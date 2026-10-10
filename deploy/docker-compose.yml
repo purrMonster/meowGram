@@ -52,6 +52,7 @@ services:
       - AUTHELIA_CLIENT_ID=${AUTHELIA_CLIENT_ID:-meowgram}
       - AUTHELIA_AUDIENCE=${AUTHELIA_AUDIENCE:?AUTHELIA_AUDIENCE must be set to the API audience}
       - WS_TICKET_ENDPOINT=${WS_TICKET_ENDPOINT:-/api/ws-ticket}
+      - PUSH_DEVICE_ENDPOINT=${PUSH_DEVICE_ENDPOINT:-/api/push/devices}
       - USE_SECURE_SCHEMES=${USE_SECURE_SCHEMES:-false}
       # FCM service account: place the JSON at deploy/secrets/fcm-service-account.json
       # (gitignored) and set GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/fcm-service-account.json.
@@ -94,10 +95,12 @@ services:
         HTTP_PORT: ${HTTP_PORT:-8080}
         USE_SECURE_SCHEMES: ${USE_SECURE_SCHEMES:-false}
         AUTHELIA_ISSUER_URL: ${AUTHELIA_ISSUER:-http://localhost:9091}
+        AUTHELIA_JWKS_URL: ${AUTHELIA_JWKS_URL:-}
         AUTHELIA_CLIENT_ID: ${AUTHELIA_CLIENT_ID:-meowgram}
         API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
         WS_BASE_URL: ${WS_BASE_URL:-ws://localhost:8080/ws}
         WS_TICKET_ENDPOINT: ${WS_TICKET_ENDPOINT:-/api/ws-ticket}
+        PUSH_DEVICE_ENDPOINT: ${PUSH_DEVICE_ENDPOINT:-/api/push/devices}
     image: meowgram-web:latest
     restart: unless-stopped
     depends_on:

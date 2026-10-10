@@ -10,18 +10,14 @@ import (
 	"meowgram/server/internal/model"
 )
 
-// PushPublisher sends a push notification to every device subscribed to a topic.
+// PushPublisher sends content-free activity to authenticated device registrations.
 // It is satisfied by *fcm.Service; tests can supply a fake.
 type PushPublisher interface {
-	PublishToTopic(ctx context.Context, topic, title, body string, data map[string]string) error
+	PublishActivity(ctx context.Context, title, body string, data map[string]string) error
 }
 
 const (
-	// PushTopic is the FCM topic every signed-in client subscribes to.
-	PushTopic = "room_lounge"
-
-	// Push notifications are content-free (no message text, no sender) because FCM
-	// topics have no access control: any app install can subscribe to them.
+	// Push notifications remain content-free (no message text or sender).
 	pushTitle = "meowGram"
 	pushBody  = "New messages in the lounge 🐾"
 
@@ -236,7 +232,7 @@ func (h *Hub) pushWorker(ctx context.Context) {
 		}
 
 		sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		err := h.publisher.PublishToTopic(sendCtx, PushTopic, pushTitle, pushBody,
+		err := h.publisher.PublishActivity(sendCtx, pushTitle, pushBody,
 			map[string]string{"type": "lounge_activity"})
 		cancel()
 		if err != nil {

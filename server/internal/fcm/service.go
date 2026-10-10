@@ -2,75 +2,82 @@ package fcm
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
 	"google.golang.org/api/option"
+	"meowgram/server/internal/repository"
 )
 
+type DeviceStore interface {
+	ActiveAfter(context.Context, int64) ([]repository.PushDevice, error)
+	DeleteInvalid(context.Context, string) error
+}
+type Sender interface {
+	SendEachForMulticast(context.Context, *messaging.MulticastMessage) (*messaging.BatchResponse, error)
+}
 type Service struct {
-	client *messaging.Client
-	logger *slog.Logger
+	client  Sender
+	devices DeviceStore
 }
 
-func NewService(ctx context.Context, logger *slog.Logger, credentialsFile string) (*Service, error) {
-	var opts []option.ClientOption
-	if credentialsFile != "" {
-		opts = append(opts, option.WithCredentialsFile(credentialsFile))
-	}
-
-	app, err := firebase.NewApp(ctx, nil, opts...)
+func NewService(ctx context.Context, logger *slog.Logger, credentialsFile string, devices DeviceStore) (*Service, error) {
+	app, err := firebase.NewApp(ctx, nil, option.WithCredentialsFile(credentialsFile))
 	if err != nil {
-		return nil, fmt.Errorf("error initializing firebase app: %w", err)
+		return nil, errors.New("unable to initialize push service")
 	}
-
 	client, err := app.Messaging(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error initializing firebase messaging client: %w", err)
+		return nil, errors.New("unable to initialize push sender")
 	}
-
-	return &Service{
-		client: client,
-		logger: logger,
-	}, nil
+	return &Service{client: client, devices: devices}, nil
 }
 
-func (s *Service) PublishToTopic(ctx context.Context, topic, title, body string, data map[string]string) error {
-	// Notifications for the same topic collapse into one on the device (Android tag /
-	// collapse key, APNs collapse id), so bursts of chat don't stack up alerts.
-	msg := &messaging.Message{
-		Notification: &messaging.Notification{
-			Title: title,
-			Body:  body,
-		},
-		Data:  data,
-		Topic: topic,
-		Android: &messaging.AndroidConfig{
-			CollapseKey: topic,
-			Notification: &messaging.AndroidNotification{
-				Tag: topic,
-			},
-		},
-		APNS: &messaging.APNSConfig{
-			Headers: map[string]string{
-				"apns-collapse-id": topic,
-			},
-			Payload: &messaging.APNSPayload{
-				Aps: &messaging.Aps{
-					Sound:    "default",
-					ThreadID: topic,
-				},
-			},
-		},
+// PublishActivity sends only to authenticated, unexpired device registrations.
+// No public topic is used. Payloads remain content-free and collapse on devices.
+func (s *Service) PublishActivity(ctx context.Context, title, body string, data map[string]string) error {
+	var cursor int64
+	for {
+		devices, err := s.devices.ActiveAfter(ctx, cursor)
+		if err != nil {
+			return errors.New("unable to load push recipients")
+		}
+		if len(devices) == 0 {
+			return nil
+		}
+		tokens := make([]string, len(devices))
+		for i, d := range devices {
+			tokens[i] = d.Token
+		}
+		batch, err := s.client.SendEachForMulticast(ctx, &messaging.MulticastMessage{
+			Tokens: tokens, Notification: &messaging.Notification{Title: title, Body: body}, Data: data,
+			Android: &messaging.AndroidConfig{CollapseKey: "lounge_activity", Notification: &messaging.AndroidNotification{Tag: "lounge_activity"}},
+			APNS:    &messaging.APNSConfig{Headers: map[string]string{"apns-collapse-id": "lounge_activity"}, Payload: &messaging.APNSPayload{Aps: &messaging.Aps{Sound: "default", ThreadID: "lounge_activity"}}},
+		})
+		if err != nil {
+			return errors.New("push provider request failed")
+		}
+		failed := false
+		for i, response := range batch.Responses {
+			if response.Success {
+				continue
+			}
+			if messaging.IsUnregistered(response.Error) {
+				if err := s.devices.DeleteInvalid(ctx, tokens[i]); err != nil {
+					return errors.New("unable to remove expired push token")
+				}
+			} else {
+				failed = true
+			}
+		}
+		if failed {
+			return errors.New("push provider rejected one or more deliveries")
+		}
+		cursor = devices[len(devices)-1].ID
+		if len(devices) < 500 {
+			return nil
+		}
 	}
-
-	id, err := s.client.Send(ctx, msg)
-	if err != nil {
-		return fmt.Errorf("error sending message to topic %s: %w", topic, err)
-	}
-
-	s.logger.Debug("Successfully broadcasted push notification", "topic", topic, "fcm_message_id", id)
-	return nil
 }
