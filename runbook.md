@@ -1050,3 +1050,21 @@ and migration tests passed; dump/restore drill passed; Flutter analysis reported
 no issues; all 55 Flutter tests passed; release web build passed. The web build
 reports an existing optional Cupertino font warning. Native OS builds and live
 service configuration are tracked separately.
+
+### 12.13 OIDC login binding
+
+`fix/oidc-nonce` persists the random nonce alongside PKCE state in web session
+storage and requires it for native and web code exchanges. Before saving a new
+session, the client verifies the ID token's RS256 signature against configured
+JWKS, exact issuer, client audience/authorized party, subject, expiry, issuance
+time, optional not-before and nonce. Unsigned, malformed, forged and mismatched
+responses fail closed with a generic error that cannot include token contents.
+The implementation follows OpenID Connect Core §3.1.3.7:
+https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+
+No endpoint or credential is added. Existing AUTHELIA_JWKS_URL must be reachable
+from the client; for web this also requires the provider's CORS policy to permit
+the app origin. Old in-flight web sign-ins without a saved nonce must restart.
+Tests generate ephemeral RSA keys and emulate token/JWKS responses, requiring no
+live provider. Flutter analysis is clean and all 66 tests pass.
+Release web build also passed with the nonce and signature checks enabled.

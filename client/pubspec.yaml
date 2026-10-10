@@ -22,6 +22,7 @@ dependencies:
   hive_flutter: ^1.1.0
   http: ^1.6.0
   intl: ^0.20.3
+  jose: ^0.3.5+2
   openid_client: ^0.4.10+2
   url_launcher: ^6.3.3
   web: ^1.1.1

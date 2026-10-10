@@ -19,11 +19,9 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
   final AppLinks _appLinks;
   final bool? _isMobileOverride;
 
-  OidcPlatformIoHelper({
-    AppLinks? appLinks,
-    bool? isMobileOverride,
-  })  : _appLinks = appLinks ?? AppLinks(),
-        _isMobileOverride = isMobileOverride;
+  OidcPlatformIoHelper({AppLinks? appLinks, bool? isMobileOverride})
+    : _appLinks = appLinks ?? AppLinks(),
+      _isMobileOverride = isMobileOverride;
 
   bool get _isMobile =>
       _isMobileOverride ?? (Platform.isIOS || Platform.isAndroid);
@@ -38,8 +36,10 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
   Future<RedirectResult?> takeRedirectResult() async => null;
 
   @override
-  Future<String?> listenForAuthCode(String redirectUri,
-      {required String expectedState}) async {
+  Future<String?> listenForAuthCode(
+    String redirectUri, {
+    required String expectedState,
+  }) async {
     cancel();
 
     if (_isMobile) {
@@ -49,10 +49,7 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
       );
     }
 
-    return _listenForDesktopAuthCode(
-      redirectUri,
-      expectedState: expectedState,
-    );
+    return _listenForDesktopAuthCode(redirectUri, expectedState: expectedState);
   }
 
   /// Mobile deep link listener using [AppLinks].
@@ -76,8 +73,8 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
       final query = uri.queryParameters.isNotEmpty
           ? uri.queryParameters
           : (uri.hasFragment
-              ? Uri.splitQueryString(uri.fragment)
-              : const <String, String>{});
+                ? Uri.splitQueryString(uri.fragment)
+                : const <String, String>{});
 
       final state = query['state'];
 
@@ -170,7 +167,9 @@ class OidcPlatformIoHelper implements OidcPlatformHelper {
             // A stale or forged callback (including a forged `error=`) must not
             // abort the real login in progress: reject it and keep listening.
             _respondWithError(
-                request, 'Invalid state parameter (potential CSRF attempt)');
+              request,
+              'Invalid state parameter (potential CSRF attempt)',
+            );
             return;
           }
 

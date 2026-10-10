@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:jose/jose.dart';
 import 'package:meowgram_client/src/auth/auth_state.dart';
 import 'package:meowgram_client/src/auth/pkce_helper.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
@@ -13,7 +14,7 @@ class OidcTokenRejectedException implements Exception {
   const OidcTokenRejectedException(this.statusCode, this.body);
 
   @override
-  String toString() => 'Token request rejected ($statusCode): $body';
+  String toString() => 'Token request rejected ($statusCode)';
 }
 
 /// Timeout applied to every request against Authelia.
@@ -28,7 +29,7 @@ class OidcService {
   String? _tokenEndpoint;
 
   OidcService({http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   /// Discovers OIDC endpoints from `/.well-known/openid-configuration`
   /// with fallback to standard Authelia endpoints.
@@ -83,17 +84,76 @@ class OidcService {
   Future<TokenData> exchangeCodeForToken({
     required String code,
     required String codeVerifier,
+    required String expectedNonce,
     required String redirectUri,
   }) async {
     await discoverEndpoints();
 
-    return _tokenRequest({
+    final tokens = await _tokenRequest({
       'grant_type': 'authorization_code',
       'client_id': AppConfig.autheliaClientId,
       'code': code,
       'redirect_uri': redirectUri,
       'code_verifier': codeVerifier,
     });
+    await _validateIdToken(tokens.idToken, expectedNonce);
+    return tokens;
+  }
+
+  /// Validate the signed ID token before storing a newly authenticated session.
+  /// Keys come only from the configured issuer's JWKS, never from token headers.
+  Future<void> _validateIdToken(String? token, String nonce) async {
+    if (token == null || token.isEmpty || nonce.isEmpty) {
+      throw const FormatException(
+        'Sign-in response is missing its ID token or nonce.',
+      );
+    }
+    try {
+      final response = await _httpClient
+          .get(Uri.parse(AppConfig.autheliaJwksUrl))
+          .timeout(kOidcRequestTimeout);
+      if (response.statusCode != 200) {
+        throw const FormatException('Signing keys unavailable.');
+      }
+      final keys = JsonWebKeyStore();
+      final document = jsonDecode(response.body) as Map<String, dynamic>;
+      for (final key in document['keys'] as List<dynamic>) {
+        final json = key as Map<String, dynamic>;
+        if (json['kty'] == 'RSA') keys.addKey(JsonWebKey.fromJson(json));
+      }
+      final signed = JsonWebSignature.fromCompactSerialization(token);
+      final payload = await signed.getPayload(
+        keys,
+        allowedAlgorithms: ['RS256'],
+      );
+      final claims = jsonDecode(payload.stringContent) as Map<String, dynamic>;
+      final audience = claims['aud'];
+      final audiences = audience is String ? [audience] : audience;
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+      if (claims['iss'] != AppConfig.autheliaIssuerUrl ||
+          audiences is! List ||
+          !audiences.contains(AppConfig.autheliaClientId) ||
+          (audiences.length > 1 &&
+              claims['azp'] != AppConfig.autheliaClientId) ||
+          (claims.containsKey('azp') &&
+              claims['azp'] != AppConfig.autheliaClientId) ||
+          claims['sub'] is! String ||
+          (claims['sub'] as String).isEmpty ||
+          claims['exp'] is! int ||
+          (claims['exp'] as int) <= now ||
+          claims['iat'] is! int ||
+          (claims['iat'] as int) > now + 60 ||
+          (claims.containsKey('nbf') &&
+              (claims['nbf'] is! int || (claims['nbf'] as int) > now + 60)) ||
+          claims['nonce'] != nonce) {
+        throw const FormatException('Invalid ID token claims.');
+      }
+    } catch (_) {
+      // Parser and crypto exceptions may contain token material. Do not expose it.
+      throw const FormatException(
+        'Sign-in ID token validation failed. Please sign in again.',
+      );
+    }
   }
 
   /// Refreshes an expired access token using the stored refresh token.
@@ -134,8 +194,7 @@ class OidcService {
       throw OidcTokenRejectedException(response.statusCode, response.body);
     }
     if (response.statusCode != 200) {
-      throw Exception(
-          'Token request failed (${response.statusCode}): ${response.body}');
+      throw Exception('Token request failed (${response.statusCode})');
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
