@@ -81,7 +81,20 @@ Future<void> runBackgroundCheck({
 
   final storage = cursorStorage ?? const FlutterSecureStorage();
   final cursorRaw = await storage.read(key: _kCursorKey);
-  final cursor = cursorRaw == null ? null : DateTime.tryParse(cursorRaw);
+  DateTime? cursor;
+  String? cursorId;
+  if (cursorRaw != null) {
+    try {
+      final decoded = jsonDecode(cursorRaw);
+      if (decoded is Map) {
+        cursor = DateTime.tryParse(decoded['created_at']?.toString() ?? '');
+        cursorId = decoded['id']?.toString();
+      }
+    } catch (_) {
+      // Existing installs stored the cursor as an ISO timestamp only.
+      cursor = DateTime.tryParse(cursorRaw);
+    }
+  }
   if (cursor == null) {
     // First run: start watching from now.
     await storage.write(
@@ -89,27 +102,41 @@ Future<void> runBackgroundCheck({
     return;
   }
 
-  final uri = Uri.parse(AppConfig.syncUrl()).replace(
-    queryParameters: {'after': cursor.toUtc().toIso8601String()},
-  );
   final client = httpClient ?? http.Client();
   try {
-    final response = await client.get(uri, headers: {
-      'Accept': 'application/json',
-      'Authorization': 'Bearer ${tokens.accessToken}',
-    }).timeout(SyncService.requestTimeout);
-    if (response.statusCode != 200) {
-      debugPrint('Background sync skipped: HTTP ${response.statusCode}');
-      return;
+    final messages = <ChatMessage>[];
+    while (true) {
+      final uri = Uri.parse(AppConfig.syncUrl()).replace(
+        queryParameters: {
+          'after': cursor.toUtc().toIso8601String(),
+          if (cursorId != null && cursorId.isNotEmpty) 'after_id': cursorId,
+        },
+      );
+      final response = await client.get(uri, headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${tokens.accessToken}',
+      }).timeout(SyncService.requestTimeout);
+      if (response.statusCode != 200) {
+        debugPrint('Background sync skipped: HTTP ${response.statusCode}');
+        return;
+      }
+
+      final batch = SyncService.parseMessages(jsonDecode(response.body));
+      if (batch.isEmpty) break;
+      messages.addAll(batch);
+      cursor = batch.last.createdAt;
+      cursorId = batch.last.id;
+      await storage.write(
+        key: _kCursorKey,
+        value: jsonEncode({
+          'created_at': cursor.toUtc().toIso8601String(),
+          'id': cursorId,
+        }),
+      );
+      if (batch.length < SyncService.pageSize) break;
     }
 
-    final messages = SyncService.parseMessages(jsonDecode(response.body));
     if (messages.isEmpty) return;
-
-    await storage.write(
-      key: _kCursorKey,
-      value: messages.last.createdAt.toUtc().toIso8601String(),
-    );
 
     final mySub = UserProfile.fromTokens(
       accessToken: tokens.accessToken,

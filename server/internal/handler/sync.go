@@ -20,7 +20,7 @@ import (
 //
 // Endpoint Contract:
 //
-//	GET /api/messages/sync?after={iso8601_timestamp}
+//	GET /api/messages/sync?after={iso8601_timestamp}&after_id={uuid}
 //
 // Architectural Rationale:
 //   - When a client reconnects after an extended offline duration, the default
@@ -32,6 +32,8 @@ import (
 //
 // Timezone Standardization:
 //   - PostgreSQL stores `messages.created_at` as `TIMESTAMPTZ` (stored internally in UTC).
+//   - Client cursors contain both created_at and the message UUID, so equal-time
+//     messages remain ordered and cannot be skipped across page boundaries.
 //   - Client timestamps are parsed using RFC3339Nano / RFC3339 layouts.
 //   - If the incoming query string contains an offset (e.g. `+05:30` or `-04:00`),
 //     it is normalized directly to UTC (`.UTC()`) before querying the database.
@@ -75,7 +77,12 @@ func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) htt
 		}
 
 		// 4. Query persistent storage for chronological gap fill (max SyncPageSize records)
-		messages, err := msgRepo.GetMessagesAfter(r.Context(), afterTime, SyncPageSize)
+		afterID := strings.TrimSpace(r.URL.Query().Get("after_id"))
+		if afterID != "" && !uuidPattern.MatchString(afterID) {
+			writeSyncJSONError(w, http.StatusBadRequest, "bad_request", "invalid 'after_id' (expected UUID)")
+			return
+		}
+		messages, err := msgRepo.GetMessagesAfter(r.Context(), afterTime, afterID, SyncPageSize)
 		if err != nil {
 			logger.Error("Failed to query messages for sync",
 				"sub", user.AutheliaSub,
@@ -159,6 +166,7 @@ func ParseSyncTimestamp(raw string) (time.Time, error) {
 }
 
 var spaceOffsetPattern = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?) (\d{2}:?\d{2})$`)
+var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 func writeSyncJSONError(w http.ResponseWriter, statusCode int, errCode string, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

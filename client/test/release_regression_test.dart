@@ -281,7 +281,7 @@ void main() {
   });
 
   group('Token never shown in UI', () {
-    test('redactToken strips the token query parameter', () {
+    test('redactToken strips credential query parameters', () {
       expect(
         ChatWebSocketService.redactToken(
             'wss://meow.example.home.arpa/ws?token=eyJ.secret.jwt'),
@@ -290,6 +290,10 @@ void main() {
       expect(
         ChatWebSocketService.redactToken('ws://h/ws?x=1&token=abc'),
         'ws://h/ws?x=1',
+      );
+      expect(
+        ChatWebSocketService.redactToken('wss://h/ws?ticket=short-lived'),
+        'wss://h/ws',
       );
     });
   });

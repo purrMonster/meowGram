@@ -98,7 +98,7 @@ func (r *MessageRepository) GetRecent(ctx context.Context, limit int) ([]*model.
 // GetMessagesAfter retrieves up to `limit` messages created strictly after `after` timestamp,
 // ordered chronologically (oldest to newest) to power deterministic catch-up sync (UST-1.4.3).
 // Capped at 500 messages to prevent payload bloat.
-func (r *MessageRepository) GetMessagesAfter(ctx context.Context, after time.Time, limit int) ([]*model.Message, error) {
+func (r *MessageRepository) GetMessagesAfter(ctx context.Context, after time.Time, afterID string, limit int) ([]*model.Message, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 500
 	}
@@ -108,11 +108,12 @@ func (r *MessageRepository) GetMessagesAfter(ctx context.Context, after time.Tim
 		FROM messages m
 		LEFT JOIN users u ON m.sender_id = u.authelia_sub
 		WHERE m.created_at > $1
-		ORDER BY m.created_at ASC
-		LIMIT $2;
+		   OR (m.created_at = $1 AND ($2 = '' OR m.id > $2::uuid))
+		ORDER BY m.created_at ASC, m.id ASC
+		LIMIT $3;
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, after, limit)
+	rows, err := r.db.QueryContext(ctx, query, after, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query catch-up messages: %w", err)
 	}

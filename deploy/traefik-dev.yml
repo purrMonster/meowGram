@@ -1,0 +1,23 @@
+http:
+  routers:
+    meowgram-server:
+      rule: "PathPrefix(`/ws`) || PathPrefix(`/api`) || PathPrefix(`/healthz`)"
+      entryPoints:
+        - web
+      priority: 100
+      service: meowgram-server
+    meowgram-web:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - web
+      priority: 1
+      service: meowgram-web
+  services:
+    meowgram-server:
+      loadBalancer:
+        servers:
+          - url: "http://server:8080"
+    meowgram-web:
+      loadBalancer:
+        servers:
+          - url: "http://web:8080"

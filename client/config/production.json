@@ -5,9 +5,10 @@
   "USE_SECURE_SCHEMES": true,
   "AUTHELIA_DOMAIN": "auth.example.home.arpa",
   "AUTHELIA_ISSUER_URL": "https://auth.example.home.arpa",
-  "AUTHELIA_CLIENT_ID": "meowgram-client",
+  "AUTHELIA_CLIENT_ID": "meowgram",
   "API_BASE_URL": "https://meow.example.home.arpa",
   "WS_BASE_URL": "wss://meow.example.home.arpa/ws",
+  "WS_TICKET_ENDPOINT": "/api/ws-ticket",
   "SYNC_ENDPOINT": "/api/messages/sync",
   "HEALTH_ENDPOINT": "/healthz"
 }

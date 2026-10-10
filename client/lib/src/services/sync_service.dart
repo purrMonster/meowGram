@@ -21,7 +21,6 @@ import 'package:meowgram_client/src/storage/local_message_repository.dart';
 /// - Timestamps are sent as UTC ISO 8601 (`toUtc().toIso8601String()`).
 class SyncService {
   static const int pageSize = 500;
-  static const int maxPages = 20;
   static const Duration requestTimeout = Duration(seconds: 15);
   static const Duration retryDelay = Duration(seconds: 15);
 
@@ -41,6 +40,7 @@ class SyncService {
   bool get isSyncing => _isSyncing;
 
   DateTime? _pendingCursor;
+  String? _pendingCursorId;
   Future<void>? _cursorCapture;
   Timer? _retryTimer;
 
@@ -81,7 +81,10 @@ class SyncService {
   Future<void> captureCursor() {
     return _cursorCapture = () async {
       final newest = await _localRepo.getNewestMessage();
-      if (newest != null) _pendingCursor = newest.createdAt;
+      if (newest != null) {
+        _pendingCursor = newest.createdAt;
+        _pendingCursorId = newest.id;
+      }
     }();
   }
 
@@ -106,9 +109,10 @@ class SyncService {
   Future<void> _syncFromPendingCursor() async {
     await _cursorCapture;
     final cursor = _pendingCursor;
-    final result = await _run(after: cursor);
+    final result = await _run(after: cursor, afterId: _pendingCursorId);
     if (result != null) {
       _pendingCursor = null;
+      _pendingCursorId = null;
     } else {
       _scheduleRetry();
     }
@@ -127,12 +131,12 @@ class SyncService {
   ///
   /// Uses [after] if given, otherwise the newest cached chat message. Returns the
   /// messages delivered (empty on failure or when there is nothing to sync).
-  Future<List<ChatMessage>> sync({DateTime? after, String? token}) async {
-    return await _run(after: after, token: token) ?? const [];
+  Future<List<ChatMessage>> sync({DateTime? after, String? afterId, String? token}) async {
+    return await _run(after: after, afterId: afterId, token: token) ?? const [];
   }
 
   /// Returns null on failure so callers can retry.
-  Future<List<ChatMessage>?> _run({DateTime? after, String? token}) async {
+  Future<List<ChatMessage>?> _run({DateTime? after, String? afterId, String? token}) async {
     if (_isSyncing) {
       debugPrint('SyncService: Sync already in progress, skipping duplicate call.');
       return const [];
@@ -141,9 +145,11 @@ class SyncService {
     _isSyncing = true;
     try {
       DateTime? cursor = after;
+      String? cursorId = afterId;
       if (cursor == null) {
         final newest = await _localRepo.getNewestMessage();
         cursor = newest?.createdAt;
+        cursorId = newest?.id;
       }
 
       // No cached messages: the WebSocket 50-message burst handles fresh hydration.
@@ -157,8 +163,8 @@ class SyncService {
       final effectiveToken = token ?? tokenProvider?.call() ?? _accessToken;
       final all = <ChatMessage>[];
 
-      for (var page = 0; page < maxPages; page++) {
-        final batch = await _fetchPage(cursor!, effectiveToken);
+      while (true) {
+        final batch = await _fetchPage(cursor!, cursorId, effectiveToken);
         if (batch == null) {
           // Keep what we got, but report failure so the gap is retried.
           _emit(all);
@@ -167,6 +173,7 @@ class SyncService {
         all.addAll(batch);
         if (batch.length < pageSize) break;
         cursor = batch.last.createdAt;
+        cursorId = batch.last.id;
       }
 
       debugPrint('SyncService: Catch-up sync delivered ${all.length} missed messages.');
@@ -187,9 +194,12 @@ class SyncService {
     return messages;
   }
 
-  Future<List<ChatMessage>?> _fetchPage(DateTime after, String? token) async {
+  Future<List<ChatMessage>?> _fetchPage(DateTime after, String? afterId, String? token) async {
     final uri = Uri.parse(AppConfig.syncUrl(baseUrlOverride: _baseUrlOverride))
-        .replace(queryParameters: {'after': after.toUtc().toIso8601String()});
+        .replace(queryParameters: {
+      'after': after.toUtc().toIso8601String(),
+      if (afterId != null && afterId.isNotEmpty) 'after_id': afterId,
+    });
 
     final headers = <String, String>{'Accept': 'application/json'};
     if (token != null && token.isNotEmpty) {

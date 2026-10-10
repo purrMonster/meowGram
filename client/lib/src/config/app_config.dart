@@ -56,7 +56,7 @@ class AppConfig {
   /// Sourced strictly at compile-time from `--dart-define=AUTHELIA_CLIENT_ID=...`
   static const String autheliaClientId = String.fromEnvironment(
     'AUTHELIA_CLIENT_ID',
-    defaultValue: 'meowgram-client',
+    defaultValue: 'meowgram',
   );
 
   /// Base issuer URL for Authelia's OpenID Connect provider.
@@ -230,11 +230,19 @@ class AppConfig {
     return '$scheme://$host$path';
   }
 
-  /// Builds a WebSocket URL with an authenticated Bearer token query parameter.
-  static String authenticatedWsUrl(String accessToken) {
-    final base = wsBaseUrl;
-    final separator = base.contains('?') ? '&' : '?';
-    return '$base${separator}token=${Uri.encodeComponent(accessToken)}';
+  /// Endpoint that exchanges an authenticated access token for a one-use
+  /// WebSocket ticket. The long-lived bearer token never enters the WS URL.
+  static const String wsTicketPath = String.fromEnvironment(
+    'WS_TICKET_ENDPOINT',
+    defaultValue: '/api/ws-ticket',
+  );
+
+  static String get wsTicketUrl {
+    if (wsTicketPath.startsWith('http://') || wsTicketPath.startsWith('https://')) {
+      return wsTicketPath;
+    }
+    final path = wsTicketPath.startsWith('/') ? wsTicketPath : '/$wsTicketPath';
+    return '${apiBaseUrl.replaceAll(RegExp(r'/+$'), '')}$path';
   }
 
   /// Catch-up synchronization endpoint path (default: `/api/messages/sync`).
