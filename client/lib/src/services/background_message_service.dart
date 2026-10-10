@@ -98,7 +98,9 @@ Future<void> runBackgroundCheck({
   if (cursor == null) {
     // First run: start watching from now.
     await storage.write(
-        key: _kCursorKey, value: DateTime.now().toUtc().toIso8601String());
+      key: _kCursorKey,
+      value: DateTime.now().toUtc().toIso8601String(),
+    );
     return;
   }
 
@@ -108,14 +110,19 @@ Future<void> runBackgroundCheck({
     while (true) {
       final uri = Uri.parse(AppConfig.syncUrl()).replace(
         queryParameters: {
-          'after': cursor.toUtc().toIso8601String(),
+          'after': cursor!.toUtc().toIso8601String(),
           if (cursorId != null && cursorId.isNotEmpty) 'after_id': cursorId,
         },
       );
-      final response = await client.get(uri, headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${tokens.accessToken}',
-      }).timeout(SyncService.requestTimeout);
+      final response = await client
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer ${tokens.accessToken}',
+            },
+          )
+          .timeout(SyncService.requestTimeout);
       if (response.statusCode != 200) {
         debugPrint('Background sync skipped: HTTP ${response.statusCode}');
         return;

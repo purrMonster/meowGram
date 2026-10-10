@@ -1019,3 +1019,34 @@ because the available Bash launcher was denied by the environment. The graph
 utility launcher also failed before extraction; the audit continued through
 direct source inspection. No deployment or external Authelia configuration was
 changed.
+
+### 12.12 Reproducible scratch verification (2026-10-11)
+
+`test/scratch-verification` includes the two previous hardening commits and adds
+`deploy/verify.compose.yml`, PowerShell/POSIX entry scripts and GitHub Actions.
+The stack has an internal, disposable PostgreSQL database with no published ports;
+trust authentication is confined to this scratch network. It never loads deploy
+credentials or mounts a live data volume. Go 1.27.1 and Flutter 3.44.4 run in
+containers; the Flutter lockfile now matches that pinned SDK. The wrapper scripts
+clean up their own project and volumes on exit. `.gitattributes` enforces LF for
+shell scripts and source files.
+
+Real execution found and repaired two failures missed in the earlier audit:
+- Background sync dereferenced a nullable cursor and did not compile.
+- Migration 000003 could not drop an index referenced by the messages foreign key.
+  It now recreates that foreign key atomically against the remaining unique
+  constraint, validates it, and preserves all rows. This migration was exercised
+  only in the disposable database; live migration execution is not authorized.
+
+Regression coverage includes ticket identity isolation, expiry, concurrent
+single-use consumption, endpoint authentication/cache headers, a real loopback
+WebSocket ticket/reconnect exchange and PostgreSQL pagination across 1001 messages
+sharing one timestamp. A dump is restored into a second scratch database and
+checked against a probe plus message count. This validates the restore mechanism;
+it does not establish off-host storage or production recovery readiness.
+
+Results: Go tests with race detection and Go vet passed; PostgreSQL pagination
+and migration tests passed; dump/restore drill passed; Flutter analysis reported
+no issues; all 55 Flutter tests passed; release web build passed. The web build
+reports an existing optional Cupertino font warning. Native OS builds and live
+service configuration are tracked separately.
