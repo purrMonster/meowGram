@@ -17,7 +17,7 @@ import 'package:meowgram_client/src/storage/local_message_repository.dart';
 ///   would point at the newest burst message and skip the gap entirely.
 /// - **Paging**: the server returns at most [pageSize] messages per request; the
 ///   service keeps requesting from the last returned timestamp until a short
-///   page arrives (bounded by [maxPages]).
+///   page arrives.
 /// - Timestamps are sent as UTC ISO 8601 (`toUtc().toIso8601String()`).
 class SyncService {
   static const int pageSize = 500;
@@ -62,12 +62,12 @@ class SyncService {
     String? accessToken,
     this.onSyncCallback,
     this.tokenProvider,
-  })  : _socketService = socketService,
-        _localRepo = localRepo,
-        _httpClient = httpClient ?? http.Client(),
-        _ownsClient = httpClient == null,
-        _baseUrlOverride = baseUrlOverride,
-        _accessToken = accessToken {
+  }) : _socketService = socketService,
+       _localRepo = localRepo,
+       _httpClient = httpClient ?? http.Client(),
+       _ownsClient = httpClient == null,
+       _baseUrlOverride = baseUrlOverride,
+       _accessToken = accessToken {
     _startListening();
   }
 
@@ -100,7 +100,9 @@ class SyncService {
         unawaited(captureCursor());
       }
       if (!wasConnected && isNowConnected) {
-        debugPrint('SyncService: WebSocket connected. Triggering catch-up sync...');
+        debugPrint(
+          'SyncService: WebSocket connected. Triggering catch-up sync...',
+        );
         unawaited(_syncFromPendingCursor());
       }
     });
@@ -131,14 +133,24 @@ class SyncService {
   ///
   /// Uses [after] if given, otherwise the newest cached chat message. Returns the
   /// messages delivered (empty on failure or when there is nothing to sync).
-  Future<List<ChatMessage>> sync({DateTime? after, String? afterId, String? token}) async {
+  Future<List<ChatMessage>> sync({
+    DateTime? after,
+    String? afterId,
+    String? token,
+  }) async {
     return await _run(after: after, afterId: afterId, token: token) ?? const [];
   }
 
   /// Returns null on failure so callers can retry.
-  Future<List<ChatMessage>?> _run({DateTime? after, String? afterId, String? token}) async {
+  Future<List<ChatMessage>?> _run({
+    DateTime? after,
+    String? afterId,
+    String? token,
+  }) async {
     if (_isSyncing) {
-      debugPrint('SyncService: Sync already in progress, skipping duplicate call.');
+      debugPrint(
+        'SyncService: Sync already in progress, skipping duplicate call.',
+      );
       return null;
     }
 
@@ -176,7 +188,9 @@ class SyncService {
         cursorId = batch.last.id;
       }
 
-      debugPrint('SyncService: Catch-up sync delivered ${all.length} missed messages.');
+      debugPrint(
+        'SyncService: Catch-up sync delivered ${all.length} missed messages.',
+      );
       return _emit(all);
     } catch (e, stack) {
       debugPrint('SyncService: Error executing catch-up sync: $e\n$stack');
@@ -194,12 +208,18 @@ class SyncService {
     return messages;
   }
 
-  Future<List<ChatMessage>?> _fetchPage(DateTime after, String? afterId, String? token) async {
+  Future<List<ChatMessage>?> _fetchPage(
+    DateTime after,
+    String? afterId,
+    String? token,
+  ) async {
     final uri = Uri.parse(AppConfig.syncUrl(baseUrlOverride: _baseUrlOverride))
-        .replace(queryParameters: {
-      'after': after.toUtc().toIso8601String(),
-      if (afterId != null && afterId.isNotEmpty) 'after_id': afterId,
-    });
+        .replace(
+          queryParameters: {
+            'after': after.toUtc().toIso8601String(),
+            if (afterId != null && afterId.isNotEmpty) 'after_id': afterId,
+          },
+        );
 
     final headers = <String, String>{'Accept': 'application/json'};
     if (token != null && token.isNotEmpty) {
@@ -207,11 +227,14 @@ class SyncService {
     }
 
     debugPrint('SyncService: Querying catch-up sync: $uri');
-    final response =
-        await _httpClient.get(uri, headers: headers).timeout(requestTimeout);
+    final response = await _httpClient
+        .get(uri, headers: headers)
+        .timeout(requestTimeout);
 
     if (response.statusCode != 200) {
-      debugPrint('SyncService: Sync endpoint responded with ${response.statusCode}');
+      debugPrint(
+        'SyncService: Sync endpoint responded with ${response.statusCode}',
+      );
       return null;
     }
     return parseMessages(jsonDecode(response.body));

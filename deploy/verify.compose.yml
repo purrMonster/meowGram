@@ -1,0 +1,56 @@
+# Disposable verification only. No production env files, ports, or volumes.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: verification
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d verification"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+    networks: [scratch]
+  server:
+    image: golang:1.27.1
+    working_dir: /src
+    volumes:
+      - ../server:/src:ro
+      - go-mod:/go/pkg/mod
+      - go-build:/root/.cache/go-build
+    environment:
+      TEST_DATABASE_URL: postgres://postgres@db:5432/verification?sslmode=disable
+      MIGRATIONS_PATH: /src/migrations
+    command: [sh, -ec, "go test -race -count=1 ./... && go vet ./..."]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [scratch, downloads]
+  restore:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGUSER: postgres
+      PGDATABASE: verification
+    volumes:
+      - ./scripts/verify_restore.sh:/verify_restore.sh:ro
+    command: [sh, /verify_restore.sh]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [scratch]
+  client:
+    build:
+      context: ../client
+      dockerfile: Dockerfile.web
+      target: verify
+    networks: [downloads]
+networks:
+  scratch:
+    internal: true
+  downloads:
+volumes:
+  go-mod:
+  go-build:

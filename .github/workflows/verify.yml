@@ -1,0 +1,16 @@
+name: Scratch verification
+on:
+  pull_request:
+  push:
+    branches: [main, 'test/**', 'fix/**', 'feat/**', 'refactor/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Go, PostgreSQL, restore, Flutter and web
+        run: sh deploy/scripts/verify.sh
