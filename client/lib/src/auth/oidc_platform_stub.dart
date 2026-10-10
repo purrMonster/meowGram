@@ -2,11 +2,13 @@
 class PendingLogin {
   final String codeVerifier;
   final String state;
+  final String nonce;
   final String redirectUri;
 
   const PendingLogin({
     required this.codeVerifier,
     required this.state,
+    required this.nonce,
     required this.redirectUri,
   });
 }
@@ -30,8 +32,10 @@ abstract class OidcPlatformHelper {
   /// Starts listening for an incoming authorization code callback.
   /// On Desktop, this binds a loopback HTTP server; on Mobile, it listens for
   /// deep links. Not used on Web.
-  Future<String?> listenForAuthCode(String redirectUri,
-      {required String expectedState});
+  Future<String?> listenForAuthCode(
+    String redirectUri, {
+    required String expectedState,
+  });
 
   /// Persists PKCE state before a full-page redirect (web only).
   Future<void> savePendingLogin(PendingLogin pending);
