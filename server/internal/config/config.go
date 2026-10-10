@@ -26,6 +26,7 @@ type Config struct {
 	SyncEndpoint      string
 	HealthEndpoint    string
 	WSEndpoint        string
+	WSTicketEndpoint  string
 	ImmichDomain      string
 	ImmichAPIURL      string
 	ReadTimeout       time.Duration
@@ -128,12 +129,15 @@ func Load() (*Config, error) {
 	}
 	if autheliaClientID == "" {
 		// Matches the public client registered in Authelia and used by the Flutter app.
-		autheliaClientID = "meowgram-client"
+		autheliaClientID = "meowgram"
 	}
 
 	autheliaAudience := os.Getenv("AUTHELIA_AUDIENCE")
 	if autheliaAudience == "" {
 		autheliaAudience = os.Getenv("OIDC_AUDIENCE")
+	}
+	if strings.TrimSpace(autheliaAudience) == "" {
+		return nil, errors.New("AUTHELIA_AUDIENCE is required (use the API audience configured for this app)")
 	}
 
 	// Sourcing REST & WebSocket Service Endpoints
@@ -165,6 +169,14 @@ func Load() (*Config, error) {
 	}
 	if !strings.HasPrefix(wsEndpoint, "/") {
 		wsEndpoint = "/" + wsEndpoint
+	}
+
+	wsTicketEndpoint := os.Getenv("WS_TICKET_ENDPOINT")
+	if wsTicketEndpoint == "" {
+		wsTicketEndpoint = "/api/ws-ticket"
+	}
+	if !strings.HasPrefix(wsTicketEndpoint, "/") {
+		wsTicketEndpoint = "/" + wsTicketEndpoint
 	}
 
 	// Immich Endpoints (Release 2). No default: zero-hardcoding rule.
@@ -221,6 +233,7 @@ func Load() (*Config, error) {
 		SyncEndpoint:      syncEndpoint,
 		HealthEndpoint:    healthEndpoint,
 		WSEndpoint:        wsEndpoint,
+		WSTicketEndpoint:  wsTicketEndpoint,
 		ImmichDomain:      immichDomain,
 		ImmichAPIURL:      immichAPIURL,
 		GoogleCredentials: googleCredentials,
