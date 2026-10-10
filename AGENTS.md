@@ -108,20 +108,23 @@ server; where the two disagree, the runbook wins.
 Where the code doesn't yet meet the parameters above (updated for release 1.0.1;
 details in runbook §12.9):
 
-- **Client ID:** the deployed Authelia client and the app use `meowgram-client`,
-  not `meowgram` as §2 says. The server default now follows the deployment. Decide
-  which name is canonical and align this file, Authelia and the defaults.
-- **Token in the WebSocket URL** (`/ws?token=`): visible to anything that logs
-  full URLs (it is no longer shown in the UI). Move it to `Sec-WebSocket-Protocol`
-  or a short-lived ticket.
+- **Client ID:** this repository now uses canonical ID `meowgram` per §2. The
+  Authelia client registration in `purrbrews-containers` must be updated before
+  deploying this branch; do not change that external configuration without owner
+  authorization.
+- **WebSocket token URL:** resolved in the review-hardening branch. The client
+  exchanges its access token for an authenticated, one-use ticket that expires
+  after 30 seconds.
 - **Push via FCM topics:** payloads are content-free and devices subscribe only
   while signed in, but topics have no access control. Replace with per-device
   tokens registered through an authenticated endpoint.
 - **Mobile sign-in:** `meowgram://callback` custom scheme works; an App Link /
   Universal Link is stronger and must also be registered in Authelia.
-- **Web build not served:** the backend serves no static files, so
-  `https://meow.<domain>/` is 404 (web login itself works since 1.0.1).
-- **No backups** of the database while it runs on roastery.
+- **Web build:** a Flutter web container and frontend catch-all route were added
+  in the review-hardening branch. Rebuild and start it before deploying.
+- **Database backups:** a daily local `pg_dump` service and retention policy were
+  added in the review-hardening branch. Copy dumps off-host and verify restores
+  before relying on them for recovery from host or disk loss.
 
 Resolved in 1.0.1: audience/expiry validation, hardcoded production values in
 tracked files (use gitignored `client/config/*.local.json`), compose dev defaults

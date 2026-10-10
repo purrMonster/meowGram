@@ -83,6 +83,8 @@ deploy/docker-compose.override.yml
 /secrets/
 deploy/secrets/*
 !deploy/secrets/README.md
+deploy/backups/*
+!deploy/backups/README.md
 
 # Real client build configs (tracked config/*.json hold placeholders only)
 client/config/*.local.json

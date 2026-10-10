@@ -12,11 +12,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// WebSocketHandler manages protocol upgrade, client registration with the Hub,
-// and launches dedicated ReadPump and WritePump goroutines.
+// WebSocketHandler consumes a one-use ticket, upgrades the connection, registers
+// the client with the Hub, and launches dedicated ReadPump and WritePump goroutines.
 func WebSocketHandler(
 	hub *chat.Hub,
 	msgRepo *repository.MessageRepository,
+	tickets *auth.WSTicketStore,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) http.HandlerFunc {
@@ -37,10 +38,11 @@ func WebSocketHandler(
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 1. Validate authenticated context from OIDC middleware
-		user, hasUser := auth.UserFromContext(r.Context())
-		if !hasUser || user == nil {
-			http.Error(w, "Unauthorized: valid Authelia OIDC token required", http.StatusUnauthorized)
+		// The access token is exchanged for a short-lived, one-use ticket at the
+		// authenticated REST endpoint. Only that ticket appears in the WS URL.
+		user, valid := tickets.Consume(r.URL.Query().Get("ticket"))
+		if !valid || user == nil {
+			http.Error(w, "Unauthorized: valid WebSocket ticket required", http.StatusUnauthorized)
 			return
 		}
 

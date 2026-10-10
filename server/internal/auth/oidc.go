@@ -37,8 +37,6 @@ type OIDCVerifier struct {
 	keySet         oidc.KeySet
 	issuer         string
 	autheliaDomain string
-	appDomain      string
-	clientID       string
 	audience       string
 }
 
@@ -71,8 +69,6 @@ func NewOIDCVerifierWithKeySet(keySet oidc.KeySet, cfg *config.Config) *OIDCVeri
 		keySet:         keySet,
 		issuer:         cfg.AutheliaIssuer,
 		autheliaDomain: cfg.AutheliaDomain,
-		appDomain:      cfg.AppDomain,
-		clientID:       cfg.AutheliaClientID,
 		audience:       cfg.AutheliaAudience,
 	}
 }
@@ -157,22 +153,13 @@ func (v *OIDCVerifier) validateIssuer(tokenIssuer string) error {
 
 // allowedAudiences returns the audiences this backend accepts.
 //
-// If AUTHELIA_AUDIENCE is configured, it is the only accepted audience. Otherwise
-// the client ID and the app's own URL (APP_DOMAIN) are accepted. There is no
-// hardcoded fallback list.
+// AUTHELIA_AUDIENCE is required and is the only accepted audience. The OIDC
+// client ID is not an API audience, so ID tokens are not accepted as API tokens.
 func (v *OIDCVerifier) allowedAudiences() []string {
-	if v.audience != "" {
-		return []string{v.audience}
+	if strings.TrimSpace(v.audience) == "" {
+		return nil
 	}
-	var allowed []string
-	if v.clientID != "" {
-		allowed = append(allowed, v.clientID)
-	}
-	if v.appDomain != "" {
-		domain := strings.TrimRight(v.appDomain, "/")
-		allowed = append(allowed, "https://"+domain, "http://"+domain)
-	}
-	return allowed
+	return []string{v.audience}
 }
 
 func (v *OIDCVerifier) validateAudience(rawAud json.RawMessage) error {

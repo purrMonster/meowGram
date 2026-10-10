@@ -117,9 +117,17 @@ func main() {
 
 	// Protected WebSocket endpoint enforcing Authelia OIDC token verification & Hub broadcast
 	authMiddleware := auth.Middleware(oidcVerifier, userRepo, logger)
-	mux.Handle("/ws", authMiddleware(handler.WebSocketHandler(hub, messageRepo, cfg, logger)))
+	ticketStore := auth.NewWSTicketStore()
+	wsHandler := handler.WebSocketHandler(hub, messageRepo, ticketStore, cfg, logger)
+	mux.Handle("/ws", wsHandler)
 	if cfg.WSEndpoint != "/ws" {
-		mux.Handle(cfg.WSEndpoint, authMiddleware(handler.WebSocketHandler(hub, messageRepo, cfg, logger)))
+		mux.Handle(cfg.WSEndpoint, wsHandler)
+	}
+
+	// Browser clients exchange their bearer token for a one-use WebSocket ticket.
+	mux.Handle("POST /api/ws-ticket", authMiddleware(handler.WSTicketHandler(ticketStore, logger)))
+	if cfg.WSTicketEndpoint != "/api/ws-ticket" {
+		mux.Handle("POST "+cfg.WSTicketEndpoint, authMiddleware(handler.WSTicketHandler(ticketStore, logger)))
 	}
 
 	// Protected catch-up synchronization endpoint (UST-1.4.3)
