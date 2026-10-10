@@ -59,8 +59,10 @@ func loadDotenv() {
 				}
 			}
 
-			// Only set if not already defined in the process environment
-			if os.Getenv(key) == "" && key != "" {
+			// Presence, not non-empty value, determines precedence. This lets callers
+			// deliberately provide an empty value and keeps tests isolated from local
+			// ignored .env files.
+			if _, exists := os.LookupEnv(key); !exists && key != "" {
 				_ = os.Setenv(key, val)
 			}
 		}
