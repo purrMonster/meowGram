@@ -86,8 +86,13 @@ class AppConfig {
       if (autheliaDomain.startsWith('http://') || autheliaDomain.startsWith('https://')) {
         return autheliaDomain.replaceAll(RegExp(r'/+$'), '');
       }
-      final isLocal = autheliaDomain.contains('localhost') || autheliaDomain.startsWith('127.');
-      final scheme = (useSecureSchemes || port == '443' || !isLocal) ? 'https' : 'http';
+      final candidate = Uri.tryParse('http://$autheliaDomain');
+      final host = candidate?.host.toLowerCase() ?? '';
+      final isLocal = host == 'localhost' ||
+          host == '127.0.0.1' ||
+          host == '::1';
+      final scheme =
+          (useSecureSchemes || port == '443' || !isLocal) ? 'https' : 'http';
       return '$scheme://$autheliaDomain';
     }
     return 'http://localhost:9091';

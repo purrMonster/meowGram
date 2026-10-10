@@ -108,7 +108,7 @@ func (r *MessageRepository) GetMessagesAfter(ctx context.Context, after time.Tim
 		FROM messages m
 		LEFT JOIN users u ON m.sender_id = u.authelia_sub
 		WHERE m.created_at > $1
-		   OR (m.created_at = $1 AND ($2 = '' OR m.id > $2::uuid))
+		   OR (m.created_at = $1 AND ($2::text = '' OR m.id > NULLIF($2::text, '')::uuid))
 		ORDER BY m.created_at ASC, m.id ASC
 		LIMIT $3;
 	`
