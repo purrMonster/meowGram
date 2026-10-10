@@ -1,7 +1,22 @@
 # Build the Flutter web client from the repository source.
-FROM debian:bookworm-slim AS build
+FROM debian:bookworm-slim AS sdk
 
 ARG FLUTTER_VERSION=3.44.4
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl git unzip xz-utils zip libglu1-mesa \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch "${FLUTTER_VERSION}" \
+    https://github.com/flutter/flutter.git /opt/flutter
+ENV PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:${PATH}"
+RUN flutter precache --web --linux
+
+FROM sdk AS verify
+WORKDIR /app
+COPY . .
+RUN flutter pub get
+CMD ["sh", "-ec", "flutter analyze && flutter test && flutter build web --release"]
+
+FROM sdk AS build
 ARG APP_ENV=production
 ARG APP_DOMAIN=localhost
 ARG HTTP_PORT=8080
@@ -11,14 +26,6 @@ ARG AUTHELIA_CLIENT_ID=meowgram
 ARG API_BASE_URL=http://localhost:8080
 ARG WS_BASE_URL=ws://localhost:8080/ws
 ARG WS_TICKET_ENDPOINT=/api/ws-ticket
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl git unzip xz-utils zip libglu1-mesa \
-    && rm -rf /var/lib/apt/lists/*
-RUN git clone --depth 1 --branch "${FLUTTER_VERSION}" \
-    https://github.com/flutter/flutter.git /opt/flutter
-ENV PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:${PATH}"
-RUN flutter precache --web
 
 WORKDIR /app
 COPY . .

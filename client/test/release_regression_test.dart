@@ -478,7 +478,10 @@ void main() {
       await run();
       expect(requests, 1);
       expect(notifiedCount, 1, reason: 'own message excluded');
-      expect(cursorStore.store.values.single, '2026-10-07T10:00:00.000Z');
+      expect(jsonDecode(cursorStore.store.values.single), {
+        'created_at': '2026-10-07T10:00:00.000Z',
+        'id': '2',
+      });
     });
   });
 }
