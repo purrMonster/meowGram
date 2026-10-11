@@ -1097,4 +1097,33 @@ It needs no Firebase project or service-account key. Live provider delivery and
 OS permission behavior still require device checks. Provider revocation is not
 instantaneous: queued OS notifications cannot be recalled, and a disabled account
 may receive content-free activity until its device lease expires (at most 24h).
-`nVerification: Go race tests and vet passed, Flutter analysis passed, all 68 Flutter tests passed, and the release web build passed.
+
+Verification: Go race tests and vet passed, Flutter analysis passed, all 68 Flutter tests passed, and the release web build passed.
+
+### 12.15 Request and message budgets
+
+`feat/request-rate-limits` adds bounded, concurrency-safe token buckets. HTTP
+requests share a process-wide ingress budget before expensive authentication;
+verified subjects then share a budget across ticket, sync and device endpoints.
+A subject's message budget is shared across all sockets and reconnects and is
+checked before database writes. Rejected frames get an error and are not broadcast.
+Health endpoints remain available. Forwarded IP headers are not trusted for limits.
+
+| Server environment setting | Default | Meaning |
+|---|---:|---|
+| GLOBAL_RATE_PER_MINUTE | 6000 | Process-wide ingress refill |
+| GLOBAL_RATE_BURST | 200 | Process-wide burst |
+| API_RATE_PER_MINUTE | 120 | Refill per verified subject |
+| API_RATE_BURST | 30 | API burst per subject |
+| MESSAGE_RATE_PER_MINUTE | 60 | Message refill per subject |
+| MESSAGE_RATE_BURST | 10 | Message burst per subject |
+
+Values must be positive integers up to 1,000,000. Buckets are capped at 10,000
+identities with idle eviction. Budgets reset on server restart and are per server
+process; a multi-replica deployment would need shared enforcement. HTTP rejections
+return 429 and Retry-After (exposed through CORS). Foreground catch-up sync waits
+and retries its current UUID page, refreshing the bearer if available; disposal
+cancels a pending retry. This prevents throttling from restarting a large backlog.
+
+
+Verification: Go race tests and vet passed; Flutter analysis is clean; all 69 Flutter tests and the release web build passed.

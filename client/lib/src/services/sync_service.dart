@@ -43,6 +43,7 @@ class SyncService {
   String? _pendingCursorId;
   Future<void>? _cursorCapture;
   Timer? _retryTimer;
+  final Completer<void> _stopped = Completer<void>();
 
   final StreamController<List<ChatMessage>> _syncCompletedController =
       StreamController<List<ChatMessage>>.broadcast();
@@ -175,7 +176,7 @@ class SyncService {
       final effectiveToken = token ?? tokenProvider?.call() ?? _accessToken;
       final all = <ChatMessage>[];
 
-      while (true) {
+      while (!_stopped.isCompleted) {
         final batch = await _fetchPage(cursor!, cursorId, effectiveToken);
         if (batch == null) {
           // Keep what we got, but report failure so the gap is retried.
@@ -227,9 +228,29 @@ class SyncService {
     }
 
     debugPrint('SyncService: Querying catch-up sync: $uri');
-    final response = await _httpClient
-        .get(uri, headers: headers)
-        .timeout(requestTimeout);
+    http.Response response;
+    while (true) {
+      if (_stopped.isCompleted) return null;
+      response = await _httpClient
+          .get(uri, headers: headers)
+          .timeout(requestTimeout);
+      if (response.statusCode != 429) break;
+      // Keep this page's cursor: restarting the whole gap can repeatedly exhaust
+      // the rate budget before ever reaching its end.
+      final seconds =
+          (int.tryParse(response.headers['retry-after'] ?? '') ?? 15).clamp(
+            1,
+            60,
+          );
+      await Future.any([
+        Future<void>.delayed(Duration(seconds: seconds)),
+        _stopped.future,
+      ]);
+      final refreshed = tokenProvider?.call();
+      if (refreshed != null && refreshed.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $refreshed';
+      }
+    }
 
     if (response.statusCode != 200) {
       debugPrint(
@@ -258,6 +279,7 @@ class SyncService {
 
   /// Disposes active listeners and streams.
   void dispose() {
+    if (!_stopped.isCompleted) _stopped.complete();
     _statusSubscription?.cancel();
     _statusSubscription = null;
     _retryTimer?.cancel();

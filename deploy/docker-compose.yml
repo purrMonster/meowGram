@@ -53,6 +53,12 @@ services:
       - AUTHELIA_AUDIENCE=${AUTHELIA_AUDIENCE:?AUTHELIA_AUDIENCE must be set to the API audience}
       - WS_TICKET_ENDPOINT=${WS_TICKET_ENDPOINT:-/api/ws-ticket}
       - PUSH_DEVICE_ENDPOINT=${PUSH_DEVICE_ENDPOINT:-/api/push/devices}
+      - GLOBAL_RATE_PER_MINUTE=${GLOBAL_RATE_PER_MINUTE:-6000}
+      - GLOBAL_RATE_BURST=${GLOBAL_RATE_BURST:-200}
+      - API_RATE_PER_MINUTE=${API_RATE_PER_MINUTE:-120}
+      - API_RATE_BURST=${API_RATE_BURST:-30}
+      - MESSAGE_RATE_PER_MINUTE=${MESSAGE_RATE_PER_MINUTE:-60}
+      - MESSAGE_RATE_BURST=${MESSAGE_RATE_BURST:-10}
       - USE_SECURE_SCHEMES=${USE_SECURE_SCHEMES:-false}
       # FCM service account: place the JSON at deploy/secrets/fcm-service-account.json
       # (gitignored) and set GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/fcm-service-account.json.

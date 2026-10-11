@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"meowgram/server/internal/model"
+	"meowgram/server/internal/ratelimit"
 )
 
 // PushPublisher sends content-free activity to authenticated device registrations.
@@ -41,6 +42,7 @@ type directMessage struct {
 // through the Hub (Broadcast, SendTo), so no goroutine can ever send on a channel
 // that the Hub has already closed.
 type Hub struct {
+	messageLimit *ratelimit.Group
 	// Registered active clients.
 	clients map[*Client]bool
 
@@ -63,17 +65,22 @@ type Hub struct {
 
 // NewHub initializes and returns a new Hub instance. publisher may be nil, in
 // which case push notifications are disabled.
-func NewHub(logger *slog.Logger, publisher PushPublisher) *Hub {
+func NewHub(logger *slog.Logger, publisher PushPublisher, limits ...*ratelimit.Group) *Hub {
+	var limiter *ratelimit.Group
+	if len(limits) > 0 {
+		limiter = limits[0]
+	}
 	return &Hub{
-		clients:    make(map[*Client]bool),
-		Broadcast:  make(chan *model.WSMessage, 256),
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
-		direct:     make(chan directMessage, 256),
-		done:       make(chan struct{}),
-		push:       make(chan struct{}, 1),
-		publisher:  publisher,
-		logger:     logger,
+		messageLimit: limiter,
+		clients:      make(map[*Client]bool),
+		Broadcast:    make(chan *model.WSMessage, 256),
+		Register:     make(chan *Client),
+		Unregister:   make(chan *Client),
+		direct:       make(chan directMessage, 256),
+		done:         make(chan struct{}),
+		push:         make(chan struct{}, 1),
+		publisher:    publisher,
+		logger:       logger,
 	}
 }
 

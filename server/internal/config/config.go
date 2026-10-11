@@ -13,6 +13,7 @@ import (
 
 // Config represents runtime configuration loaded strictly from environment variables and .env files.
 type Config struct {
+	RateLimits         RateLimits
 	Port               string
 	AppDomain          string
 	CORSOrigins        []string
@@ -226,8 +227,13 @@ func Load() (*Config, error) {
 	idleTimeout := parseDurationSeconds(os.Getenv("IDLE_TIMEOUT_SECONDS"), 60*time.Second)
 
 	googleCredentials := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	limits, err := loadRateLimits()
+	if err != nil {
+		return nil, err
+	}
 
 	return &Config{
+		RateLimits:         limits,
 		Port:               port,
 		AppDomain:          appDomain,
 		CORSOrigins:        corsOrigins,

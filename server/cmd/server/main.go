@@ -17,6 +17,7 @@ import (
 	"meowgram/server/internal/fcm"
 	"meowgram/server/internal/handler"
 	"meowgram/server/internal/middleware"
+	"meowgram/server/internal/ratelimit"
 	"meowgram/server/internal/repository"
 )
 
@@ -91,7 +92,7 @@ func main() {
 	if fcmService != nil {
 		publisher = fcmService // avoid a non-nil interface wrapping a nil *fcm.Service
 	}
-	hub := chat.NewHub(logger, publisher)
+	hub := chat.NewHub(logger, publisher, ratelimit.New(cfg.RateLimits.MessagePerMinute, cfg.RateLimits.MessageBurst))
 	hubCtx, hubCancel := context.WithCancel(context.Background())
 	defer hubCancel()
 
@@ -117,7 +118,9 @@ func main() {
 	}
 
 	// Protected WebSocket endpoint enforcing Authelia OIDC token verification & Hub broadcast
-	authMiddleware := auth.Middleware(oidcVerifier, userRepo, logger)
+	verifyIdentity := auth.Middleware(oidcVerifier, userRepo, logger)
+	userBudget := middleware.UserRateLimit(ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst))
+	authMiddleware := func(next http.Handler) http.Handler { return verifyIdentity(userBudget(next)) }
 	ticketStore := auth.NewWSTicketStore()
 	wsHandler := handler.WebSocketHandler(hub, messageRepo, ticketStore, cfg, logger)
 	mux.Handle("/ws", wsHandler)
@@ -143,6 +146,7 @@ func main() {
 
 	// Global Middleware chain: RequestLogger -> CORS -> Mux
 	var rootHandler http.Handler = mux
+	rootHandler = middleware.GlobalRateLimit(ratelimit.New(cfg.RateLimits.GlobalPerMinute, cfg.RateLimits.GlobalBurst), cfg.HealthEndpoint)(rootHandler)
 	rootHandler = middleware.CORS(cfg)(rootHandler)
 	rootHandler = middleware.RequestLogger(logger)(rootHandler)
 

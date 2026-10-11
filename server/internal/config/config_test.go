@@ -17,6 +17,8 @@ func cleanEnv(t *testing.T) {
 		"AUTHELIA_CLIENT_ID", "OIDC_CLIENT_ID", "CLIENT_ID", "AUTHELIA_AUDIENCE", "OIDC_AUDIENCE",
 		"SYNC_ENDPOINT", "MESSAGES_SYNC_ENDPOINT", "HEALTH_ENDPOINT", "WS_ENDPOINT", "WS_PATH", "WS_TICKET_ENDPOINT",
 		"IMMICH_DOMAIN", "IMMICH_API_URL", "CORS_ORIGINS", "GOOGLE_APPLICATION_CREDENTIALS",
+		"PUSH_DEVICE_ENDPOINT", "API_RATE_PER_MINUTE", "API_RATE_BURST",
+		"MESSAGE_RATE_PER_MINUTE", "MESSAGE_RATE_BURST", "GLOBAL_RATE_PER_MINUTE", "GLOBAL_RATE_BURST",
 	} {
 		t.Setenv(k, "")
 	}
@@ -200,5 +202,21 @@ func TestLoadDotenv_ExplicitEmptyEnvironmentValueWins(t *testing.T) {
 	loadDotenv()
 	if got := os.Getenv("DOTENV_EMPTY_OVERRIDE_TEST"); got != "" {
 		t.Fatalf("explicit empty environment value was overwritten by dotenv: %q", got)
+	}
+}
+
+func TestRateLimitConfiguration(t *testing.T) {
+	for _, raw := range []string{"0", "-1", "nope", "1000001"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("API_RATE_PER_MINUTE", raw)
+			if _, err := loadRateLimits(); err == nil {
+				t.Fatal("invalid rate accepted")
+			}
+		})
+	}
+	t.Setenv("API_RATE_PER_MINUTE", "240")
+	limits, err := loadRateLimits()
+	if err != nil || limits.APIPerMinute != 240 {
+		t.Fatal("rate override ignored")
 	}
 }
