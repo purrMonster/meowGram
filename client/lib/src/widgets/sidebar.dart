@@ -4,6 +4,7 @@ import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/bloc/chat_bloc.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/widgets/connection_badge.dart';
+import 'package:meowgram_client/src/widgets/meowgram_logo.dart';
 
 /// Desktop & Tablet sidebar displaying chat rooms, active members, and user profile status.
 class Sidebar extends StatelessWidget {
@@ -72,18 +73,7 @@ class Sidebar extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.pets_rounded,
-                    size: 20,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-                ),
+                const MeowGramLogo(size: 36),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(

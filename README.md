@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="brand/meowgram-logo.svg" alt="meowGram" width="420">
+</p>
+
 # meowGram
 
 A private cat-lounge chat for the purrBrews household: Flutter on web, Android,

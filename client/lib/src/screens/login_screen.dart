@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/auth/auth_state.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
+import 'package:meowgram_client/src/widgets/meowgram_logo.dart';
 
 class LoginScreen extends StatelessWidget {
   final AuthController authController;
@@ -32,35 +33,8 @@ class LoginScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // Brand Header
-                      Center(
-                        child: Container(
-                          width: 90,
-                          height: 90,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                theme.colorScheme.primary,
-                                theme.colorScheme.tertiary,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color:
-                                    theme.colorScheme.primary.withValues(alpha: 0.35),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.pets_rounded,
-                            size: 48,
-                            color: Colors.white,
-                          ),
-                        ),
+                      const Center(
+                        child: MeowGramLogo(size: 96, elevated: true),
                       ),
                       const SizedBox(height: 20),
                       Text(

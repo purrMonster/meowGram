@@ -17,7 +17,7 @@
 
   <!-- Standard & PWA meta tags -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#1e293b">
+  <meta name="theme-color" content="#6750A4">
 
   <title>meowGram</title>
   <link rel="icon" type="image/png" href="favicon.png"/>
@@ -31,8 +31,22 @@
       });
     }
   </script>
+  <!-- Logo splash until Flutter paints its first frame. -->
+  <style>
+    body { margin: 0; background: #FDF8FF; }
+    @media (prefers-color-scheme: dark) { body { background: #141218; } }
+    #splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    #splash img { width: 96px; height: 96px; border-radius: 22.5%; }
+  </style>
 </head>
 <body>
+  <div id="splash"><img src="icons/Icon-192.png" alt="meowGram"></div>
+  <script>
+    window.addEventListener("flutter-first-frame", function () {
+      var splash = document.getElementById("splash");
+      if (splash) splash.remove();
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

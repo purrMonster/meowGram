@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar notification icon: the meowGram silhouette from
+     brand/meowgram-icon-monochrome.svg. Android tints it, so it stays white. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <group android:translateY="-23">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M412,330 H612 A200,200 0 0 1 812,530 V590 A200,200 0 0 1 612,790 H440 L250,880 L283.4,743.2 A200,200 0 0 1 212,590 V530 A200,200 0 0 1 412,330 Z M232,470 L262,215 Q268,190 290,203 L470,345 Z M554,345 L734,203 Q756,190 762,215 L792,470 Z M452,565 A40,52 0 0 0 372,565 A40,52 0 0 0 452,565 Z M652,565 A40,52 0 0 0 572,565 A40,52 0 0 0 652,565 Z" />
+    </group>
+</vector>

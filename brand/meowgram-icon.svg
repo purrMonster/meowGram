@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>meowGram</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8B6CF0"/>
+      <stop offset="1" stop-color="#5236A8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <g transform="translate(0 -23)">
+    <path d="M412,330 H612 A200,200 0 0 1 812,530 V590 A200,200 0 0 1 612,790 H440 L250,880 L283.4,743.2 A200,200 0 0 1 212,590 V530 A200,200 0 0 1 412,330 Z M232,470 L262,215 Q268,190 290,203 L470,345 Z M554,345 L734,203 Q756,190 762,215 L792,470 Z" fill="#1B1040" fill-opacity="0.18" transform="translate(0 18)"/>
+    <path d="M412,330 H612 A200,200 0 0 1 812,530 V590 A200,200 0 0 1 612,790 H440 L250,880 L283.4,743.2 A200,200 0 0 1 212,590 V530 A200,200 0 0 1 412,330 Z M232,470 L262,215 Q268,190 290,203 L470,345 Z M554,345 L734,203 Q756,190 762,215 L792,470 Z" fill="#FFFFFF"/>
+    <path d="M270,380 L285,262 L400,350 Z M754,380 L739,262 L624,350 Z" fill="#F7B2D0"/>
+    <ellipse cx="412" cy="565" rx="40" ry="52" fill="#2E1F5E"/>
+    <ellipse cx="612" cy="565" rx="40" ry="52" fill="#2E1F5E"/>
+    <circle cx="426" cy="545" r="13" fill="#FFFFFF"/>
+    <circle cx="626" cy="545" r="13" fill="#FFFFFF"/>
+    <path d="M488,628 H536 Q546,628 539,636 L519,656 Q512,663 505,656 L485,636 Q478,628 488,628 Z" fill="#F27BAA"/>
+    <path d="M512,660 Q512,692 480,692 M512,660 Q512,692 544,692" fill="none" stroke="#2E1F5E" stroke-width="12" stroke-linecap="round"/>
+    <path d="M262,622 L372,640 M268,700 L374,676 M762,622 L652,640 M756,700 L650,676" fill="none" stroke="#D9CEF7" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>

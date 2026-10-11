@@ -1,9 +1,9 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.13.0
+> **Document Version**: 1.14.0
 > **Status**: Full codebase re-audit is in progress on `refactor/full-codebase-audit`; see [§12.10](#1210-review-hardening) and [§12.11](#1211-full-codebase-re-audit) for changes and deployment prerequisites. Release 1.0.1 remains the latest deployed release.
 > **Author**: Lead Developer / Antigravity IDE; §12 and corrections by Claude  
-> **Last Updated**: 2026-10-10
+> **Last Updated**: 2026-10-11
 
 > [!IMPORTANT]
 > Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; §§12.10–12.11 record code changes that are not yet deployed. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
@@ -751,6 +751,42 @@ To achieve real-time alerts, Apple mandates the use of Remote Push Notifications
 - **Topics have no access control**: any install of the app can subscribe to `room_lounge`, signed in or not. Therefore the payload must never carry message text or sender identity. 1.0.1 sends a content-free, collapsed "New messages in the lounge" notice.
 - The "no device-token fan-out" advantage is exactly what causes the exposure. The planned follow-up is per-device tokens registered through an authenticated endpoint, with data-only pings, so only signed-in devices are notified.
 - Web push (service worker + VAPID key) and Windows (no FCM plugin) are not supported; Windows relies on the live WebSocket while the app runs.
+
+### 10.10 Brand Assets & Launcher Icons
+
+The logo is a white cat-head speech bubble on a violet (`#8B6CF0` → `#5236A8`)
+rounded square, matching the app's `#6750A4` seed colour. The SVGs in `brand/`
+are the source of truth; every raster file is generated from them.
+
+| Source (`brand/`) | Generated file | Used for |
+|---|---|---|
+| `meowgram-logo.svg` | (none) | Project logo with wordmark, shown in the README; adapts to dark mode |
+| `meowgram-icon.svg` | `client/assets/brand/logo.png` (512 px) | In-app logo (`MeowGramLogo`): login screen, sidebar/drawer header |
+| | `client/assets/icon/icon_rounded.png` | Windows `.ico`, macOS app icon |
+| | `client/android/.../drawable-xxhdpi/launch_logo.png` | Android launch splash (`launch_background.xml`) |
+| | `client/ios/.../LaunchImage.imageset/*` | iOS launch screen |
+| `meowgram-icon-full-bleed.svg` | `client/assets/icon/icon.png` | iOS app icon (iOS masks the corners), Android legacy icon, web favicon/PWA icons |
+| `meowgram-icon-foreground.svg` | `client/assets/icon/icon_foreground.png` | Android adaptive icon foreground (background `#6A4FCB`) |
+| `meowgram-icon-monochrome.svg` | `client/assets/icon/icon_monochrome.png` | Android 13+ themed icon |
+| (same silhouette path) | `res/drawable/ic_stat_meowgram.xml` | Android status-bar notification icon, kept from resource shrinking by `res/raw/keep.xml` |
+
+The web shell (`client/web/index.html`) shows the PWA icon as a splash until
+Flutter fires `flutter-first-frame`.
+
+To change the logo, edit the SVGs and then regenerate (Docker only):
+
+```bash
+sh brand/render.sh
+```
+```bash
+cd client && dart run flutter_launcher_icons
+```
+
+`flutter_launcher_icons` rewrites a few unrelated files (Xcode project, plugin
+registrants, `manifest.json`), and those changes are usually only line endings.
+Revert them unless their content actually changed. The status-bar icon's
+`pathData` is copied from `meowgram-icon-monochrome.svg`, so update it by hand
+if the silhouette changes.
 
 ---
 
