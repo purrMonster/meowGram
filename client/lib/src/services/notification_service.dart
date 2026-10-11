@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:meowgram_client/src/models/chat_message.dart';
@@ -31,7 +33,8 @@ class NotificationService {
   Future<void> initialize() async {
     if (_isInitialized || !isSupportedPlatform) return;
 
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // White silhouette for the status bar (res/drawable/ic_stat_meowgram.xml).
+    const android = AndroidInitializationSettings('@drawable/ic_stat_meowgram');
     const darwin = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -72,6 +75,7 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         showWhen: true,
+        color: Color(0xFF6750A4),
       ),
       iOS: DarwinNotificationDetails(
         presentAlert: true,
