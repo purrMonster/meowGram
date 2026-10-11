@@ -8,20 +8,17 @@ import (
 	"time"
 
 	"meowgram/server/internal/model"
+	"meowgram/server/internal/ratelimit"
 )
 
-// PushPublisher sends a push notification to every device subscribed to a topic.
+// PushPublisher sends content-free activity to authenticated device registrations.
 // It is satisfied by *fcm.Service; tests can supply a fake.
 type PushPublisher interface {
-	PublishToTopic(ctx context.Context, topic, title, body string, data map[string]string) error
+	PublishActivity(ctx context.Context, title, body string, data map[string]string) error
 }
 
 const (
-	// PushTopic is the FCM topic every signed-in client subscribes to.
-	PushTopic = "room_lounge"
-
-	// Push notifications are content-free (no message text, no sender) because FCM
-	// topics have no access control: any app install can subscribe to them.
+	// Push notifications remain content-free (no message text or sender).
 	pushTitle = "meowGram"
 	pushBody  = "New messages in the lounge 🐾"
 
@@ -45,6 +42,7 @@ type directMessage struct {
 // through the Hub (Broadcast, SendTo), so no goroutine can ever send on a channel
 // that the Hub has already closed.
 type Hub struct {
+	messageLimit *ratelimit.Group
 	// Registered active clients.
 	clients map[*Client]bool
 
@@ -67,17 +65,22 @@ type Hub struct {
 
 // NewHub initializes and returns a new Hub instance. publisher may be nil, in
 // which case push notifications are disabled.
-func NewHub(logger *slog.Logger, publisher PushPublisher) *Hub {
+func NewHub(logger *slog.Logger, publisher PushPublisher, limits ...*ratelimit.Group) *Hub {
+	var limiter *ratelimit.Group
+	if len(limits) > 0 {
+		limiter = limits[0]
+	}
 	return &Hub{
-		clients:    make(map[*Client]bool),
-		Broadcast:  make(chan *model.WSMessage, 256),
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
-		direct:     make(chan directMessage, 256),
-		done:       make(chan struct{}),
-		push:       make(chan struct{}, 1),
-		publisher:  publisher,
-		logger:     logger,
+		messageLimit: limiter,
+		clients:      make(map[*Client]bool),
+		Broadcast:    make(chan *model.WSMessage, 256),
+		Register:     make(chan *Client),
+		Unregister:   make(chan *Client),
+		direct:       make(chan directMessage, 256),
+		done:         make(chan struct{}),
+		push:         make(chan struct{}, 1),
+		publisher:    publisher,
+		logger:       logger,
 	}
 }
 
@@ -236,7 +239,7 @@ func (h *Hub) pushWorker(ctx context.Context) {
 		}
 
 		sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		err := h.publisher.PublishToTopic(sendCtx, PushTopic, pushTitle, pushBody,
+		err := h.publisher.PublishActivity(sendCtx, pushTitle, pushBody,
 			map[string]string{"type": "lounge_activity"})
 		cancel()
 		if err != nil {

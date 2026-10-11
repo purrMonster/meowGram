@@ -17,6 +17,7 @@ import (
 	"meowgram/server/internal/fcm"
 	"meowgram/server/internal/handler"
 	"meowgram/server/internal/middleware"
+	"meowgram/server/internal/ratelimit"
 	"meowgram/server/internal/repository"
 )
 
@@ -70,11 +71,12 @@ func main() {
 	// Initialize repository layers
 	userRepo := repository.NewUserRepository(db)
 	messageRepo := repository.NewMessageRepository(db)
+	deviceRepo := repository.NewDeviceRepository(db)
 
 	// Initialize FCM service if credentials are provided
 	var fcmService *fcm.Service
 	if cfg.GoogleCredentials != "" {
-		svc, err := fcm.NewService(context.Background(), logger, cfg.GoogleCredentials)
+		svc, err := fcm.NewService(context.Background(), logger, cfg.GoogleCredentials, deviceRepo)
 		if err != nil {
 			logger.Warn("Failed to initialize FCM service, push notifications will be disabled", "error", err)
 		} else {
@@ -90,7 +92,7 @@ func main() {
 	if fcmService != nil {
 		publisher = fcmService // avoid a non-nil interface wrapping a nil *fcm.Service
 	}
-	hub := chat.NewHub(logger, publisher)
+	hub := chat.NewHub(logger, publisher, ratelimit.New(cfg.RateLimits.MessagePerMinute, cfg.RateLimits.MessageBurst))
 	hubCtx, hubCancel := context.WithCancel(context.Background())
 	defer hubCancel()
 
@@ -116,13 +118,27 @@ func main() {
 	}
 
 	// Protected WebSocket endpoint enforcing Authelia OIDC token verification & Hub broadcast
-	authMiddleware := auth.Middleware(oidcVerifier, userRepo, logger)
-	mux.Handle("/ws", authMiddleware(handler.WebSocketHandler(hub, messageRepo, cfg, logger)))
+	verifyIdentity := auth.Middleware(oidcVerifier, userRepo, logger)
+	userBudget := middleware.UserRateLimit(ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst))
+	authMiddleware := func(next http.Handler) http.Handler { return verifyIdentity(userBudget(next)) }
+	ticketStore := auth.NewWSTicketStore()
+	wsHandler := handler.WebSocketHandler(hub, messageRepo, ticketStore, cfg, logger)
+	mux.Handle("/ws", wsHandler)
 	if cfg.WSEndpoint != "/ws" {
-		mux.Handle(cfg.WSEndpoint, authMiddleware(handler.WebSocketHandler(hub, messageRepo, cfg, logger)))
+		mux.Handle(cfg.WSEndpoint, wsHandler)
+	}
+
+	// Browser clients exchange their bearer token for a one-use WebSocket ticket.
+	mux.Handle("POST /api/ws-ticket", authMiddleware(handler.WSTicketHandler(ticketStore, logger)))
+	if cfg.WSTicketEndpoint != "/api/ws-ticket" {
+		mux.Handle("POST "+cfg.WSTicketEndpoint, authMiddleware(handler.WSTicketHandler(ticketStore, logger)))
 	}
 
 	// Protected catch-up synchronization endpoint (UST-1.4.3)
+	deviceHandler := authMiddleware(handler.PushDeviceHandler(deviceRepo))
+	mux.Handle("PUT "+cfg.PushDeviceEndpoint, deviceHandler)
+	mux.Handle("DELETE "+cfg.PushDeviceEndpoint, deviceHandler)
+
 	mux.Handle("GET /api/messages/sync", authMiddleware(handler.SyncHandler(messageRepo, logger)))
 	if cfg.SyncEndpoint != "/api/messages/sync" {
 		mux.Handle("GET "+cfg.SyncEndpoint, authMiddleware(handler.SyncHandler(messageRepo, logger)))
@@ -130,6 +146,7 @@ func main() {
 
 	// Global Middleware chain: RequestLogger -> CORS -> Mux
 	var rootHandler http.Handler = mux
+	rootHandler = middleware.GlobalRateLimit(ratelimit.New(cfg.RateLimits.GlobalPerMinute, cfg.RateLimits.GlobalBurst), cfg.HealthEndpoint)(rootHandler)
 	rootHandler = middleware.CORS(cfg)(rootHandler)
 	rootHandler = middleware.RequestLogger(logger)(rootHandler)
 

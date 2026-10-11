@@ -56,7 +56,7 @@ class AppConfig {
   /// Sourced strictly at compile-time from `--dart-define=AUTHELIA_CLIENT_ID=...`
   static const String autheliaClientId = String.fromEnvironment(
     'AUTHELIA_CLIENT_ID',
-    defaultValue: 'meowgram-client',
+    defaultValue: 'meowgram',
   );
 
   /// Base issuer URL for Authelia's OpenID Connect provider.
@@ -83,11 +83,17 @@ class AppConfig {
       return _rawAutheliaIssuerUrl.replaceAll(RegExp(r'/+$'), '');
     }
     if (autheliaDomain.isNotEmpty && autheliaDomain != 'localhost:9091') {
-      if (autheliaDomain.startsWith('http://') || autheliaDomain.startsWith('https://')) {
+      if (autheliaDomain.startsWith('http://') ||
+          autheliaDomain.startsWith('https://')) {
         return autheliaDomain.replaceAll(RegExp(r'/+$'), '');
       }
-      final isLocal = autheliaDomain.contains('localhost') || autheliaDomain.startsWith('127.');
-      final scheme = (useSecureSchemes || port == '443' || !isLocal) ? 'https' : 'http';
+      final candidate = Uri.tryParse('http://$autheliaDomain');
+      final host = candidate?.host.toLowerCase() ?? '';
+      final isLocal =
+          host == 'localhost' || host == '127.0.0.1' || host == '::1';
+      final scheme = (useSecureSchemes || port == '443' || !isLocal)
+          ? 'https'
+          : 'http';
       return '$scheme://$autheliaDomain';
     }
     return 'http://localhost:9091';
@@ -116,7 +122,8 @@ class AppConfig {
     'AUTHELIA_AUTHORIZATION_ENDPOINT',
     defaultValue: '',
   );
-  static String get autheliaAuthorizationEndpoint => _rawAutheliaAuthEndpoint.isNotEmpty
+  static String get autheliaAuthorizationEndpoint =>
+      _rawAutheliaAuthEndpoint.isNotEmpty
       ? _rawAutheliaAuthEndpoint
       : '$autheliaIssuerUrl/api/oidc/authorization';
 
@@ -125,7 +132,8 @@ class AppConfig {
     'AUTHELIA_TOKEN_ENDPOINT',
     defaultValue: '',
   );
-  static String get autheliaTokenEndpoint => _rawAutheliaTokenEndpoint.isNotEmpty
+  static String get autheliaTokenEndpoint =>
+      _rawAutheliaTokenEndpoint.isNotEmpty
       ? _rawAutheliaTokenEndpoint
       : '$autheliaIssuerUrl/api/oidc/token';
 
@@ -134,7 +142,8 @@ class AppConfig {
     'AUTHELIA_USERINFO_ENDPOINT',
     defaultValue: '',
   );
-  static String get autheliaUserinfoEndpoint => _rawAutheliaUserinfoEndpoint.isNotEmpty
+  static String get autheliaUserinfoEndpoint =>
+      _rawAutheliaUserinfoEndpoint.isNotEmpty
       ? _rawAutheliaUserinfoEndpoint
       : '$autheliaIssuerUrl/api/oidc/userinfo';
 
@@ -143,7 +152,8 @@ class AppConfig {
     'AUTHELIA_REVOCATION_ENDPOINT',
     defaultValue: '',
   );
-  static String get autheliaRevocationEndpoint => _rawAutheliaRevocationEndpoint.isNotEmpty
+  static String get autheliaRevocationEndpoint =>
+      _rawAutheliaRevocationEndpoint.isNotEmpty
       ? _rawAutheliaRevocationEndpoint
       : '$autheliaIssuerUrl/api/oidc/revocation';
 
@@ -230,11 +240,20 @@ class AppConfig {
     return '$scheme://$host$path';
   }
 
-  /// Builds a WebSocket URL with an authenticated Bearer token query parameter.
-  static String authenticatedWsUrl(String accessToken) {
-    final base = wsBaseUrl;
-    final separator = base.contains('?') ? '&' : '?';
-    return '$base${separator}token=${Uri.encodeComponent(accessToken)}';
+  /// Endpoint that exchanges an authenticated access token for a one-use
+  /// WebSocket ticket. The long-lived bearer token never enters the WS URL.
+  static const String wsTicketPath = String.fromEnvironment(
+    'WS_TICKET_ENDPOINT',
+    defaultValue: '/api/ws-ticket',
+  );
+
+  static String get wsTicketUrl {
+    if (wsTicketPath.startsWith('http://') ||
+        wsTicketPath.startsWith('https://')) {
+      return wsTicketPath;
+    }
+    final path = wsTicketPath.startsWith('/') ? wsTicketPath : '/$wsTicketPath';
+    return '${apiBaseUrl.replaceAll(RegExp(r'/+$'), '')}$path';
   }
 
   /// Catch-up synchronization endpoint path (default: `/api/messages/sync`).
@@ -243,6 +262,13 @@ class AppConfig {
     'SYNC_ENDPOINT',
     defaultValue: '/api/messages/sync',
   );
+
+  static const String pushDevicePath = String.fromEnvironment(
+    'PUSH_DEVICE_ENDPOINT',
+    defaultValue: '/api/push/devices',
+  );
+  static String get pushDeviceUrl =>
+      Uri.parse('$apiBaseUrl/').resolve(pushDevicePath).toString();
 
   /// Resolves the full URL for the catch-up synchronization REST service.
   static String syncUrl({String? baseUrlOverride}) {

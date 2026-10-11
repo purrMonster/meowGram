@@ -14,14 +14,17 @@ import 'package:web/web.dart' as web;
 class OidcPlatformWebHelper implements OidcPlatformHelper {
   static const _kVerifier = 'meowgram.oidc.verifier';
   static const _kState = 'meowgram.oidc.state';
+  static const _kNonce = 'meowgram.oidc.nonce';
   static const _kRedirect = 'meowgram.oidc.redirect';
 
   @override
   bool get usesFullPageRedirect => true;
 
   @override
-  Future<String?> listenForAuthCode(String redirectUri,
-      {required String expectedState}) async {
+  Future<String?> listenForAuthCode(
+    String redirectUri, {
+    required String expectedState,
+  }) async {
     // Not used on web: see takeRedirectResult.
     return null;
   }
@@ -31,6 +34,7 @@ class OidcPlatformWebHelper implements OidcPlatformHelper {
     final storage = web.window.sessionStorage;
     storage.setItem(_kVerifier, pending.codeVerifier);
     storage.setItem(_kState, pending.state);
+    storage.setItem(_kNonce, pending.nonce);
     storage.setItem(_kRedirect, pending.redirectUri);
   }
 
@@ -39,19 +43,26 @@ class OidcPlatformWebHelper implements OidcPlatformHelper {
     final storage = web.window.sessionStorage;
     final verifier = storage.getItem(_kVerifier);
     final expectedState = storage.getItem(_kState);
+    final nonce = storage.getItem(_kNonce);
     final redirectUri = storage.getItem(_kRedirect);
 
     final params = _callbackParams(Uri.base);
-    final hasCallback = params.containsKey('code') || params.containsKey('error');
+    final hasCallback =
+        params.containsKey('code') || params.containsKey('error');
     if (!hasCallback) return null;
 
     // A callback is present: always clean up so a reload can't replay it.
     storage.removeItem(_kVerifier);
     storage.removeItem(_kState);
+    storage.removeItem(_kNonce);
     storage.removeItem(_kRedirect);
     _stripCallbackFromAddressBar();
 
-    if (verifier == null || expectedState == null || redirectUri == null) {
+    if (verifier == null ||
+        expectedState == null ||
+        redirectUri == null ||
+        nonce == null ||
+        nonce.isEmpty) {
       return null; // Not started from this tab.
     }
     if (params['state'] != expectedState) {
@@ -64,6 +75,7 @@ class OidcPlatformWebHelper implements OidcPlatformHelper {
       pending: PendingLogin(
         codeVerifier: verifier,
         state: expectedState,
+        nonce: nonce,
         redirectUri: redirectUri,
       ),
     );
@@ -83,7 +95,8 @@ class OidcPlatformWebHelper implements OidcPlatformHelper {
     final fragment = uri.fragment;
     final i = fragment.indexOf('?');
     final cleanFragment = i >= 0 ? fragment.substring(0, i) : fragment;
-    final clean = '${uri.scheme}://${uri.authority}${uri.path}'
+    final clean =
+        '${uri.scheme}://${uri.authority}${uri.path}'
         '${cleanFragment.isNotEmpty ? '#$cleanFragment' : ''}';
     web.window.history.replaceState(null, '', clean);
   }

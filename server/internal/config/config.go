@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -11,26 +13,29 @@ import (
 
 // Config represents runtime configuration loaded strictly from environment variables and .env files.
 type Config struct {
-	Port              string
-	AppDomain         string
-	CORSOrigins       []string
-	Environment       string
-	LogLevel          string
-	DatabaseURL       string
-	AutheliaDomain    string
-	AutheliaIssuer    string
-	AutheliaJWKSURL   string
-	AutheliaClientID  string
-	AutheliaAudience  string
-	GoogleCredentials string
-	SyncEndpoint      string
-	HealthEndpoint    string
-	WSEndpoint        string
-	ImmichDomain      string
-	ImmichAPIURL      string
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
+	RateLimits         RateLimits
+	Port               string
+	AppDomain          string
+	CORSOrigins        []string
+	Environment        string
+	LogLevel           string
+	DatabaseURL        string
+	AutheliaDomain     string
+	AutheliaIssuer     string
+	AutheliaJWKSURL    string
+	AutheliaClientID   string
+	AutheliaAudience   string
+	GoogleCredentials  string
+	SyncEndpoint       string
+	HealthEndpoint     string
+	WSEndpoint         string
+	WSTicketEndpoint   string
+	PushDeviceEndpoint string
+	ImmichDomain       string
+	ImmichAPIURL       string
+	ReadTimeout        time.Duration
+	WriteTimeout       time.Duration
+	IdleTimeout        time.Duration
 }
 
 // Load populates and validates Config from process environment and candidate .env files.
@@ -101,7 +106,7 @@ func Load() (*Config, error) {
 	if autheliaIssuer == "" && autheliaDomain != "" {
 		if strings.HasPrefix(autheliaDomain, "http://") || strings.HasPrefix(autheliaDomain, "https://") {
 			autheliaIssuer = autheliaDomain
-		} else if strings.Contains(autheliaDomain, "localhost") || strings.HasPrefix(autheliaDomain, "127.") {
+		} else if isLoopbackDomain(autheliaDomain) {
 			autheliaIssuer = "http://" + autheliaDomain
 		} else {
 			autheliaIssuer = "https://" + autheliaDomain
@@ -111,7 +116,7 @@ func Load() (*Config, error) {
 	if autheliaIssuer == "" {
 		return nil, errors.New("environment variable AUTHELIA_ISSUER or AUTHELIA_DOMAIN is required")
 	}
-	autheliaIssuer = strings.TrimRight(autheliaIssuer, "/")
+	autheliaIssuer = strings.TrimRight(strings.TrimSpace(autheliaIssuer), "/")
 
 	autheliaJWKSURL := os.Getenv("AUTHELIA_JWKS_URL")
 	if autheliaJWKSURL == "" {
@@ -128,13 +133,17 @@ func Load() (*Config, error) {
 	}
 	if autheliaClientID == "" {
 		// Matches the public client registered in Authelia and used by the Flutter app.
-		autheliaClientID = "meowgram-client"
+		autheliaClientID = "meowgram"
 	}
 
 	autheliaAudience := os.Getenv("AUTHELIA_AUDIENCE")
 	if autheliaAudience == "" {
 		autheliaAudience = os.Getenv("OIDC_AUDIENCE")
 	}
+	if strings.TrimSpace(autheliaAudience) == "" {
+		return nil, errors.New("AUTHELIA_AUDIENCE is required (use the API audience configured for this app)")
+	}
+	autheliaAudience = strings.TrimSpace(autheliaAudience)
 
 	// Sourcing REST & WebSocket Service Endpoints
 	syncEndpoint := os.Getenv("SYNC_ENDPOINT")
@@ -167,6 +176,14 @@ func Load() (*Config, error) {
 		wsEndpoint = "/" + wsEndpoint
 	}
 
+	wsTicketEndpoint := os.Getenv("WS_TICKET_ENDPOINT")
+	if wsTicketEndpoint == "" {
+		wsTicketEndpoint = "/api/ws-ticket"
+	}
+	if !strings.HasPrefix(wsTicketEndpoint, "/") {
+		wsTicketEndpoint = "/" + wsTicketEndpoint
+	}
+
 	// Immich Endpoints (Release 2). No default: zero-hardcoding rule.
 	immichDomain := os.Getenv("IMMICH_DOMAIN")
 	immichAPIURL := os.Getenv("IMMICH_API_URL")
@@ -188,15 +205,20 @@ func Load() (*Config, error) {
 
 	// Default fallback origins if none specified
 	if len(corsOrigins) == 0 {
-		corsOrigins = []string{
-			fmt.Sprintf("http://%s", appDomain),
-			fmt.Sprintf("http://%s:%s", appDomain, port),
-			fmt.Sprintf("https://%s", appDomain),
-			"http://localhost",
-			"http://localhost:8080",
-			"http://localhost:3000",
-			"http://127.0.0.1",
-			"http://127.0.0.1:8080",
+		if env == "production" || env == "staging" {
+			corsOrigins = []string{fmt.Sprintf("https://%s", appDomain)}
+		} else {
+			corsOrigins = []string{
+				fmt.Sprintf("http://%s", appDomain),
+				fmt.Sprintf("http://%s:%s", appDomain, port),
+				"http://localhost",
+				"http://localhost:8080",
+				"http://localhost:8081",
+				"http://localhost:3000",
+				"http://127.0.0.1",
+				"http://127.0.0.1:8080",
+				"http://127.0.0.1:8081",
+			}
 		}
 	}
 
@@ -205,29 +227,62 @@ func Load() (*Config, error) {
 	idleTimeout := parseDurationSeconds(os.Getenv("IDLE_TIMEOUT_SECONDS"), 60*time.Second)
 
 	googleCredentials := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	limits, err := loadRateLimits()
+	if err != nil {
+		return nil, err
+	}
 
 	return &Config{
-		Port:              port,
-		AppDomain:         appDomain,
-		CORSOrigins:       corsOrigins,
-		Environment:       env,
-		LogLevel:          logLevel,
-		DatabaseURL:       dbURL,
-		AutheliaDomain:    autheliaDomain,
-		AutheliaIssuer:    autheliaIssuer,
-		AutheliaJWKSURL:   autheliaJWKSURL,
-		AutheliaClientID:  autheliaClientID,
-		AutheliaAudience:  autheliaAudience,
-		SyncEndpoint:      syncEndpoint,
-		HealthEndpoint:    healthEndpoint,
-		WSEndpoint:        wsEndpoint,
-		ImmichDomain:      immichDomain,
-		ImmichAPIURL:      immichAPIURL,
-		GoogleCredentials: googleCredentials,
-		ReadTimeout:       readTimeout,
-		WriteTimeout:      writeTimeout,
-		IdleTimeout:       idleTimeout,
+		RateLimits:         limits,
+		Port:               port,
+		AppDomain:          appDomain,
+		CORSOrigins:        corsOrigins,
+		Environment:        env,
+		LogLevel:           logLevel,
+		DatabaseURL:        dbURL,
+		AutheliaDomain:     autheliaDomain,
+		AutheliaIssuer:     autheliaIssuer,
+		AutheliaJWKSURL:    autheliaJWKSURL,
+		AutheliaClientID:   autheliaClientID,
+		AutheliaAudience:   autheliaAudience,
+		SyncEndpoint:       syncEndpoint,
+		HealthEndpoint:     healthEndpoint,
+		WSEndpoint:         wsEndpoint,
+		WSTicketEndpoint:   wsTicketEndpoint,
+		PushDeviceEndpoint: normalizePath(os.Getenv("PUSH_DEVICE_ENDPOINT"), "/api/push/devices"),
+		ImmichDomain:       immichDomain,
+		ImmichAPIURL:       immichAPIURL,
+		GoogleCredentials:  googleCredentials,
+		ReadTimeout:        readTimeout,
+		WriteTimeout:       writeTimeout,
+		IdleTimeout:        idleTimeout,
 	}, nil
+}
+
+func normalizePath(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	if !strings.HasPrefix(value, "/") {
+		return "/" + value
+	}
+	return value
+}
+
+func isLoopbackDomain(value string) bool {
+	if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
+		value = parsed.Host
+	}
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		value = host
+	}
+	value = strings.Trim(value, "[]")
+	if strings.EqualFold(value, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(value)
+	return ip != nil && ip.IsLoopback()
 }
 
 // Address returns the listen address string.
@@ -235,22 +290,13 @@ func (c *Config) Address() string {
 	return ":" + c.Port
 }
 
-// IsAllowedOrigin checks if the provided origin header matches configured origins or app domain.
+// IsAllowedOrigin accepts only explicitly configured origins.
 func (c *Config) IsAllowedOrigin(origin string) bool {
 	if origin == "" {
 		return true // Allow requests without an origin (e.g. mobile apps, curl, non-browser clients)
 	}
 
 	origin = strings.TrimRight(origin, "/")
-
-	if c.AppDomain != "" {
-		if strings.EqualFold(origin, "https://"+c.AppDomain) ||
-			strings.EqualFold(origin, "http://"+c.AppDomain) ||
-			strings.EqualFold(origin, c.AppDomain) {
-			return true
-		}
-	}
-
 	for _, allowed := range c.CORSOrigins {
 		if strings.EqualFold(origin, strings.TrimRight(allowed, "/")) {
 			return true

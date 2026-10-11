@@ -109,6 +109,12 @@ func (c *Client) ReadPump() {
 		}
 
 		// Only process text frames for chat messaging
+		if c.hub.messageLimit != nil {
+			if allowed, _ := c.hub.messageLimit.Allow(c.user.AutheliaSub); !allowed {
+				c.sendError("Message rate limit reached. Please wait before sending again.")
+				continue
+			}
+		}
 		if messageType != websocket.TextMessage {
 			continue
 		}

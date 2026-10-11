@@ -1,0 +1,75 @@
+# Build the Flutter web client from the repository source.
+FROM debian:bookworm-slim AS sdk
+
+ARG FLUTTER_VERSION=3.44.4
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl git unzip xz-utils zip libglu1-mesa \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch "${FLUTTER_VERSION}" \
+    https://github.com/flutter/flutter.git /opt/flutter
+ENV PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:${PATH}"
+RUN flutter precache --web --linux
+
+FROM sdk AS verify
+WORKDIR /app
+COPY . .
+RUN flutter pub get
+CMD ["sh", "-ec", "flutter analyze && flutter test && flutter build web --release"]
+
+FROM sdk AS android-sdk
+RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jdk-headless && rm -rf /var/lib/apt/lists/*
+ENV ANDROID_HOME=/opt/android-sdk
+ENV PATH="/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:${PATH}"
+RUN curl -fL https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip -o /tmp/tools.zip \
+    && echo '4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583  /tmp/tools.zip' | sha256sum -c - \
+    && mkdir -p /opt/android-sdk/cmdline-tools \
+    && unzip -q /tmp/tools.zip -d /opt/android-sdk/cmdline-tools \
+    && mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest \
+    && rm /tmp/tools.zip
+RUN yes | sdkmanager --licenses >/dev/null
+RUN sdkmanager 'platform-tools' 'platforms;android-34' 'platforms;android-35' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+RUN flutter precache --android
+
+FROM android-sdk AS verify-android
+WORKDIR /app
+COPY . .
+RUN flutter pub get
+# Synthetic build fixture only; this cannot connect to a Firebase project.
+RUN printf '%s' '{"project_info":{"project_number":"123456789012","project_id":"meowgram-scratch"},"client":[{"client_info":{"mobilesdk_app_id":"1:123456789012:android:0000000000000000000000","android_client_info":{"package_name":"com.purrbrews.meowgram"}},"api_key":[{"current_key":"scratch-placeholder-not-a-real-api-key"}]}],"configuration_version":"1"}' > android/app/google-services.json
+RUN sed -i 's/-Xmx8G/-Xmx2G/;s/MaxMetaspaceSize=4G/MaxMetaspaceSize=1G/' android/gradle.properties \
+    && printf '\norg.gradle.workers.max=2\n' >> android/gradle.properties
+CMD ["flutter", "build", "apk", "--debug"]
+
+FROM sdk AS build
+ARG APP_ENV=production
+ARG APP_DOMAIN=localhost
+ARG HTTP_PORT=8080
+ARG USE_SECURE_SCHEMES=false
+ARG AUTHELIA_ISSUER_URL=http://localhost:9091
+ARG AUTHELIA_JWKS_URL=
+ARG AUTHELIA_CLIENT_ID=meowgram
+ARG API_BASE_URL=http://localhost:8080
+ARG WS_BASE_URL=ws://localhost:8080/ws
+ARG WS_TICKET_ENDPOINT=/api/ws-ticket
+ARG PUSH_DEVICE_ENDPOINT=/api/push/devices
+
+WORKDIR /app
+COPY . .
+RUN flutter pub get && flutter build web --release \
+    --dart-define=APP_ENV="${APP_ENV}" \
+    --dart-define=APP_DOMAIN="${APP_DOMAIN}" \
+    --dart-define=HTTP_PORT="${HTTP_PORT}" \
+    --dart-define=USE_SECURE_SCHEMES="${USE_SECURE_SCHEMES}" \
+    --dart-define=AUTHELIA_ISSUER_URL="${AUTHELIA_ISSUER_URL}" \
+    --dart-define=AUTHELIA_JWKS_URL="${AUTHELIA_JWKS_URL}" \
+    --dart-define=AUTHELIA_CLIENT_ID="${AUTHELIA_CLIENT_ID}" \
+    --dart-define=API_BASE_URL="${API_BASE_URL}" \
+    --dart-define=WS_BASE_URL="${WS_BASE_URL}" \
+    --dart-define=WS_TICKET_ENDPOINT="${WS_TICKET_ENDPOINT}" \
+    --dart-define=PUSH_DEVICE_ENDPOINT="${PUSH_DEVICE_ENDPOINT}"
+
+FROM nginx:1.29-alpine
+COPY nginx.web.conf /etc/nginx/nginx.conf
+COPY --from=build /app/build/web /usr/share/nginx/html
+EXPOSE 8080
+USER nginx

@@ -10,7 +10,7 @@ TARGET="${1:-all}"
 APP_DOMAIN="${APP_DOMAIN:-meow.example.home.arpa}"
 AUTHELIA_DOMAIN="${AUTHELIA_DOMAIN:-auth.example.home.arpa}"
 AUTHELIA_ISSUER="${AUTHELIA_ISSUER:-https://auth.example.home.arpa}"
-AUTHELIA_CLIENT_ID="${AUTHELIA_CLIENT_ID:-meowgram-client}"
+AUTHELIA_CLIENT_ID="${AUTHELIA_CLIENT_ID:-meowgram}"
 VERSION="1.0.1+2"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,6 +48,7 @@ else
     "--dart-define=AUTHELIA_CLIENT_ID=$AUTHELIA_CLIENT_ID"
     "--dart-define=API_BASE_URL=https://$APP_DOMAIN"
     "--dart-define=WS_BASE_URL=wss://$APP_DOMAIN/ws"
+    "--dart-define=WS_TICKET_ENDPOINT=/api/ws-ticket"
     "--dart-define=SYNC_ENDPOINT=/api/messages/sync"
     "--dart-define=HEALTH_ENDPOINT=/healthz"
   )

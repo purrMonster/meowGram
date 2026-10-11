@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -13,11 +15,14 @@ func cleanEnv(t *testing.T) {
 		"DATABASE_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB",
 		"AUTHELIA_DOMAIN", "AUTHELIA_ISSUER", "AUTHELIA_ISSUER_URL", "AUTHELIA_JWKS_URL",
 		"AUTHELIA_CLIENT_ID", "OIDC_CLIENT_ID", "CLIENT_ID", "AUTHELIA_AUDIENCE", "OIDC_AUDIENCE",
-		"SYNC_ENDPOINT", "MESSAGES_SYNC_ENDPOINT", "HEALTH_ENDPOINT", "WS_ENDPOINT", "WS_PATH",
+		"SYNC_ENDPOINT", "MESSAGES_SYNC_ENDPOINT", "HEALTH_ENDPOINT", "WS_ENDPOINT", "WS_PATH", "WS_TICKET_ENDPOINT",
 		"IMMICH_DOMAIN", "IMMICH_API_URL", "CORS_ORIGINS", "GOOGLE_APPLICATION_CREDENTIALS",
+		"PUSH_DEVICE_ENDPOINT", "API_RATE_PER_MINUTE", "API_RATE_BURST",
+		"MESSAGE_RATE_PER_MINUTE", "MESSAGE_RATE_BURST", "GLOBAL_RATE_PER_MINUTE", "GLOBAL_RATE_BURST",
 	} {
 		t.Setenv(k, "")
 	}
+	t.Setenv("AUTHELIA_AUDIENCE", "http://localhost:8080")
 }
 
 func TestConfig_AutheliaDomainDerivation(t *testing.T) {
@@ -59,6 +64,9 @@ func TestConfig_AutheliaDomainDerivation(t *testing.T) {
 	if cfg.WSEndpoint != "/ws" {
 		t.Errorf("expected default WSEndpoint /ws, got: %s", cfg.WSEndpoint)
 	}
+	if cfg.WSTicketEndpoint != "/api/ws-ticket" {
+		t.Errorf("expected default WSTicketEndpoint /api/ws-ticket, got: %s", cfg.WSTicketEndpoint)
+	}
 }
 
 func TestConfig_LocalhostAutheliaDomain(t *testing.T) {
@@ -80,6 +88,20 @@ func TestConfig_LocalhostAutheliaDomain(t *testing.T) {
 
 	if cfg.AutheliaJWKSURL != "http://localhost:9091/jwks.json" {
 		t.Errorf("expected http://localhost:9091/jwks.json, got: %s", cfg.AutheliaJWKSURL)
+	}
+}
+
+func TestConfig_LocalhostLookalikeUsesHTTPS(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("AUTHELIA_DOMAIN", "localhost.attacker.example")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected Load to succeed, got: %v", err)
+	}
+	if cfg.AutheliaIssuer != "https://localhost.attacker.example" {
+		t.Fatalf("expected HTTPS for non-loopback hostname, got: %s", cfg.AutheliaIssuer)
 	}
 }
 
@@ -121,7 +143,80 @@ func TestConfig_DefaultsHaveNoHardcodedDomainsAndMatchClientID(t *testing.T) {
 	if cfg.ImmichDomain != "" || cfg.ImmichAPIURL != "" {
 		t.Errorf("Immich must have no hardcoded default, got %q / %q", cfg.ImmichDomain, cfg.ImmichAPIURL)
 	}
-	if cfg.AutheliaClientID != "meowgram-client" {
+	if cfg.AutheliaClientID != "meowgram" {
 		t.Errorf("default client ID must match the Flutter client, got %q", cfg.AutheliaClientID)
+	}
+}
+
+func TestConfig_OriginPolicyUsesConfiguredOrigins(t *testing.T) {
+	cfg := &Config{
+		AppDomain:   "chat.example.home.arpa",
+		CORSOrigins: []string{"https://chat.example.home.arpa"},
+	}
+	if !cfg.IsAllowedOrigin("https://chat.example.home.arpa") {
+		t.Fatal("configured origin should be allowed")
+	}
+	if cfg.IsAllowedOrigin("http://chat.example.home.arpa") {
+		t.Fatal("an unconfigured insecure origin must not be implicitly allowed")
+	}
+}
+
+func TestConfig_ProductionOriginDefaultsUseHTTPS(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("AUTHELIA_ISSUER", "https://auth.example.home.arpa")
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("APP_DOMAIN", "chat.example.home.arpa")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.IsAllowedOrigin("https://chat.example.home.arpa") {
+		t.Fatal("production default should allow the configured HTTPS app origin")
+	}
+	if cfg.IsAllowedOrigin("http://chat.example.home.arpa") {
+		t.Fatal("production default must not allow plaintext HTTP")
+	}
+}
+
+func TestLoadDotenv_ExplicitEmptyEnvironmentValueWins(t *testing.T) {
+	t.Setenv("DOTENV_EMPTY_OVERRIDE_TEST", "")
+	workingDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workingDir, ".env"), []byte("DOTENV_EMPTY_OVERRIDE_TEST=from-file\n"), 0600); err != nil {
+		t.Fatalf("write dotenv fixture: %v", err)
+	}
+	previousDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(workingDir); err != nil {
+		t.Fatalf("change working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previousDir); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	loadDotenv()
+	if got := os.Getenv("DOTENV_EMPTY_OVERRIDE_TEST"); got != "" {
+		t.Fatalf("explicit empty environment value was overwritten by dotenv: %q", got)
+	}
+}
+
+func TestRateLimitConfiguration(t *testing.T) {
+	for _, raw := range []string{"0", "-1", "nope", "1000001"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv("API_RATE_PER_MINUTE", raw)
+			if _, err := loadRateLimits(); err == nil {
+				t.Fatal("invalid rate accepted")
+			}
+		})
+	}
+	t.Setenv("API_RATE_PER_MINUTE", "240")
+	limits, err := loadRateLimits()
+	if err != nil || limits.APIPerMinute != 240 {
+		t.Fatal("rate override ignored")
 	}
 }

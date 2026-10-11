@@ -17,11 +17,10 @@ import 'package:meowgram_client/src/storage/local_message_repository.dart';
 ///   would point at the newest burst message and skip the gap entirely.
 /// - **Paging**: the server returns at most [pageSize] messages per request; the
 ///   service keeps requesting from the last returned timestamp until a short
-///   page arrives (bounded by [maxPages]).
+///   page arrives.
 /// - Timestamps are sent as UTC ISO 8601 (`toUtc().toIso8601String()`).
 class SyncService {
   static const int pageSize = 500;
-  static const int maxPages = 20;
   static const Duration requestTimeout = Duration(seconds: 15);
   static const Duration retryDelay = Duration(seconds: 15);
 
@@ -41,8 +40,10 @@ class SyncService {
   bool get isSyncing => _isSyncing;
 
   DateTime? _pendingCursor;
+  String? _pendingCursorId;
   Future<void>? _cursorCapture;
   Timer? _retryTimer;
+  final Completer<void> _stopped = Completer<void>();
 
   final StreamController<List<ChatMessage>> _syncCompletedController =
       StreamController<List<ChatMessage>>.broadcast();
@@ -62,12 +63,12 @@ class SyncService {
     String? accessToken,
     this.onSyncCallback,
     this.tokenProvider,
-  })  : _socketService = socketService,
-        _localRepo = localRepo,
-        _httpClient = httpClient ?? http.Client(),
-        _ownsClient = httpClient == null,
-        _baseUrlOverride = baseUrlOverride,
-        _accessToken = accessToken {
+  }) : _socketService = socketService,
+       _localRepo = localRepo,
+       _httpClient = httpClient ?? http.Client(),
+       _ownsClient = httpClient == null,
+       _baseUrlOverride = baseUrlOverride,
+       _accessToken = accessToken {
     _startListening();
   }
 
@@ -81,7 +82,10 @@ class SyncService {
   Future<void> captureCursor() {
     return _cursorCapture = () async {
       final newest = await _localRepo.getNewestMessage();
-      if (newest != null) _pendingCursor = newest.createdAt;
+      if (newest != null) {
+        _pendingCursor = newest.createdAt;
+        _pendingCursorId = newest.id;
+      }
     }();
   }
 
@@ -97,7 +101,9 @@ class SyncService {
         unawaited(captureCursor());
       }
       if (!wasConnected && isNowConnected) {
-        debugPrint('SyncService: WebSocket connected. Triggering catch-up sync...');
+        debugPrint(
+          'SyncService: WebSocket connected. Triggering catch-up sync...',
+        );
         unawaited(_syncFromPendingCursor());
       }
     });
@@ -106,9 +112,10 @@ class SyncService {
   Future<void> _syncFromPendingCursor() async {
     await _cursorCapture;
     final cursor = _pendingCursor;
-    final result = await _run(after: cursor);
+    final result = await _run(after: cursor, afterId: _pendingCursorId);
     if (result != null) {
       _pendingCursor = null;
+      _pendingCursorId = null;
     } else {
       _scheduleRetry();
     }
@@ -127,23 +134,35 @@ class SyncService {
   ///
   /// Uses [after] if given, otherwise the newest cached chat message. Returns the
   /// messages delivered (empty on failure or when there is nothing to sync).
-  Future<List<ChatMessage>> sync({DateTime? after, String? token}) async {
-    return await _run(after: after, token: token) ?? const [];
+  Future<List<ChatMessage>> sync({
+    DateTime? after,
+    String? afterId,
+    String? token,
+  }) async {
+    return await _run(after: after, afterId: afterId, token: token) ?? const [];
   }
 
   /// Returns null on failure so callers can retry.
-  Future<List<ChatMessage>?> _run({DateTime? after, String? token}) async {
+  Future<List<ChatMessage>?> _run({
+    DateTime? after,
+    String? afterId,
+    String? token,
+  }) async {
     if (_isSyncing) {
-      debugPrint('SyncService: Sync already in progress, skipping duplicate call.');
-      return const [];
+      debugPrint(
+        'SyncService: Sync already in progress, skipping duplicate call.',
+      );
+      return null;
     }
 
     _isSyncing = true;
     try {
       DateTime? cursor = after;
+      String? cursorId = afterId;
       if (cursor == null) {
         final newest = await _localRepo.getNewestMessage();
         cursor = newest?.createdAt;
+        cursorId = newest?.id;
       }
 
       // No cached messages: the WebSocket 50-message burst handles fresh hydration.
@@ -157,8 +176,8 @@ class SyncService {
       final effectiveToken = token ?? tokenProvider?.call() ?? _accessToken;
       final all = <ChatMessage>[];
 
-      for (var page = 0; page < maxPages; page++) {
-        final batch = await _fetchPage(cursor!, effectiveToken);
+      while (!_stopped.isCompleted) {
+        final batch = await _fetchPage(cursor!, cursorId, effectiveToken);
         if (batch == null) {
           // Keep what we got, but report failure so the gap is retried.
           _emit(all);
@@ -167,9 +186,12 @@ class SyncService {
         all.addAll(batch);
         if (batch.length < pageSize) break;
         cursor = batch.last.createdAt;
+        cursorId = batch.last.id;
       }
 
-      debugPrint('SyncService: Catch-up sync delivered ${all.length} missed messages.');
+      debugPrint(
+        'SyncService: Catch-up sync delivered ${all.length} missed messages.',
+      );
       return _emit(all);
     } catch (e, stack) {
       debugPrint('SyncService: Error executing catch-up sync: $e\n$stack');
@@ -187,9 +209,18 @@ class SyncService {
     return messages;
   }
 
-  Future<List<ChatMessage>?> _fetchPage(DateTime after, String? token) async {
+  Future<List<ChatMessage>?> _fetchPage(
+    DateTime after,
+    String? afterId,
+    String? token,
+  ) async {
     final uri = Uri.parse(AppConfig.syncUrl(baseUrlOverride: _baseUrlOverride))
-        .replace(queryParameters: {'after': after.toUtc().toIso8601String()});
+        .replace(
+          queryParameters: {
+            'after': after.toUtc().toIso8601String(),
+            if (afterId != null && afterId.isNotEmpty) 'after_id': afterId,
+          },
+        );
 
     final headers = <String, String>{'Accept': 'application/json'};
     if (token != null && token.isNotEmpty) {
@@ -197,11 +228,34 @@ class SyncService {
     }
 
     debugPrint('SyncService: Querying catch-up sync: $uri');
-    final response =
-        await _httpClient.get(uri, headers: headers).timeout(requestTimeout);
+    http.Response response;
+    while (true) {
+      if (_stopped.isCompleted) return null;
+      response = await _httpClient
+          .get(uri, headers: headers)
+          .timeout(requestTimeout);
+      if (response.statusCode != 429) break;
+      // Keep this page's cursor: restarting the whole gap can repeatedly exhaust
+      // the rate budget before ever reaching its end.
+      final seconds =
+          (int.tryParse(response.headers['retry-after'] ?? '') ?? 15).clamp(
+            1,
+            60,
+          );
+      await Future.any([
+        Future<void>.delayed(Duration(seconds: seconds)),
+        _stopped.future,
+      ]);
+      final refreshed = tokenProvider?.call();
+      if (refreshed != null && refreshed.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $refreshed';
+      }
+    }
 
     if (response.statusCode != 200) {
-      debugPrint('SyncService: Sync endpoint responded with ${response.statusCode}');
+      debugPrint(
+        'SyncService: Sync endpoint responded with ${response.statusCode}',
+      );
       return null;
     }
     return parseMessages(jsonDecode(response.body));
@@ -225,6 +279,7 @@ class SyncService {
 
   /// Disposes active listeners and streams.
   void dispose() {
+    if (!_stopped.isCompleted) _stopped.complete();
     _statusSubscription?.cancel();
     _statusSubscription = null;
     _retryTimer?.cancel();

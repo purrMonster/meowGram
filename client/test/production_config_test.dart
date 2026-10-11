@@ -11,7 +11,7 @@ void main() {
       expect(AppConfig.port, equals('443'));
       expect(AppConfig.httpPort, equals(443));
       expect(AppConfig.useSecureSchemes, isTrue);
-      expect(AppConfig.autheliaClientId, equals('meowgram-client'));
+      expect(AppConfig.autheliaClientId, equals('meowgram'));
       expect(AppConfig.autheliaIssuerUrl, startsWith('https://'));
       expect(AppConfig.apiBaseUrl, equals('https://${AppConfig.appDomain}'));
       expect(AppConfig.wsBaseUrl, equals('wss://${AppConfig.appDomain}/ws'));

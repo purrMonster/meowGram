@@ -7,7 +7,7 @@ param (
     [string]$AppDomain = "meow.example.home.arpa",
     [string]$AutheliaDomain = "auth.example.home.arpa",
     [string]$AutheliaIssuer = "https://auth.example.home.arpa",
-    [string]$AutheliaClientId = "meowgram-client",
+    [string]$AutheliaClientId = "meowgram",
     [string]$Version = "1.0.1+2"
 )
 
@@ -25,6 +25,12 @@ $FlutterBin = "flutter"
 if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
     if ($env:FLUTTER_BIN -and (Test-Path $env:FLUTTER_BIN)) {
         $FlutterBin = $env:FLUTTER_BIN
+    }
+}
+
+function Assert-NativeCommandSucceeded([string]$Step) {
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Step failed with exit code $LASTEXITCODE."
     }
 }
 
@@ -56,6 +62,7 @@ if (Test-Path $ConfigFile) {
         "--dart-define=AUTHELIA_CLIENT_ID=$AutheliaClientId",
         "--dart-define=API_BASE_URL=https://$AppDomain",
         "--dart-define=WS_BASE_URL=wss://$AppDomain/ws",
+        "--dart-define=WS_TICKET_ENDPOINT=/api/ws-ticket",
         "--dart-define=SYNC_ENDPOINT=/api/messages/sync",
         "--dart-define=HEALTH_ENDPOINT=/healthz"
     )
@@ -65,11 +72,13 @@ Set-Location $ClientDir
 
 Write-Host "`n[1/7] Fetching Flutter dependencies..." -ForegroundColor Yellow
 & $FlutterBin pub get
+Assert-NativeCommandSucceeded "flutter pub get"
 
 # Target: Web
 if ($Target -eq "all" -or $Target -eq "web") {
     Write-Host "`n[2/7] Building Web Release Bundle..." -ForegroundColor Green
     & $FlutterBin build web --release $DartDefines
+    Assert-NativeCommandSucceeded "flutter build web"
     Write-Host "[OK] Web bundle compiled to client/build/web" -ForegroundColor Green
 }
 
@@ -77,9 +86,11 @@ if ($Target -eq "all" -or $Target -eq "web") {
 if ($Target -eq "all" -or $Target -eq "android") {
     Write-Host "`n[3/7] Building Android App Bundle (AAB for Google Play)..." -ForegroundColor Green
     & $FlutterBin build appbundle --release $DartDefines
+    Assert-NativeCommandSucceeded "flutter build appbundle"
 
     Write-Host "`n[4/7] Building Android Universal APK (Direct Sideload)..." -ForegroundColor Green
     & $FlutterBin build apk --release $DartDefines
+    Assert-NativeCommandSucceeded "flutter build apk"
     Write-Host "[OK] Android APK compiled to client/build/app/outputs/flutter-apk/app-release.apk" -ForegroundColor Green
 }
 
@@ -88,6 +99,7 @@ if ($Target -eq "all" -or $Target -eq "windows") {
     Write-Host "`n[5/7] Building Windows Desktop Release..." -ForegroundColor Green
     if ($IsWin) {
         & $FlutterBin build windows --release $DartDefines
+        Assert-NativeCommandSucceeded "flutter build windows"
         Write-Host "[OK] Windows release compiled to client/build/windows/x64/runner/Release" -ForegroundColor Green
     } else {
         Write-Host "Notice: Windows desktop builds must be executed on a Windows host with Visual Studio C++ workload." -ForegroundColor DarkYellow
@@ -99,6 +111,7 @@ if ($Target -eq "all" -or $Target -eq "macos") {
     Write-Host "`n[6/7] Building macOS Desktop Release..." -ForegroundColor Green
     if ($IsMac) {
         & $FlutterBin build macos --release $DartDefines
+        Assert-NativeCommandSucceeded "flutter build macos"
         Write-Host "[OK] macOS release compiled to client/build/macos/Build/Products/Release" -ForegroundColor Green
     } else {
         Write-Host "Notice: macOS builds must be executed on a macOS host with Xcode installed." -ForegroundColor DarkYellow
@@ -110,6 +123,7 @@ if ($Target -eq "all" -or $Target -eq "ios") {
     Write-Host "`n[7/7] Building iOS Archive / IPA..." -ForegroundColor Green
     if ($IsMac) {
         & $FlutterBin build ipa --release --no-codesign $DartDefines
+        Assert-NativeCommandSucceeded "flutter build ipa"
         Write-Host "[OK] iOS archive compiled to client/build/ios/archive/Runner.xcarchive" -ForegroundColor Green
     } else {
         Write-Host "Notice: iOS IPA builds must be executed on a macOS host with Xcode installed." -ForegroundColor DarkYellow
@@ -121,6 +135,7 @@ if ($Target -eq "all" -or $Target -eq "server" -or $Target -eq "docker") {
     Set-Location $ProjectRoot
     Write-Host "`n[*] Building Backend Production Docker Image (meowgram:1.0.1)..." -ForegroundColor Cyan
     docker build -t meowgram:1.0.1 -t meowgram:latest -f "$ServerDir/Dockerfile" "$ServerDir"
+    Assert-NativeCommandSucceeded "docker build"
     Write-Host "[OK] Docker image meowgram:1.0.1 built successfully." -ForegroundColor Green
 }
 

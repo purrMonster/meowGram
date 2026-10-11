@@ -1,0 +1,26 @@
+name: Scratch verification
+on:
+  pull_request:
+  push:
+    branches: [main, 'test/**', 'fix/**', 'feat/**', 'refactor/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Go, PostgreSQL, restore, Flutter and web
+        run: sh deploy/scripts/verify.sh
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Android debug APK with synthetic Firebase configuration
+        run: docker compose -p meowgram-android-ci -f deploy/verify.compose.yml run --build --rm android
+      - name: Remove scratch resources
+        if: always()
+        run: docker compose -p meowgram-android-ci -f deploy/verify.compose.yml down --volumes --remove-orphans

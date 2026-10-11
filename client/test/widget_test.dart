@@ -13,7 +13,7 @@ void main() {
       if (AppConfig.isDevelopment) {
         expect(AppConfig.environment, equals('development'));
         expect(AppConfig.appDomain, equals('localhost'));
-        expect(AppConfig.autheliaClientId, equals('meowgram-client'));
+        expect(AppConfig.autheliaClientId, equals('meowgram'));
         expect(AppConfig.autheliaIssuerUrl, equals('http://localhost:9091'));
         expect(AppConfig.apiBaseUrl, equals('http://localhost:8080'));
         expect(AppConfig.wsBaseUrl, equals('ws://localhost:8080/ws'));
@@ -27,8 +27,7 @@ void main() {
       }
       expect(AppConfig.authRedirectUri, isNotEmpty);
 
-      final authWs = AppConfig.authenticatedWsUrl('sample_token_xyz');
-      expect(authWs, contains('token=sample_token_xyz'));
+      expect(AppConfig.wsTicketUrl, contains('/api/ws-ticket'));
     });
 
     test('Endpoint resolvers and Authelia discovery contracts resolve correctly', () {

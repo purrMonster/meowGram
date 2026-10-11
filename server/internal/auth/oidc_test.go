@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ func TestOIDCVerifier_TrailingSlashAndAudience(t *testing.T) {
 		AutheliaDomain:   "auth.example.home.arpa",
 		AppDomain:        "meow.example.home.arpa",
 		AutheliaClientID: "meowgram",
+		AutheliaAudience: "https://meow.example.home.arpa",
 	}
 
 	rawClaims := map[string]interface{}{
@@ -68,6 +70,7 @@ func TestOIDCVerifier_FallbackUsernameHierarchy(t *testing.T) {
 		AutheliaIssuer:   "https://auth.example.home.arpa",
 		AppDomain:        "meow.example.home.arpa",
 		AutheliaClientID: "meowgram",
+		AutheliaAudience: "https://meow.example.home.arpa",
 	}
 
 	tests := []struct {
@@ -80,7 +83,7 @@ func TestOIDCVerifier_FallbackUsernameHierarchy(t *testing.T) {
 			claims: map[string]interface{}{
 				"iss":   "https://auth.example.home.arpa",
 				"sub":   "uuid-123",
-				"aud":   "meowgram",
+				"aud":   "https://meow.example.home.arpa",
 				"exp":   time.Now().Add(1 * time.Hour).Unix(),
 				"name":  "Captain Whisker",
 				"email": "captain@example.home.arpa",
@@ -92,7 +95,7 @@ func TestOIDCVerifier_FallbackUsernameHierarchy(t *testing.T) {
 			claims: map[string]interface{}{
 				"iss":   "https://auth.example.home.arpa",
 				"sub":   "uuid-123",
-				"aud":   "meowgram",
+				"aud":   "https://meow.example.home.arpa",
 				"exp":   time.Now().Add(1 * time.Hour).Unix(),
 				"email": "fluffy_cat@example.home.arpa",
 			},
@@ -103,7 +106,7 @@ func TestOIDCVerifier_FallbackUsernameHierarchy(t *testing.T) {
 			claims: map[string]interface{}{
 				"iss": "https://auth.example.home.arpa",
 				"sub": "141a5dfa-uuid",
-				"aud": "meowgram",
+				"aud": "https://meow.example.home.arpa",
 				"exp": time.Now().Add(1 * time.Hour).Unix(),
 			},
 			expectedUsername: "141a5dfa-uuid",
@@ -198,12 +201,13 @@ func TestOIDCVerifier_MandatoryClaims(t *testing.T) {
 	cfg := &config.Config{
 		AutheliaIssuer:   "https://auth.example.home.arpa",
 		AppDomain:        "meow.example.home.arpa",
-		AutheliaClientID: "meowgram-client",
+		AutheliaClientID: "meowgram",
+		AutheliaAudience: "https://meow.example.home.arpa",
 	}
 	future := time.Now().Add(time.Hour).Unix()
 
 	if err := verifyClaims(t, cfg, map[string]interface{}{
-		"iss": "https://auth.example.home.arpa", "sub": "u1", "aud": "meowgram-client",
+		"iss": "https://auth.example.home.arpa", "sub": "u1", "aud": "meowgram",
 	}); err == nil {
 		t.Error("token without exp must be rejected (it would never expire)")
 	}
@@ -213,9 +217,14 @@ func TestOIDCVerifier_MandatoryClaims(t *testing.T) {
 		t.Error("token without aud must be rejected")
 	}
 	if err := verifyClaims(t, cfg, map[string]interface{}{
-		"iss": "https://auth.example.home.arpa", "sub": "u1", "exp": future, "aud": "meowgram-client",
+		"iss": "https://auth.example.home.arpa", "sub": "u1", "exp": future, "aud": "meowgram",
+	}); err == nil {
+		t.Error("OIDC ID token audience must not be accepted as an API bearer token")
+	}
+	if err := verifyClaims(t, cfg, map[string]interface{}{
+		"iss": "https://auth.example.home.arpa", "sub": "u1", "exp": future, "aud": "https://meow.example.home.arpa",
 	}); err != nil {
-		t.Errorf("token for the configured client ID must be accepted: %v", err)
+		t.Errorf("token for the configured API audience must be accepted: %v", err)
 	}
 	if err := verifyClaims(t, cfg, map[string]interface{}{
 		"iss": "https://auth.example.home.arpa", "sub": "u1", "exp": future, "aud": "some-other-app",
@@ -228,7 +237,7 @@ func TestOIDCVerifier_StrictConfiguredAudience(t *testing.T) {
 	cfg := &config.Config{
 		AutheliaIssuer:   "https://auth.example.home.arpa",
 		AppDomain:        "meow.example.home.arpa",
-		AutheliaClientID: "meowgram-client",
+		AutheliaClientID: "meowgram",
 		AutheliaAudience: "https://meow.example.home.arpa",
 	}
 	future := time.Now().Add(time.Hour).Unix()
@@ -243,7 +252,43 @@ func TestOIDCVerifier_StrictConfiguredAudience(t *testing.T) {
 	if err := verifyClaims(t, cfg, map[string]interface{}{
 		"iss": "https://auth.example.home.arpa", "sub": "u1", "exp": future,
 		"aud": []string{"https://meow.example.home.arpa/"},
-	}); err != nil {
-		t.Errorf("configured audience (with trailing slash) must be accepted: %v", err)
+	}); err == nil {
+		t.Error("audience comparison must be exact; trailing slash changes the value")
+	}
+}
+
+func TestOIDCVerifier_RejectsIssuerAliases(t *testing.T) {
+	cfg := &config.Config{
+		AutheliaIssuer:   "https://auth.example.home.arpa",
+		AutheliaDomain:   "auth.example.home.arpa",
+		AutheliaAudience: "https://meow.example.home.arpa",
+	}
+	future := time.Now().Add(time.Hour).Unix()
+
+	for _, issuer := range []string{
+		"http://auth.example.home.arpa",
+		"auth.example.home.arpa",
+		"https://auth.example.home.arpa/other",
+	} {
+		t.Run(issuer, func(t *testing.T) {
+			err := verifyClaims(t, cfg, map[string]interface{}{
+				"iss": issuer, "sub": "u1", "exp": future,
+				"aud": "https://meow.example.home.arpa",
+			})
+			if err == nil {
+				t.Errorf("issuer alias %q must be rejected", issuer)
+			}
+		})
+	}
+}
+
+func TestExtractToken_RequiresBearerHeader(t *testing.T) {
+	request := httptest.NewRequest("GET", "/api/messages/sync?token=query-secret", nil)
+	if got := extractToken(request); got != "" {
+		t.Fatalf("query token must not authenticate HTTP requests; got %q", got)
+	}
+	request.Header.Set("Authorization", "Bearer header-token")
+	if got := extractToken(request); got != "header-token" {
+		t.Fatalf("expected bearer header token, got %q", got)
 	}
 }

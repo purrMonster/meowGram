@@ -1,12 +1,12 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.11.0  
-> **Status**: Release **1.0.1 (stable)**: fixes the issues found in the 2026-10-07 review. See [§12.9](#129-release-101-resolution) for what was fixed and what remains open.  
+> **Document Version**: 1.13.0
+> **Status**: Full codebase re-audit is in progress on `refactor/full-codebase-audit`; see [§12.10](#1210-review-hardening) and [§12.11](#1211-full-codebase-re-audit) for changes and deployment prerequisites. Release 1.0.1 remains the latest deployed release.
 > **Author**: Lead Developer / Antigravity IDE; §12 and corrections by Claude  
-> **Last Updated**: 2026-10-07  
+> **Last Updated**: 2026-10-10
 
 > [!IMPORTANT]
-> Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; where release 1.0.1 resolves them, they are additionally marked **✅ Fixed in 1.0.1**. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
+> Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; §§12.10–12.11 record code changes that are not yet deployed. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
 
 ---
 
@@ -32,8 +32,8 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
   - Hive NoSQL local storage (`hive_flutter`) enabling **Instant Offline Launch** (loading cached messages immediately on launch before live WebSocket connection).
   - Cache-to-Live Handoff: Seamless synchronization and deduplication between the offline Hive cache and live 50-message WebSocket bursts. **⚠ Correction**: the first frame is currently still blocked by auth refresh and Firebase setup in `main.dart` (§12, H6). ✅ **Fixed in 1.0.1**: only Hive and the stored session load before `runApp`; refresh, notifications, Firebase and background sync run afterwards.
 - **Catch-Up Synchronization Pipeline (UST-1.4.3)**:
-  - Dedicated REST endpoint `GET /api/messages/sync?after={iso8601_timestamp}` querying PostgreSQL messages where `created_at > {timestamp}` chronologically (limit 500).
-  - Client-side `SyncService` triggered automatically upon WebSocket reconnection, retrieving the newest cached timestamp and requesting gap-fill messages. **⚠ Correction**: this cursor is racy and only one page is fetched, so gaps can persist (§12, H5). ✅ **Fixed in 1.0.1**: the cursor is snapshotted before connecting, and the client pages until it's caught up.
+  - Dedicated REST endpoint `GET /api/messages/sync?after={iso8601_timestamp}&after_id={uuid}` querying messages with a stable `(created_at, id)` cursor (limit 500).
+  - Client-side `SyncService` is triggered on WebSocket reconnection, uses the last cached chat message as its resume cursor, and pages until caught up. The backend background sync also follows every full page. Older timestamp-only cursors remain accepted for upgrade compatibility.
   - Strict timezone standardization: timestamps are normalized to UTC (`toUtc().toIso8601String()`) and parsed to UTC before executing PostgreSQL `TIMESTAMPTZ` comparisons.
   - Deduplicating merge in `ChatBloc`: incoming messages are deduplicated by PostgreSQL UUID against live WebSocket hydration bursts and active state, sorted chronologically, and persisted to Hive.
 - **Post-Login UAT Hardening (Release 1)**:
@@ -52,7 +52,7 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Desktop Redirect URI** | RFC 8252 Loopback HTTP (`http://127.0.0.1:8088/callback`) | Standard for native desktop apps on Windows/macOS/Linux. Eliminates OS custom URI scheme registry requirements during dev/testing. |
 | **Web Redirect URI** | Host Origin (`Uri.base.origin`) | Seamless in-browser redirect on Web. URL inspection captures `code` and `state` parameters without local socket binding. **⚠ Correction**: not working; the URL is inspected before the browser opens and the PKCE verifier is lost on the redirect page load (§12, H7). ✅ **Fixed in 1.0.1**: same-tab redirect with PKCE state in `sessionStorage`; the code is exchanged on startup. |
 | **Mobile Redirect URI** | Custom URL Scheme (`meowgram://callback`) | Deep link interception via `app_links` on iOS and Android. Replaces loopback sockets on mobile OSes. |
-| **Token Transport to WS** | URL Query Parameter (`?token={access_token}`) | Standard web browsers do not allow arbitrary HTTP headers (such as `Authorization`) during WebSocket handshake (`new WebSocket(...)`). **⚠ Known gap**: the token is exposed to anything logging full URLs, and the chat screen currently renders this URL, token included, on screen (§12, H4). ✅ **Fixed in 1.0.1**: the URL shown is redacted. Moving the token out of the URL remains open. |
+| **Token Transport to WS** | Authenticated ticket exchange (`POST /api/ws-ticket`) | The client exchanges its access token for a random, one-use 30-second ticket; only the ticket appears in the WebSocket URL. The ticket is hashed in server memory and consumed atomically. |
 | **Auth State Management** | `AuthController` with `refreshListenable` GoRouter | Declarative route protection. Automatically redirects `/login` -> `/chat` on token acquisition and `/chat` -> `/login` on expiry/logout. |
 | **Secure Token Persistence** | `flutter_secure_storage` (`TokenStorage`) | Persists tokens to iOS Keychain (`first_unlock`) and Android KeyStore immediately upon PKCE exchange. Restores session on app startup and foregrounding (`WidgetsBindingObserver`). |
 | **Username Claim Resolution** | Token Claim Hierarchy | Resolves user display name from `preferred_username` -> `name` -> `email prefix` -> `sub` UUID fallback, preventing raw Authelia UUIDs in the UI. |
@@ -69,7 +69,7 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 | **Mobile Keyboard Adaptation** | `SafeArea` + `viewInsets` in `ChatInputBar` | Prevents software keyboard from overlapping chat input bar on Android/iOS without double-padding on Web/Desktop. |
 | **Message Ordering Guarantee** | Chronological Sorting & In-Memory Deduplication | Re-sorts by `createdAt` ascending and deduplicates by PostgreSQL UUID to guarantee deterministic ordering across network jitters. |
 | **Token Refresh Lifecycle** | Proactive Background Timer (`expiresAt - 60s`) | Silently exchanges `refresh_token` for a fresh `access_token` prior to expiration, preventing WebSocket disconnects during active chat. **⚠ Correction**: any refresh failure, including being offline, triggers `logout()`, and timer and app-resume refreshes can race (§12, H6). ✅ **Fixed in 1.0.1**: refresh is single-flight, and only an HTTP 400/401 rejection ends the session; network errors retry. |
-| **Backend OIDC Verifier** | JWKS Remote KeySet + Normalized Claims | Cryptographically verifies incoming Bearer JWTs against Authelia's JWKS endpoint with trailing slash normalization and multi-audience matching. **⚠ Correction**: multi-audience matching includes a hardcoded allow-list and accepts tokens without `aud`/`exp` (§12, H3). ✅ **Fixed in 1.0.1**: no hardcoded list; `AUTHELIA_AUDIENCE`, when set, is the only accepted audience. |
+| **Backend OIDC Verifier** | JWKS Remote KeySet + strict API audience | Cryptographically verifies signed JWT access tokens against Authelia's JWKS and requires `sub`, `exp`, and one configured API audience. The OIDC client ID is never an API audience. Authelia must issue JWT access tokens with the API audience. |
 | **Broadcast Engine** | Go In-Memory `Hub` with Goroutine Channels | Highly performant, zero external messaging broker (Redis/RabbitMQ) dependency needed for single-node core. Suited to household scale; no load testing has been done, so throughput claims are unverified. |
 | **Real-Time Presence** | Hub Presence Frames (`type: "presence"`) | Dynamically tracks connected clients and broadcasts online roster on join/disconnect, eliminating hardcoded mock member lists. |
 | **Write Durability** | **Persistence Before Broadcast** | `ReadPump` saves message to PostgreSQL *before* queueing into `hub.Broadcast`. If the database write fails or client drops mid-flight, uncommitted state never corrupts peer chat streams. |
@@ -343,9 +343,10 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
        │                         │◄─────────────────────┤                    │                    │
        │                         │     DateTime?        │                    │                    │
        │                         │                      │                    │                    │
-       │                         │ (3) GET /api/messages/sync?after={UTC_ISO}│                    │
+       │                         │ (3) GET /api/messages/sync?after={UTC_ISO}&after_id={UUID}│       │
        │                         ├───────────────────────────────────────────────────────────────►│
        │                         │                                           │                    │ (4) created_at > $1
+       │                         │                                           │                    │ OR (created_at = $1 AND id > $2)
        │                         │                                           │                    │     LIMIT 500
        │                         │◄───────────────────────────────────────────────────────────────┤
        │                         │     JSON: List<Message>                   │                    │
@@ -364,24 +365,18 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 
 ### 7.1 Gap Analysis & The Need for Catch-Up Sync
 - **The Problem**: When a user was offline for minutes or hours (e.g. laptop closed or device in airplane mode), dozens or hundreds of messages may have been broadcast. The default WebSocket reconnection handshake emits a burst of the 50 most recent messages (`SendHistory(ctx, 50)`). If more than 50 messages were sent while offline, a permanent gap remains between the user's latest local message and the 50-message burst.
-- **The Solution**: A dedicated REST endpoint (`GET /api/messages/sync?after={timestamp}`) allows the client to fetch all messages created strictly after the newest locally cached message, up to 500 messages per request.
-- **⚠ Correction (gap can still persist)**:
-  1. The cursor is read from Hive *after* the socket reports `connected`, while the history burst and the client's own `system` join notice (timestamped *now*) are being written into the same box. If those writes land first, the request becomes `after≈now` and returns nothing.
-  2. `system`/`error` items count as "newest".
-  3. Only one page of 500 is fetched; there is no loop, and the response doesn't say whether more exist.
-  4. Errors and non-200 responses return `[]` silently, with no retry.
-- **Fix direction**: snapshot the newest *chat message with a server `id`* before connecting, then page until fewer than 500 come back, or switch the server to an id-based resume cursor.
-- ✅ **Fixed in 1.0.1**: snapshot before connect and on every drop; paging (max 20 × 500); failures retry after 15 s. The server sets `X-Has-More: true` on full pages.
+- **The Solution**: A dedicated REST endpoint (`GET /api/messages/sync?after={timestamp}&after_id={uuid}`) lets the client page through messages after a stable timestamp and UUID cursor, up to 500 messages per request.
+- **Cursor and paging**: The cursor is `(created_at, id)` so messages sharing a timestamp are not skipped. The client captures the newest cached chat message before reconnecting and requests pages until one is shorter than 500 messages. Failed pages retain the cursor and retry after 15 seconds.
 
 ### 7.2 Endpoint Contract & Timezone Standardization
-- **Endpoint**: `GET /api/messages/sync?after={iso8601_timestamp}`
-- **Security**: Authenticated via Authelia OIDC Bearer token (`Authorization: Bearer <token>`) or `?token=<token>`.
-- **Query Parameter**: `after` (mandatory, ISO 8601 / RFC 3339 formatted).
+- **Endpoint**: `GET /api/messages/sync?after={iso8601_timestamp}&after_id={uuid}`
+- **Security**: HTTP sync and ticket exchange require an Authelia OIDC Bearer token (`Authorization: Bearer <token>`). The WebSocket authenticates with the short-lived one-use ticket from `POST /api/ws-ticket`; access tokens are never accepted in its URL.
+- **Query Parameters**: `after` (mandatory, ISO 8601 / RFC 3339 formatted); `after_id` (optional UUID used to disambiguate messages with the same timestamp; omitted for old timestamp-only cursors).
 - **Timezone Standardization Architecture**:
   - **Client**: `newest.createdAt.toUtc().toIso8601String()` produces RFC 3339 with `Z` suffix (e.g. `2026-10-03T13:40:00.123456Z`).
   - **URL Encoding**: `Uri.replace(queryParameters: {'after': afterIso})` safely percent-encodes colons and plus signs.
   - **Go Backend Parser (`ParseSyncTimestamp`)**: Supports `RFC3339Nano`, `RFC3339`, ISO variants, and numeric epoch timestamps. Resolves space-encoded `+` characters in timezone offsets. **⚠ Correction**: the `2006-01-02 15:04:05` (space-separated) layout can never match, because the `+`-restoration step rewrites the space first. Verified: `"2026-10-03 13:40:00"` → error. ✅ **Fixed in 1.0.1**: only a trailing ` HH:MM` after a `T` time is treated as an offset.
-  - **Database Query**: Converted to `.UTC()` before parameter binding (`$1`). PostgreSQL stores `created_at` as `TIMESTAMPTZ` (UTC internally), guaranteeing mathematically exact comparison (`created_at > $1`).
+  - **Database Query**: Converted to `.UTC()` before parameter binding (`$1`). PostgreSQL stores `created_at` as `TIMESTAMPTZ` (UTC internally); pagination compares `created_at`, then UUID, with the same ordering as the client timeline.
 - **Response**: Array of message objects `[]*model.Message` serialized as JSON (HTTP 200 OK).
 
 ### 7.3 Conflict Resolution & In-Memory Deduplication
@@ -404,31 +399,34 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 | `APP_ENV` | `development` | `production` | Alias for `ENVIRONMENT`. |
 | `LOG_LEVEL` | `debug` | `info` | Minimum log verbosity (`debug`, `info`, `warn`, `error`). |
 | `USE_SECURE_SCHEMES` | `false` | `true` | Enforces `https://` and `wss://` protocols. |
-| `HOST_HTTP_PORT` | `8080` | `8080` | Host port exposed on the host machine by Docker Compose. |
+| `HOST_HTTP_PORT` | `127.0.0.1:8080` | `127.0.0.1:8080` | Loopback host binding for the backend. |
+| `HOST_WEB_PORT` | `127.0.0.1:8081` | `127.0.0.1:8081` | Loopback host binding for the Flutter web client. |
 | `HTTP_PORT` | `8080` | `8080` | Internal container port bound by the Go HTTP server. |
 | `WS_PORT` | `8080` | `8080` | WebSocket endpoint port (unified with `HTTP_PORT` over `/ws`). |
 | `API_BASE_URL` | *(Computed)* | `https://meow.example.home.arpa` | Full REST API base URL override. |
 | `WS_BASE_URL` | *(Computed)* | `wss://meow.example.home.arpa/ws` | Full WebSocket base URL override. |
 | `WS_ENDPOINT` | `/ws` | `/ws` | WebSocket upgrade route path. |
+| `WS_TICKET_ENDPOINT` | `/api/ws-ticket` | `/api/ws-ticket` | Authenticated endpoint that issues short-lived one-use WebSocket tickets. |
 | `SYNC_ENDPOINT` | `/api/messages/sync` | `/api/messages/sync` | Catch-up synchronization REST route path. |
 | `HEALTH_ENDPOINT` | `/healthz` | `/healthz` | Health check probe route path. |
 | `AUTHELIA_DOMAIN` | `localhost:9091` | `auth.example.home.arpa` | FQDN or host:port for Authelia OIDC identity provider. |
 | `AUTHELIA_ISSUER` | *(Derived)* | `https://auth.example.home.arpa` | Base Issuer URL for Authelia OIDC provider. Derived from `AUTHELIA_DOMAIN`. |
 | `AUTHELIA_ISSUER_URL` | *(Derived)* | `https://auth.example.home.arpa` | Alias for `AUTHELIA_ISSUER`. |
-| `AUTHELIA_CLIENT_ID` | `meowgram-client` | `meowgram-client` | Client ID accepted as `aud`. **⚠ Mismatch**: AGENTS.md and the server default say `meowgram`, but the Flutter client, `config/*.json` and `build_all.*` use `meowgram-client`. It only worked because both strings were hardcoded as always-allowed audiences in `oidc.go`. **1.0.1**: the server default is now `meowgram-client` (matches the deployed client), and the hardcoded list is gone. AGENTS.md still names `meowgram`; the owner should decide which to keep. |
-| `AUTHELIA_AUDIENCE` | *(Optional)* | `https://meow.example.home.arpa` | Expected audience (`aud`). **⚠ Correction**: there is no default derivation. When unset, tokens with **no** `aud` are accepted. Even when set, `meowgram`, `meowgram-client`, the client ID and `APP_DOMAIN` variants are still accepted. **Not passed by `docker-compose.yml`.** ✅ **Fixed in 1.0.1**: if set, it is the *only* accepted audience. If unset, `AUTHELIA_CLIENT_ID` and `https://APP_DOMAIN` are accepted. A token without `aud` is always rejected. Compose passes it through. |
-| `AUTHELIA_DOMAIN` (server) | *(unset)* | `auth.example.home.arpa` | Also widens issuer matching to `http(s)://<domain>` and the bare domain. Not passed by compose. |
-| `GOOGLE_APPLICATION_CREDENTIALS` | *(unset)* | `/run/secrets/fcm.json` | Path to the FCM service-account JSON. When unset, push is disabled with a warning. **Not passed or mounted by `docker-compose.yml`**, so push is off in Docker deployments. |
+| `AUTHELIA_CLIENT_ID` | `meowgram` | `meowgram` | Public OIDC client ID. The Authelia registration in `purrbrews-containers` must be aligned before deploying this branch. |
+| `AUTHELIA_AUDIENCE` | `http://localhost:8080` | `https://meow.example.home.arpa` | Required API audience. The backend accepts only this value; do not set it to the OIDC client ID. Configure Authelia to issue signed JWT access tokens with this audience. |
+| `AUTHELIA_DOMAIN` | *(unset)* | `auth.example.home.arpa` | Also widens issuer matching to `http(s)://<domain>`. Passed through by Compose. |
+| `GOOGLE_APPLICATION_CREDENTIALS` | *(unset)* | `/run/secrets/fcm-service-account.json` | Path to FCM service-account JSON. Compose passes the path and mounts `deploy/secrets` read-only. |
 | `MIGRATIONS_PATH` | `/migrations` (image) | `/migrations` | Directory of `golang-migrate` SQL files; migrations run at every startup. |
 | `READ_TIMEOUT_SECONDS` / `WRITE_TIMEOUT_SECONDS` / `IDLE_TIMEOUT_SECONDS` | `15` / `15` / `60` | same | `http.Server` timeouts. |
-| `IMMICH_DOMAIN` / `IMMICH_API_URL` | **hardcoded real domain fallback in `config.go`** | — | Release 2. The hardcoded default violates the zero-hardcoding rule. |
+| `IMMICH_DOMAIN` / `IMMICH_API_URL` | *(unset)* | deployment-specific | Release 2. No default; the API key belongs on the server, never in a client define. |
 | `AUTHELIA_JWKS_URL` | *(Derived)* | `https://auth.example.home.arpa/jwks.json` | URL for Authelia public keys (JWKS). Derived from `AUTHELIA_ISSUER`. |
 | `POSTGRES_USER` | `meowgram` | `meowgram_prod` | PostgreSQL user account. |
 | `POSTGRES_PASSWORD` | `meowgram_secret_dev...` | *(Strong secret)* | PostgreSQL password. |
 | `POSTGRES_DB` | `meowgram` | `meowgram` | PostgreSQL database name. |
 | `DATABASE_URL` | `postgres://...` | `postgres://...` | Full connection string for Go backend. |
-| `CORS_ORIGINS` | *(Localhost list)* | `https://meow.example.home.arpa` | Comma-separated list of allowed client origins. |
-| `TRAEFIK_ENTRYPOINTS` | `web` | `web` / `websecure` | Traefik entrypoint(s) bound to backend router (`meowgram-server`). |
+| `CORS_ORIGINS` | *(Derived: local origins in development; HTTPS app origin in staging/production)* | `https://meow.example.home.arpa` | Comma-separated allow-list. Set explicitly when serving the app from another origin. |
+| `TRAEFIK_ENTRYPOINTS` | `web` | `web` / `websecure` | Traefik entrypoint(s) used by the backend and web routers. |
+| `BACKUP_RETENTION_DAYS` | `14` | `14` or more | Number of days of local PostgreSQL backups to retain. |
 
 ### Flutter Client Environment Variables & `.env` Controllability
 
@@ -446,11 +444,12 @@ All endpoints are **compile-time only**, set via `--dart-define-from-file=<file>
 | `API_BASE_URL` | *(Computed)* | Direct override for HTTP REST API base URL. |
 | `WS_BASE_URL` | *(Computed)* | Direct override for WebSocket base URL. |
 | `WS_ENDPOINT` | `/ws` | WebSocket relative route path. |
+| `WS_TICKET_ENDPOINT` | `/api/ws-ticket` | Authenticated endpoint for short-lived WebSocket tickets. |
 | `SYNC_ENDPOINT` | `/api/messages/sync` | Catch-up sync endpoint path or full URL. |
 | `HEALTH_ENDPOINT` | `/healthz` | Health check endpoint path or full URL. |
 | `AUTHELIA_DOMAIN` | `localhost:9091` | Authelia identity provider domain. Setting this auto-derives all OIDC endpoints! |
 | `AUTHELIA_ISSUER_URL` | *(Derived)* | Authelia OIDC base issuer URL for discovery. |
-| `AUTHELIA_CLIENT_ID` | `meowgram-client` | Public client identifier registered in Authelia. |
+| `AUTHELIA_CLIENT_ID` | `meowgram` | Public client identifier registered in Authelia. This repository now uses the canonical ID; align the Authelia registration in `purrbrews-containers` before deploying. |
 | `AUTHELIA_JWKS_URL` | *(Derived)* | Authelia cryptographic public keys URL. |
 | `AUTHELIA_DISCOVERY_URL` | *(Derived)* | OpenID configuration discovery endpoint URL. |
 | `AUTHELIA_AUTHORIZATION_ENDPOINT` | *(Derived)* | OIDC PKCE authorization endpoint. |
@@ -494,7 +493,7 @@ cd c:\Users\jyotirmoyc\Desktop\Projects\meowGram\client
 flutter run -d chrome `
   --dart-define=APP_DOMAIN=localhost `
   --dart-define=HTTP_PORT=8080 `
-  --dart-define=AUTHELIA_CLIENT_ID=meowgram-client `
+  --dart-define=AUTHELIA_CLIENT_ID=meowgram `
   --dart-define=AUTHELIA_ISSUER_URL=http://localhost:9091 `
   --dart-define=APP_ENV=development
 ```
@@ -504,7 +503,7 @@ flutter run -d chrome `
 flutter run -d windows `
   --dart-define=APP_DOMAIN=localhost `
   --dart-define=HTTP_PORT=8080 `
-  --dart-define=AUTHELIA_CLIENT_ID=meowgram-client `
+  --dart-define=AUTHELIA_CLIENT_ID=meowgram `
   --dart-define=AUTHELIA_ISSUER_URL=http://localhost:9091 `
   --dart-define=APP_ENV=development
 ```
@@ -535,7 +534,7 @@ All production binaries must be compiled with `--dart-define` flags targeting th
 --dart-define=HTTP_PORT=443 \
 --dart-define=USE_SECURE_SCHEMES=true \
 --dart-define=AUTHELIA_ISSUER_URL=https://auth.example.home.arpa \
---dart-define=AUTHELIA_CLIENT_ID=meowgram-client \
+--dart-define=AUTHELIA_CLIENT_ID=meowgram \
 --dart-define=API_BASE_URL=https://meow.example.home.arpa \
 --dart-define=WS_BASE_URL=wss://meow.example.home.arpa/ws
 ```
@@ -591,7 +590,7 @@ Apple platforms enforce cryptographic code signing and provisioning profiles tha
 
 #### 10.4.1 Day 1 iOS Testing: Progressive Web App (PWA) Mode
 > [!WARNING]
-> Not usable yet. The Go backend serves no static files and compose has no frontend container, so `https://meow.<domain>/` returns 404 (AGENTS.md known gap). Web login is also broken (§12, H7).
+> The review-hardening branch adds a Flutter web image to Compose. A deployment must rebuild and start it before the root URL is served. Local bind is `127.0.0.1:8081`; the optional development Traefik routes `/` to the frontend and `/api`, `/ws`, and `/healthz` to the backend.
 
 To test on iOS devices without waiting for Apple Developer Team certificate provisioning:
 1. Navigate to `https://meow.example.home.arpa` in Safari on iOS.
@@ -893,7 +892,10 @@ Severity: **High** = security/privacy exposure, data loss, or a platform that do
 - **`README.md`** still describes the echo-server phase (AGENTS.md acknowledges this; it should be rewritten or reduced to a pointer here).
 - **This runbook** previously claimed tests were passing, `Runner.entitlements`, `AppConfig.initialize()`/runtime `.env` loading, a 512-byte message limit, a schema snippet that didn't match the migration, gitignored FCM credentials, compose injection of FCM credentials, and a registry-push rollout. All of these are corrected above.
 
-### 12.6 Recommended order of work
+### 12.6 Recommended order of work at release 1.0.1
+
+This is the plan recorded before review hardening; items addressed by the current
+branch are summarized in §12.10.
 
 Items 1–6 of the original plan were completed in release 1.0.1 (§12.9). Remaining, each on its own branch per AGENTS.md §1:
 
@@ -966,4 +968,203 @@ Verification for 1.0.1:
 | Low: timestamp layout, HTML escaping, stray callbacks, `withOpacity`, mock rooms, config test isolation | ✅ Fixed | |
 | Low: duplicate unique index, nonce not validated, `gradlew` gitignored, CRLF (`.gitattributes`), `golang:alpine` unpinned | Open | Low risk; left out of a stability release on purpose |
 
-**Still open** (AGENTS.md §4 and above): token in the WebSocket URL; web bundle not served; no database backups; per-device push tokens; rate limiting; the `google-services` Gradle plugin `4.3.15` alongside AGP `9.1.0` (Android builds were not run in this review; bump it if the build complains).
+**Open at release 1.0.1**: token in the WebSocket URL; web bundle not served; no database backups; per-device push tokens; rate limiting; the `google-services` Gradle plugin `4.3.15` alongside AGP `9.1.0`. The current branch's status is in §12.10.
+
+### 12.10 Review hardening
+
+The changes below are prepared on `fix/review-hardening` and have not been
+deployed. They address the findings from the 2026-10-10 whole-codebase review.
+
+| Finding | Change in this branch | Remaining deployment action |
+|---|---|---|
+| Bearer token in WebSocket URL | `POST /api/ws-ticket` verifies the bearer token and issues a random, hashed-in-memory ticket that is one-use and expires after 30 seconds. The WebSocket consumes the ticket; the client redacts auth query values from displayed URLs. | Rebuild both client and server together. Existing access-token WebSocket URLs stop working. |
+| ID tokens accepted as API credentials or loose token matching | `AUTHELIA_AUDIENCE` is required at startup and is the only accepted audience. Issuer and audience claims are compared exactly (apart from a trailing issuer slash); alternate issuer schemes, domain aliases, and query-string bearer tokens are rejected. | Configure Authelia to sign JWT access tokens for the app API audience. Authelia defaults to opaque access tokens, which this JWKS verifier cannot validate; see [Authelia OIDC integration](https://www.authelia.com/integration/openid-connect/introduction/). |
+| Sync gaps at page boundaries and large catch-up windows | Sync cursor is `(created_at, id)`, and both foreground and Android background sync continue through full pages. | Existing background timestamp-only cursors are accepted and may replay same-time messages once; UUID deduplication makes that safe. |
+| Web frontend had no deployment route | Compose builds Flutter web assets from the repo, serves them with unprivileged Nginx, and routes the host catch-all to the frontend while backend paths retain priority. Local web bind defaults to `127.0.0.1:8081`. | Rebuild and start the `web` service. Configure production `APP_DOMAIN`, `API_BASE_URL`, `WS_BASE_URL`, and Authelia issuer in the ignored deploy environment. |
+| No scheduled database dump | Compose starts a daily `pg_dump` service with owner-only files and 14-day local retention by default. Restore instructions are in `deploy/backups/README.md`. | Backups share the deployment host; configure off-host copying and verify restores before relying on disaster recovery. |
+| Development proxy exposed insecure dashboard/socket | Optional development Traefik now uses static file routing, binds to loopback, disables the dashboard, and has no Docker socket mount. | None for the dev profile. Production continues to use the externally managed reverse proxy. |
+| CORS implicitly allowed the app hostname over HTTP | Origin checks now accept only configured origins; default production/staging origins use HTTPS, while development defaults include localhost ports used by the web client. | Set `CORS_ORIGINS` explicitly for every deployed web origin. |
+| Empty environment values could be overwritten by ignored `.env` files | Dotenv loading now respects environment-variable presence, even when the value is explicitly empty; this also keeps config tests isolated from local secrets. | None. |
+| Manual reconnect could be ignored while connected or start duplicate handshakes | Reconnect now updates the current token/endpoint and starts exactly one new ticket and socket attempt; stream errors also schedule recovery. A concurrent sync no longer clears its pending cursor. | None. |
+| PowerShell build could claim success after failure | The packaging script checks every Flutter/Docker native exit code and stops on error. | None. |
+| Client ID mismatch | Client, server, examples, and build defaults now use `meowgram`, as specified in AGENTS.md §2. | Update the Authelia client registration in `purrbrews-containers` before deploying; this branch does not alter that repo or the live deployment. |
+
+The original review-hardening commit was prepared without running the Go and
+Flutter suites. Follow-up verification for this branch is recorded in §12.11.
+Both suites must pass before requesting a merge, per AGENTS.md §1.3. No live
+deployment or external Authelia configuration was changed.
+
+### 12.11 Full codebase re-audit
+
+Follow-up refactors on `refactor/full-codebase-audit`:
+
+| Finding | Change | Remaining action |
+|---|---|---|
+| OIDC issuer aliases and audience normalization accepted values other than the configured claims | Issuer matching now requires the configured issuer (trailing slash normalized); audience matching is exact and case-sensitive. Future `iat` values outside clock skew are rejected. | Configure Authelia with the exact issuer and API audience values. |
+| HTTP auth still accepted access tokens in a query parameter | Protected HTTP routes now accept bearer tokens only in `Authorization`; URL query tokens no longer authenticate. | None. |
+| CORS automatically allowed the app hostname over HTTP, including in production | Only explicitly configured origins match. Production/staging defaults are HTTPS; Compose leaves an empty allow-list for environment-aware defaults. | Set `CORS_ORIGINS` explicitly for deployed origins. |
+| Empty environment variables were overwritten from ignored dotenv files | Dotenv loading now respects variables present in the process even when empty, making environment precedence predictable and config tests isolated. | None. |
+| Manual reconnect could be ignored or start duplicate ticket handshakes | Reconnect configures token and endpoint before starting one forced reconnect; stream errors schedule recovery. Concurrent sync attempts retain the pending cursor. | None. |
+| Sync SQL relied on implicit parameter type inference for an empty UUID cursor | The cursor parameter is explicitly treated as text and converted with `NULLIF` before UUID comparison. | None. |
+| Local OIDC issuer detection matched hostnames containing the word `localhost` | Development HTTP is now selected only for an exact loopback hostname/IP; lookalike public hostnames default to HTTPS in both client and server config. | Use an explicit issuer URL when Authelia is behind a nonstandard local proxy. |
+| User identity uniqueness had two equivalent indexes | Migration `000003` removes the standalone index while preserving the unique constraint and all rows; its down migration recreates the index. The Go builder image now pins its toolchain to 1.27.1. | The additive migration runs on normal server startup; no manual data operation is required. |
+
+Remaining gaps confirmed during the re-audit and still tracked in AGENTS.md/runbook: per-device FCM tokens (topic subscriptions remain public), OIDC nonce persistence and validation in the client, App Links / Universal Links registration with Authelia, off-host backup and restore drills, API rate limiting, and Android Google Services plugin compatibility. These need separate implementation or deployment work; no external identity configuration was changed here.
+
+Verification attempted for this audit: `go test ./...` and `flutter test` could
+not start because Go and Flutter are not installed or available on PATH in the
+review environment. Docker Compose configuration validation, PowerShell script
+parsing, and `git diff --check` passed. Shell syntax parsing could not run
+because the available Bash launcher was denied by the environment. The graph
+utility launcher also failed before extraction; the audit continued through
+direct source inspection. No deployment or external Authelia configuration was
+changed.
+
+### 12.12 Reproducible scratch verification (2026-10-11)
+
+`test/scratch-verification` includes the two previous hardening commits and adds
+`deploy/verify.compose.yml`, PowerShell/POSIX entry scripts and GitHub Actions.
+The stack has an internal, disposable PostgreSQL database with no published ports;
+trust authentication is confined to this scratch network. It never loads deploy
+credentials or mounts a live data volume. Go 1.27.1 and Flutter 3.44.4 run in
+containers; the Flutter lockfile now matches that pinned SDK. The wrapper scripts
+clean up their own project and volumes on exit. `.gitattributes` enforces LF for
+shell scripts and source files.
+
+Real execution found and repaired two failures missed in the earlier audit:
+- Background sync dereferenced a nullable cursor and did not compile.
+- Migration 000003 could not drop an index referenced by the messages foreign key.
+  It now recreates that foreign key atomically against the remaining unique
+  constraint, validates it, and preserves all rows. This migration was exercised
+  only in the disposable database; live migration execution is not authorized.
+
+Regression coverage includes ticket identity isolation, expiry, concurrent
+single-use consumption, endpoint authentication/cache headers, a real loopback
+WebSocket ticket/reconnect exchange and PostgreSQL pagination across 1001 messages
+sharing one timestamp. A dump is restored into a second scratch database and
+checked against a probe plus message count. This validates the restore mechanism;
+it does not establish off-host storage or production recovery readiness.
+
+Results: Go tests with race detection and Go vet passed; PostgreSQL pagination
+and migration tests passed; dump/restore drill passed; Flutter analysis reported
+no issues; all 55 Flutter tests passed; release web build passed. The web build
+reports an existing optional Cupertino font warning. Native OS builds and live
+service configuration are tracked separately.
+
+### 12.13 OIDC login binding
+
+`fix/oidc-nonce` persists the random nonce alongside PKCE state in web session
+storage and requires it for native and web code exchanges. Before saving a new
+session, the client verifies the ID token's RS256 signature against configured
+JWKS, exact issuer, client audience/authorized party, subject, expiry, issuance
+time, optional not-before and nonce. Unsigned, malformed, forged and mismatched
+responses fail closed with a generic error that cannot include token contents.
+The implementation follows OpenID Connect Core §3.1.3.7:
+https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+
+No endpoint or credential is added. Existing AUTHELIA_JWKS_URL must be reachable
+from the client; for web this also requires the provider's CORS policy to permit
+the app origin. Old in-flight web sign-ins without a saved nonce must restart.
+Tests generate ephemeral RSA keys and emulate token/JWKS responses, requiring no
+live provider. Flutter analysis is clean and all 66 tests pass.
+Release web build also passed with the nonce and signature checks enabled.
+
+### 12.14 Authenticated device notifications
+
+`feat/authenticated-device-push` removes all server topic sends. Authenticated
+PUT/DELETE requests to the configured device endpoint register/revoke a token;
+ownership comes exclusively from verified identity, never request JSON. Migration
+000004 adds a device table. Its down migration intentionally preserves rows and
+schema; removing that data requires separate owner authorization.
+
+| Setting | Server env / client define | Default |
+|---|---|---|
+| Device registration endpoint | `PUSH_DEVICE_ENDPOINT` | `/api/push/devices` |
+
+Registrations expire after 24 hours without renewal. The app renews at sign-in,
+access-token/device-token changes and every 12 hours while running. Logout queues
+revocation after any in-flight registration and invalidates the Firebase token,
+even if API revocation fails. Legacy public topic subscriptions are removed.
+The sender pages active registrations in batches of 500 and removes tokens the
+provider reports as unregistered. Notifications remain content-free and collapsed.
+Neither tokens nor provider error bodies are logged. Web/Windows push remains
+unsupported; their chat and local notification behavior is unchanged.
+
+Scratch verification covers anonymous rejection, owner spoofing, bounded request
+bodies, JSON validation, registration/expiry/ownership transfer/revocation against
+PostgreSQL, authenticated client requests and 1001 mocked provider recipients.
+It needs no Firebase project or service-account key. Live provider delivery and
+OS permission behavior still require device checks. Provider revocation is not
+instantaneous: queued OS notifications cannot be recalled, and a disabled account
+may receive content-free activity until its device lease expires (at most 24h).
+
+Verification: Go race tests and vet passed, Flutter analysis passed, all 68 Flutter tests passed, and the release web build passed.
+
+### 12.15 Request and message budgets
+
+`feat/request-rate-limits` adds bounded, concurrency-safe token buckets. HTTP
+requests share a process-wide ingress budget before expensive authentication;
+verified subjects then share a budget across ticket, sync and device endpoints.
+A subject's message budget is shared across all sockets and reconnects and is
+checked before database writes. Rejected frames get an error and are not broadcast.
+Health endpoints remain available. Forwarded IP headers are not trusted for limits.
+
+| Server environment setting | Default | Meaning |
+|---|---:|---|
+| GLOBAL_RATE_PER_MINUTE | 6000 | Process-wide ingress refill |
+| GLOBAL_RATE_BURST | 200 | Process-wide burst |
+| API_RATE_PER_MINUTE | 120 | Refill per verified subject |
+| API_RATE_BURST | 30 | API burst per subject |
+| MESSAGE_RATE_PER_MINUTE | 60 | Message refill per subject |
+| MESSAGE_RATE_BURST | 10 | Message burst per subject |
+
+Values must be positive integers up to 1,000,000. Buckets are capped at 10,000
+identities with idle eviction. Budgets reset on server restart and are per server
+process; a multi-replica deployment would need shared enforcement. HTTP rejections
+return 429 and Retry-After (exposed through CORS). Foreground catch-up sync waits
+and retries its current UUID page, refreshing the bearer if available; disposal
+cancels a pending retry. This prevents throttling from restarting a large backlog.
+
+
+Verification: Go race tests and vet passed; Flutter analysis is clean; all 69 Flutter tests and the release web build passed.
+
+### 12.16 Platform and integrated verification
+
+`test/platform-verification` combines the preceding review branches and adds a
+real HTTP/WebSocket integration test with a locally emulated RSA/JWKS issuer.
+It rejects an incorrect audience, exchanges a signed access token for a ticket,
+rejects ticket replay, checks persistence before the observed broadcast, retrieves
+the message through sync, and registers/revokes a device through authenticated
+HTTP requests. Keys exist only in test memory. No production identity settings
+or credentials are needed.
+
+The Android scratch build exposed missing core library desugaring required by
+the notifications plugin. The app now enables it with `desugar_jdk_libs:2.1.4`,
+following [Android's configuration guidance](https://developer.android.com/studio/write/java8-support.html).
+The `verify-android` Docker target installs the Android SDK and verifies the
+command-line tools archive checksum. It generates a synthetic Firebase config,
+uses disposable debug signing, and limits Gradle memory/workers inside the image.
+Run `deploy/scripts/verify.ps1 -Android` or `sh deploy/scripts/verify.sh --android`;
+CI also runs this target independently. SDK licenses are accepted in the image.
+This checks packaging compatibility, not Firebase delivery or release signing.
+
+The default harness also builds the production web image and verifies non-root
+Nginx startup, SPA callback fallback, uncached HTML and the bootstrap asset,
+without publishing a host port.
+
+External acceptance gates remain explicit: the owner must align the Authelia
+registration/client ID and JWKS CORS policy; establish and register mobile
+App/Universal Links with actual association/signing identities; test delivery on
+a real authorized Firebase device; provision an off-host backup destination; and
+verify platform-specific behavior on Apple/Windows devices. Scratch provider,
+database and protocol tests complete the emulatable checks but cannot establish
+these real-world properties. No live deployment was changed.
+
+Verification on 2026-10-11: fresh-database Go race tests and vet passed; the
+dump/restore drill passed; Flutter analysis reported no issues and all 69 tests
+passed; release web and production backend images built; the non-root web smoke
+check passed; Android debug APK compilation passed after enabling desugaring.
+Existing build warnings remain for the optional Cupertino font, Android SDK XML
+metadata, and Firebase/workmanager plugins' future Kotlin migration. These did
+not prevent the verified builds. Release signing and Apple native builds were
+not exercised.
