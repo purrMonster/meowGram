@@ -45,8 +45,13 @@ sh deploy/scripts/verify.sh
 The workflow runs Go tests with the race detector, Go vet, real PostgreSQL
 migration/pagination tests, a dump/restore drill, Flutter analysis/tests and a
 release web build. The scripts return failure if any check fails and clean up
-their isolated stack. Downloads need network access on the first run; Docker's
-image cache supports subsequent runs. GitHub Actions runs the same workflow.
+their isolated stack, including a production Nginx container smoke check. Add
+`-Android` (PowerShell) or `--android` (POSIX) to build a debug APK with a
+synthetic Firebase configuration. Android SDK licenses are accepted inside that
+scratch image; no Firebase account or signing credentials are needed. This APK
+is for build verification only and cannot verify real push delivery. Downloads
+need network access on the first run; Docker's image cache supports subsequent
+runs. GitHub Actions runs both the standard and Android checks.
 
 With local toolchains installed:
 

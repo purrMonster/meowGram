@@ -1,4 +1,4 @@
-param([switch]$KeepCaches)
+param([switch]$KeepCaches, [switch]$Android)
 $ErrorActionPreference = 'Stop'
 $compose = Join-Path $PSScriptRoot '../verify.compose.yml'
 $project = 'meowgram-verify-' + [guid]::NewGuid().ToString('N').Substring(0, 10)
@@ -10,6 +10,8 @@ try {
     Invoke-Compose run --rm server
     Invoke-Compose run --rm restore
     Invoke-Compose run --build --rm client
+    Invoke-Compose run --build --rm web-smoke
+    if ($Android) { Invoke-Compose run --build --rm android }
 } finally {
     if ($KeepCaches) { & docker compose -p $project -f $compose down --remove-orphans }
     else { & docker compose -p $project -f $compose down --volumes --remove-orphans }

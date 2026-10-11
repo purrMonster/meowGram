@@ -1127,3 +1127,44 @@ cancels a pending retry. This prevents throttling from restarting a large backlo
 
 
 Verification: Go race tests and vet passed; Flutter analysis is clean; all 69 Flutter tests and the release web build passed.
+
+### 12.16 Platform and integrated verification
+
+`test/platform-verification` combines the preceding review branches and adds a
+real HTTP/WebSocket integration test with a locally emulated RSA/JWKS issuer.
+It rejects an incorrect audience, exchanges a signed access token for a ticket,
+rejects ticket replay, checks persistence before the observed broadcast, retrieves
+the message through sync, and registers/revokes a device through authenticated
+HTTP requests. Keys exist only in test memory. No production identity settings
+or credentials are needed.
+
+The Android scratch build exposed missing core library desugaring required by
+the notifications plugin. The app now enables it with `desugar_jdk_libs:2.1.4`,
+following [Android's configuration guidance](https://developer.android.com/studio/write/java8-support.html).
+The `verify-android` Docker target installs the Android SDK and verifies the
+command-line tools archive checksum. It generates a synthetic Firebase config,
+uses disposable debug signing, and limits Gradle memory/workers inside the image.
+Run `deploy/scripts/verify.ps1 -Android` or `sh deploy/scripts/verify.sh --android`;
+CI also runs this target independently. SDK licenses are accepted in the image.
+This checks packaging compatibility, not Firebase delivery or release signing.
+
+The default harness also builds the production web image and verifies non-root
+Nginx startup, SPA callback fallback, uncached HTML and the bootstrap asset,
+without publishing a host port.
+
+External acceptance gates remain explicit: the owner must align the Authelia
+registration/client ID and JWKS CORS policy; establish and register mobile
+App/Universal Links with actual association/signing identities; test delivery on
+a real authorized Firebase device; provision an off-host backup destination; and
+verify platform-specific behavior on Apple/Windows devices. Scratch provider,
+database and protocol tests complete the emulatable checks but cannot establish
+these real-world properties. No live deployment was changed.
+
+Verification on 2026-10-11: fresh-database Go race tests and vet passed; the
+dump/restore drill passed; Flutter analysis reported no issues and all 69 tests
+passed; release web and production backend images built; the non-root web smoke
+check passed; Android debug APK compilation passed after enabling desugaring.
+Existing build warnings remain for the optional Cupertino font, Android SDK XML
+metadata, and Firebase/workmanager plugins' future Kotlin migration. These did
+not prevent the verified builds. Release signing and Apple native builds were
+not exercised.

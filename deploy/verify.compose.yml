@@ -47,6 +47,21 @@ services:
       dockerfile: Dockerfile.web
       target: verify
     networks: [downloads]
+  android:
+    profiles: [android]
+    build:
+      context: ../client
+      dockerfile: Dockerfile.web
+      target: verify-android
+    networks: [downloads]
+  web-smoke:
+    build:
+      context: ../client
+      dockerfile: Dockerfile.web
+    entrypoint: [sh, /verify_web.sh]
+    volumes:
+      - ./scripts/verify_web.sh:/verify_web.sh:ro
+    networks: [scratch]
 networks:
   scratch:
     internal: true

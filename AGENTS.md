@@ -3,8 +3,8 @@
 meowGram is the purrBrews household's cat-lounge chat: a Flutter client (web,
 Android, iOS, Windows, macOS) and a Go backend with PostgreSQL, deployed as
 containers. Read this file first, then [`runbook.md`](runbook.md) (current design
-and decisions) before changing anything. `README.md` still describes the early echo
-server; where the two disagree, the runbook wins.
+and decisions) before changing anything. `README.md` provides a project overview;
+where the two disagree, the runbook wins.
 
 ## 1. Workflow
 
@@ -100,8 +100,8 @@ server; where the two disagree, the runbook wins.
   (`stacks/roastery/meowgram/README.md`).
 - Started with
   `docker compose --env-file .env --env-file deploy/.env -f deploy/docker-compose.yml up -d`.
-  `deploy/.env` holds the server's secret and the loopback port bindings; without
-  it the compose falls back to open ports and the dev password.
+  `deploy/.env` holds the server's secret and the loopback port bindings. Compose
+  requires a database password and defaults published ports to loopback.
 
 ## 4. Known gaps (fix these on their own branches)
 
