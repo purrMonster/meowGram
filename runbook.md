@@ -825,7 +825,8 @@ No new environment variable.
 | Trigger | Result |
 |---|---|
 | Tag `vX.Y.Z` (must equal `version:` in `client/pubspec.yaml`) | Scratch verification, then: `ghcr.io/purrmonster/meowgram-server` and `meowgram-web` (`linux/amd64` + `linux/arm64`, tags `X.Y.Z` and `latest`) pushed to GHCR; Android APK + AAB, Windows x64 zip, macOS zip, iOS `.ipa`, web bundle and `SHA256SUMS.txt` attached to a **draft** GitHub Release for the owner to review and publish |
-| Manual run (Actions → Release packages → Run workflow) | Builds every package as workflow artifacts; publishes nothing |
+| Pull request changing `release.yml` or `client/pubspec.yaml` | Builds every package as workflow artifacts; publishes nothing. A version bump is therefore fully built before its tag |
+| Manual run (Actions → Release packages → Run workflow; needs the workflow on `main`) | Same: builds everything, publishes nothing |
 
 Owner prerequisites (credentials stay with the owner, AGENTS.md §1.5):
 
