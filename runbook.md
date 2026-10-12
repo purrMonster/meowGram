@@ -859,6 +859,15 @@ tag `main`:
 git tag v1.1.0 && git push origin v1.1.0
 ```
 
+Never move or re-push a published tag. If only the final `release` job fails
+(the packages and images built), create the draft from that run instead:
+`gh run download <run> -n package-android -n package-windows -n package-apple`,
+`sha256sum -- meowGram-* > SHA256SUMS.txt`, then
+`gh release create vX.Y.Z --draft --verify-tag --generate-notes meowGram-* SHA256SUMS.txt`
+with the install notes from the workflow. That is how v1.1.0 was released
+(2026-10-13): the job had tried to download the image build-record artifacts,
+which it now skips (`package-*` only).
+
 ---
 
 ## 11. Review Gate & Verification Checklist
