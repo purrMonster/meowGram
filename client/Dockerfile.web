@@ -1,5 +1,6 @@
 # Build the Flutter web client from the repository source.
-FROM debian:bookworm-slim AS sdk
+# Flutter runs on the build machine; the web output is architecture-independent.
+FROM --platform=$BUILDPLATFORM debian:bookworm-slim AS sdk
 
 ARG FLUTTER_VERSION=3.44.4
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -40,33 +41,32 @@ RUN sed -i 's/-Xmx8G/-Xmx2G/;s/MaxMetaspaceSize=4G/MaxMetaspaceSize=1G/' android
     && printf '\norg.gradle.workers.max=2\n' >> android/gradle.properties
 CMD ["flutter", "build", "apk", "--debug"]
 
+# Domain-free by default: the web app reads its server's /api/client-config
+# from its own origin (runbook §10.11), so one image serves any domain. Set an
+# argument only to pin a build to one server; empty ones aren't compiled in.
 FROM sdk AS build
 ARG APP_ENV=production
-ARG APP_DOMAIN=localhost
-ARG HTTP_PORT=8080
-ARG USE_SECURE_SCHEMES=false
-ARG AUTHELIA_ISSUER_URL=http://localhost:9091
+ARG APP_DOMAIN=
+ARG HTTP_PORT=
+ARG USE_SECURE_SCHEMES=
+ARG AUTHELIA_ISSUER_URL=
 ARG AUTHELIA_JWKS_URL=
-ARG AUTHELIA_CLIENT_ID=meowgram
-ARG API_BASE_URL=http://localhost:8080
-ARG WS_BASE_URL=ws://localhost:8080/ws
-ARG WS_TICKET_ENDPOINT=/api/ws-ticket
-ARG PUSH_DEVICE_ENDPOINT=/api/push/devices
+ARG AUTHELIA_CLIENT_ID=
+ARG API_BASE_URL=
+ARG WS_BASE_URL=
+ARG WS_TICKET_ENDPOINT=
+ARG PUSH_DEVICE_ENDPOINT=
 
 WORKDIR /app
 COPY . .
-RUN flutter pub get && flutter build web --release \
-    --dart-define=APP_ENV="${APP_ENV}" \
-    --dart-define=APP_DOMAIN="${APP_DOMAIN}" \
-    --dart-define=HTTP_PORT="${HTTP_PORT}" \
-    --dart-define=USE_SECURE_SCHEMES="${USE_SECURE_SCHEMES}" \
-    --dart-define=AUTHELIA_ISSUER_URL="${AUTHELIA_ISSUER_URL}" \
-    --dart-define=AUTHELIA_JWKS_URL="${AUTHELIA_JWKS_URL}" \
-    --dart-define=AUTHELIA_CLIENT_ID="${AUTHELIA_CLIENT_ID}" \
-    --dart-define=API_BASE_URL="${API_BASE_URL}" \
-    --dart-define=WS_BASE_URL="${WS_BASE_URL}" \
-    --dart-define=WS_TICKET_ENDPOINT="${WS_TICKET_ENDPOINT}" \
-    --dart-define=PUSH_DEVICE_ENDPOINT="${PUSH_DEVICE_ENDPOINT}"
+RUN set -- --dart-define=APP_ENV="${APP_ENV}"; \
+    for name in APP_DOMAIN HTTP_PORT USE_SECURE_SCHEMES AUTHELIA_ISSUER_URL \
+        AUTHELIA_JWKS_URL AUTHELIA_CLIENT_ID API_BASE_URL WS_BASE_URL \
+        WS_TICKET_ENDPOINT PUSH_DEVICE_ENDPOINT; do \
+      eval "value=\${$name}"; \
+      if [ -n "$value" ]; then set -- "$@" "--dart-define=$name=$value"; fi; \
+    done; \
+    flutter pub get && flutter build web --release "$@"
 
 FROM nginx:1.29-alpine
 COPY nginx.web.conf /etc/nginx/nginx.conf

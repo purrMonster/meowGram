@@ -79,3 +79,11 @@ API audience and align its client registration with the configured client ID.
 See the runbook before deploying. The normal deployment stack is
 `deploy/docker-compose.yml`; the scratch stack is `deploy/verify.compose.yml`.
 Only the repository owner merges and authorizes changes to the live deployment.
+
+## Releases
+
+Tagged releases (`vX.Y.Z`) publish domain-free packages: the server and web
+images on GHCR, and Android, Windows, macOS and iOS apps on the GitHub Release.
+The apps ask for your server's address on first launch and read its sign-in
+settings from `/api/client-config`; the web image uses its own origin. See
+[runbook §10.11](runbook.md#1011-published-packages--runtime-server-configuration).

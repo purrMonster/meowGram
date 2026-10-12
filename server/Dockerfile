@@ -3,7 +3,9 @@
 # ==============================================================================
 # Build Stage
 # ==============================================================================
-FROM golang:1.27.1-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine AS builder
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 
 WORKDIR /src
 
@@ -28,7 +30,7 @@ RUN go mod download && go mod verify
 COPY . .
 
 # Compile static binary
-RUN CGO_ENABLED=0 GOOS=linux go build \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     -trimpath \
     -ldflags="-w -s -extldflags '-static'" \
     -o /bin/server \

@@ -12,6 +12,8 @@ import 'package:meowgram_client/src/auth/oidc_platform.dart';
 import 'package:meowgram_client/src/auth/oidc_service.dart';
 import 'package:meowgram_client/src/auth/token_storage.dart';
 import 'package:meowgram_client/src/bloc/chat_bloc.dart';
+import 'package:meowgram_client/src/config/app_config.dart';
+import 'package:meowgram_client/src/config/server_profile.dart';
 import 'package:meowgram_client/src/services/background_message_service.dart';
 import 'package:meowgram_client/src/services/chat_websocket_service.dart';
 import 'package:meowgram_client/src/services/sync_service.dart';
@@ -502,9 +504,20 @@ void main() {
           ),
         );
         final cursorStore = MemSecureStorage();
+        // A published build syncs only with the server it stored.
+        await ServerProfileStore(storage: cursorStore).write(
+          const ServerProfile(
+            baseUrl: 'https://meow.example.home.arpa',
+            issuer: 'https://authelia.example.home.arpa',
+            clientId: 'meowgram',
+          ),
+        );
+        addTearDown(() => AppConfig.useServer(null));
         var requests = 0;
+        Uri? lastUrl;
         final client = MockClient((req) async {
           requests++;
+          lastUrl = req.url;
           return http.Response(
             jsonEncode([
               chat('1', DateTime.utc(2026, 10, 7, 9), sender: 'me').toJson(),
@@ -533,12 +546,37 @@ void main() {
         await run();
         expect(requests, 1);
         expect(notifiedCount, 1, reason: 'own message excluded');
-        expect(jsonDecode(cursorStore.store.values.single), {
+        expect(jsonDecode(cursorStore.store['meowgram_bg_sync_cursor']!), {
           'created_at': '2026-10-07T10:00:00.000Z',
           'id': '2',
         });
+        expect(lastUrl?.origin, 'https://meow.example.home.arpa');
       },
     );
+
+    test('a published build with no stored server makes no request', () async {
+      final tokens = TokenStorage(storage: MemSecureStorage());
+      await tokens.saveTokens(
+        TokenData(
+          accessToken: jwt({'sub': 'me'}),
+          expiresAt: DateTime.now().add(const Duration(hours: 1)),
+        ),
+      );
+      final cursorStore = MemSecureStorage();
+      await cursorStore.write(
+          key: 'meowgram_bg_sync_cursor', value: '2026-10-07T09:00:00Z');
+      var requests = 0;
+      await runBackgroundCheck(
+        tokenStorage: tokens,
+        cursorStorage: cursorStore,
+        httpClient: MockClient((_) async {
+          requests++;
+          return http.Response('[]', 200);
+        }),
+        notify: (_, __) async {},
+      );
+      expect(requests, 0, reason: 'never send the token to a default host');
+    });
   });
 }
 

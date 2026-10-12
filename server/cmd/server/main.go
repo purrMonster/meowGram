@@ -117,6 +117,9 @@ func main() {
 		mux.HandleFunc("HEAD "+cfg.HealthEndpoint, handler.HealthHandler(cfg))
 	}
 
+	// Public sign-in settings for domain-free client builds (runbook §10.11).
+	mux.HandleFunc("GET "+handler.ClientConfigPath, handler.ClientConfigHandler(cfg))
+
 	// Protected WebSocket endpoint enforcing Authelia OIDC token verification & Hub broadcast
 	verifyIdentity := auth.Middleware(oidcVerifier, userRepo, logger)
 	userBudget := middleware.UserRateLimit(ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst))

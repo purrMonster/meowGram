@@ -1,0 +1,246 @@
+name: Release packages
+# Domain-free packages (runbook §10.11):
+# - push a tag vX.Y.Z (matching client/pubspec.yaml) to build everything, push
+#   the images to GHCR and attach the apps to a draft GitHub Release;
+# - run it by hand (workflow_dispatch) to build everything without publishing.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  FLUTTER_VERSION: 3.44.4
+  # Compiled into the apps; no domain is (the app asks the server at runtime).
+  APP_DEFINES: --dart-define=APP_ENV=production
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          version=$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' client/pubspec.yaml)
+          test -n "$version"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME doesn't match pubspec version $version"
+              exit 1
+            fi
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Go, PostgreSQL, restore, Flutter and web
+        run: sh deploy/scripts/verify.sh
+
+  images:
+    needs: [version, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: meowgram-server
+            context: server
+            file: server/Dockerfile
+          - name: meowgram-web
+            context: client
+            file: client/Dockerfile.web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - id: names
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+      - if: needs.version.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.version.outputs.publish == 'true' }}
+          tags: |
+            ${{ steps.names.outputs.image }}:${{ needs.version.outputs.version }}
+            ${{ steps.names.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=NOASSERTION
+
+  web:
+    needs: [version, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - working-directory: client
+        run: |
+          flutter pub get
+          flutter build web --release $APP_DEFINES
+          tar -czf "$GITHUB_WORKSPACE/meowGram-web-${{ needs.version.outputs.version }}.tar.gz" -C build/web .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: meowGram-web-*.tar.gz
+
+  android:
+    needs: [version, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - name: Release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PUBLISH: ${{ needs.version.outputs.publish }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            if [ "$PUBLISH" = true ]; then
+              echo "::error::Set the ANDROID_KEYSTORE_* secrets (runbook §10.11); a release must not be debug-signed."
+              exit 1
+            fi
+            echo "::warning::No release key: this test build is debug-signed and is not for distribution."
+            echo "APK_SUFFIX=-debug-signed" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > client/android/key.properties
+      - working-directory: client
+        run: |
+          flutter pub get
+          flutter build apk --release $APP_DEFINES
+          flutter build appbundle --release $APP_DEFINES
+          v=${{ needs.version.outputs.version }}
+          cp build/app/outputs/flutter-apk/app-release.apk "$GITHUB_WORKSPACE/meowGram-android-$v$APK_SUFFIX.apk"
+          cp build/app/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/meowGram-android-$v$APK_SUFFIX.aab"
+      - if: always()
+        run: rm -f client/android/key.properties "$RUNNER_TEMP/release.jks"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: meowGram-android-*
+
+  windows:
+    needs: [version, verify]
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - working-directory: client
+        shell: pwsh
+        run: |
+          flutter pub get
+          flutter build windows --release $env:APP_DEFINES
+          Compress-Archive -Path build/windows/x64/runner/Release/* `
+            -DestinationPath "$env:GITHUB_WORKSPACE/meowGram-windows-x64-${{ needs.version.outputs.version }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: meowGram-windows-*.zip
+
+  apple:
+    needs: [version, verify]
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+      - working-directory: client
+        run: |
+          v=${{ needs.version.outputs.version }}
+          flutter pub get
+          # Unsigned: Apple signing needs the owner's developer account
+          # (runbook §10.4). The macOS app opens after right-click → Open;
+          # the iOS .ipa must be re-signed (e.g. AltStore) before installing.
+          flutter build macos --release $APP_DEFINES
+          ditto -c -k --keepParent build/macos/Build/Products/Release/meowGram.app \
+            "$GITHUB_WORKSPACE/meowGram-macos-$v-unsigned.zip"
+          flutter build ios --release --no-codesign $APP_DEFINES
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry "$GITHUB_WORKSPACE/meowGram-ios-$v-unsigned.ipa" Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apple
+          path: |
+            meowGram-macos-*.zip
+            meowGram-ios-*.ipa
+
+  release:
+    if: needs.version.outputs.publish == 'true'
+    needs: [version, images, web, android, windows, apple]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Draft GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          cat > notes.md <<EOF
+          Docker images:
+          - \`ghcr.io/$owner/meowgram-server:$VERSION\`
+          - \`ghcr.io/$owner/meowgram-web:$VERSION\` (serve it on the same origin as \`/api\` and \`/ws\`)
+
+          The apps contain no server address: on first launch they ask for it, and
+          the web app uses its own origin. macOS and iOS builds are unsigned.
+          EOF
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
+            --title "meowGram $VERSION" --notes-file notes.md --generate-notes \
+            $(ls | grep -v '^notes.md$')
