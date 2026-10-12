@@ -1,21 +1,58 @@
 import 'package:flutter/foundation.dart';
+import 'package:meowgram_client/src/config/server_profile.dart';
 
 /// Runtime and compile-time configuration contract for the meowGram client.
 ///
-/// In alignment with the "Zero Hardcoded Domains" architectural mandate,
-/// all service targets, authentication parameters, endpoints, and domain references
-/// are read strictly via compile-time `const` environment readers (`String.fromEnvironment`,
-/// `bool.fromEnvironment`). This ensures full compatibility with `--dart-define`
-/// and `--dart-define-from-file` without runtime evaluation drops.
+/// In alignment with the "Zero Hardcoded Domains" architectural mandate, no
+/// domain is compiled in by default. Two sources, in order:
+/// 1. A runtime [ServerProfile] from the server's `/api/client-config`
+///    (published builds: the web app's own origin, or the address entered on
+///    first launch; runbook §10.11).
+/// 2. Compile-time `--dart-define` / `--dart-define-from-file` values
+///    (development and private builds).
 class AppConfig {
   const AppConfig._();
+
+  /// Canonical application brand name displayed in the UI.
+  static const String appName = 'meowGram';
+
+  // ===========================================================================
+  // Runtime server (published, domain-free builds)
+  // ===========================================================================
+
+  /// True when this build was compiled for one server (`APP_DOMAIN` or
+  /// `API_BASE_URL` defined). Published builds define neither.
+  static const bool hasBuiltInServer =
+      bool.hasEnvironment('APP_DOMAIN') || bool.hasEnvironment('API_BASE_URL');
+
+  static ServerProfile? _server;
+
+  /// The server reported by `/api/client-config`, once known.
+  static ServerProfile? get server => _server;
+
+  /// Applies (or, with null, forgets) the runtime server.
+  static void useServer(ServerProfile? profile) => _server = profile;
+
+  /// A native published build that doesn't know its server yet.
+  static bool get needsServerSetup =>
+      !hasBuiltInServer && !kIsWeb && _server == null;
+
+  /// Where a published build asks for `/api/client-config`: the web app's own
+  /// origin, or the stored server. Null when there's nothing to ask yet.
+  static String? get serverConfigBase {
+    if (hasBuiltInServer) return null;
+    if (_server != null) return _server!.baseUrl;
+    return kIsWeb ? _webOrigin : null;
+  }
+
+  static String get _webOrigin {
+    final uri = Uri.base;
+    return '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+  }
 
   // ===========================================================================
   // Strict Compile-Time `const` Environment Readers
   // ===========================================================================
-
-  /// Canonical application brand name displayed in the UI.
-  static const String appName = 'meowGram';
 
   /// Environment mode: 'development', 'staging', or 'production'.
   /// Sourced strictly at compile-time from `--dart-define=APP_ENV=...`
@@ -25,11 +62,16 @@ class AppConfig {
   );
 
   /// Target application domain (e.g., 'localhost', 'meow.example.home.arpa').
-  /// Sourced strictly at compile-time from `--dart-define=APP_DOMAIN=...`
-  static const String appDomain = String.fromEnvironment(
+  /// Runtime server first, then `--dart-define=APP_DOMAIN=...`.
+  static const String _builtInAppDomain = String.fromEnvironment(
     'APP_DOMAIN',
     defaultValue: 'localhost',
   );
+  static String get appDomain {
+    if (_server != null) return _server!.domain;
+    if (kIsWeb && !hasBuiltInServer) return Uri.base.host;
+    return _builtInAppDomain;
+  }
 
   /// Target HTTP port for backend services (default: 8080).
   /// Sourced strictly at compile-time from `--dart-define=HTTP_PORT=...`
@@ -53,11 +95,12 @@ class AppConfig {
   // ===========================================================================
 
   /// Client ID registered in Authelia's identity provider configuration.
-  /// Sourced strictly at compile-time from `--dart-define=AUTHELIA_CLIENT_ID=...`
-  static const String autheliaClientId = String.fromEnvironment(
+  /// Runtime server first, then `--dart-define=AUTHELIA_CLIENT_ID=...`.
+  static const String _builtInClientId = String.fromEnvironment(
     'AUTHELIA_CLIENT_ID',
     defaultValue: 'meowgram',
   );
+  static String get autheliaClientId => _server?.clientId ?? _builtInClientId;
 
   /// Base issuer URL for Authelia's OpenID Connect provider.
   /// Sourced strictly at compile-time from `--dart-define=AUTHELIA_ISSUER_URL=...`
@@ -68,17 +111,21 @@ class AppConfig {
 
   /// Authelia Domain (e.g., 'auth.example.home.arpa', 'localhost:9091').
   /// Sourced strictly at compile-time from `--dart-define=AUTHELIA_DOMAIN=...`
-  static const String autheliaDomain = String.fromEnvironment(
+  static const String _builtInAutheliaDomain = String.fromEnvironment(
     'AUTHELIA_DOMAIN',
     defaultValue: 'localhost:9091',
   );
+  static String get autheliaDomain =>
+      _server?.issuerDomain ?? _builtInAutheliaDomain;
 
   /// Effective Authelia Issuer URL.
   /// Sourced with fallback order:
-  /// 1. Compile-time `--dart-define=AUTHELIA_ISSUER_URL`
-  /// 2. Inferred from `--dart-define=AUTHELIA_DOMAIN` if set and not default 'localhost:9091'
-  /// 3. Default fallback: 'http://localhost:9091'
+  /// 1. The runtime server's issuer
+  /// 2. Compile-time `--dart-define=AUTHELIA_ISSUER_URL`
+  /// 3. Inferred from `--dart-define=AUTHELIA_DOMAIN` if set and not default 'localhost:9091'
+  /// 4. Default fallback: 'http://localhost:9091'
   static String get autheliaIssuerUrl {
+    if (_server != null) return _server!.issuer;
     if (_rawAutheliaIssuerUrl.isNotEmpty) {
       return _rawAutheliaIssuerUrl.replaceAll(RegExp(r'/+$'), '');
     }
@@ -104,7 +151,7 @@ class AppConfig {
     'AUTHELIA_JWKS_URL',
     defaultValue: '',
   );
-  static String get autheliaJwksUrl => _rawAutheliaJwksUrl.isNotEmpty
+  static String get autheliaJwksUrl => _server == null && _rawAutheliaJwksUrl.isNotEmpty
       ? _rawAutheliaJwksUrl
       : '$autheliaIssuerUrl/jwks.json';
 
@@ -113,7 +160,7 @@ class AppConfig {
     'AUTHELIA_DISCOVERY_URL',
     defaultValue: '',
   );
-  static String get autheliaDiscoveryUrl => _rawAutheliaDiscoveryUrl.isNotEmpty
+  static String get autheliaDiscoveryUrl => _server == null && _rawAutheliaDiscoveryUrl.isNotEmpty
       ? _rawAutheliaDiscoveryUrl
       : '$autheliaIssuerUrl/.well-known/openid-configuration';
 
@@ -123,7 +170,7 @@ class AppConfig {
     defaultValue: '',
   );
   static String get autheliaAuthorizationEndpoint =>
-      _rawAutheliaAuthEndpoint.isNotEmpty
+      _server == null && _rawAutheliaAuthEndpoint.isNotEmpty
       ? _rawAutheliaAuthEndpoint
       : '$autheliaIssuerUrl/api/oidc/authorization';
 
@@ -133,7 +180,7 @@ class AppConfig {
     defaultValue: '',
   );
   static String get autheliaTokenEndpoint =>
-      _rawAutheliaTokenEndpoint.isNotEmpty
+      _server == null && _rawAutheliaTokenEndpoint.isNotEmpty
       ? _rawAutheliaTokenEndpoint
       : '$autheliaIssuerUrl/api/oidc/token';
 
@@ -143,7 +190,7 @@ class AppConfig {
     defaultValue: '',
   );
   static String get autheliaUserinfoEndpoint =>
-      _rawAutheliaUserinfoEndpoint.isNotEmpty
+      _server == null && _rawAutheliaUserinfoEndpoint.isNotEmpty
       ? _rawAutheliaUserinfoEndpoint
       : '$autheliaIssuerUrl/api/oidc/userinfo';
 
@@ -153,7 +200,7 @@ class AppConfig {
     defaultValue: '',
   );
   static String get autheliaRevocationEndpoint =>
-      _rawAutheliaRevocationEndpoint.isNotEmpty
+      _server == null && _rawAutheliaRevocationEndpoint.isNotEmpty
       ? _rawAutheliaRevocationEndpoint
       : '$autheliaIssuerUrl/api/oidc/revocation';
 
@@ -202,6 +249,8 @@ class AppConfig {
 
   /// Resolves the effective HTTP Base URL.
   static String get apiBaseUrl {
+    if (_server != null) return _server!.baseUrl;
+    if (kIsWeb && !hasBuiltInServer) return _webOrigin;
     if (_rawApiBaseUrl.isNotEmpty) {
       return _rawApiBaseUrl.replaceAll(RegExp(r'/+$'), '');
     }
@@ -229,6 +278,13 @@ class AppConfig {
 
   /// Resolves the effective WebSocket endpoint URL.
   static String get wsBaseUrl {
+    if (_server != null) return _server!.wsUrl;
+    if (kIsWeb && !hasBuiltInServer) {
+      final origin = Uri.parse(_webOrigin);
+      return origin
+          .replace(scheme: origin.scheme == 'https' ? 'wss' : 'ws', path: wsPath)
+          .toString();
+    }
     if (_rawWsBaseUrl.isNotEmpty) {
       return _rawWsBaseUrl.replaceAll(RegExp(r'/+$'), '');
     }
@@ -248,6 +304,7 @@ class AppConfig {
   );
 
   static String get wsTicketUrl {
+    if (_server != null) return _server!.resolve(_server!.wsTicketPath);
     if (wsTicketPath.startsWith('http://') ||
         wsTicketPath.startsWith('https://')) {
       return wsTicketPath;
@@ -267,11 +324,17 @@ class AppConfig {
     'PUSH_DEVICE_ENDPOINT',
     defaultValue: '/api/push/devices',
   );
-  static String get pushDeviceUrl =>
-      Uri.parse('$apiBaseUrl/').resolve(pushDevicePath).toString();
+  static String get pushDeviceUrl => _server != null
+      ? _server!.resolve(_server!.pushDevicesPath)
+      : Uri.parse('$apiBaseUrl/').resolve(pushDevicePath).toString();
 
   /// Resolves the full URL for the catch-up synchronization REST service.
   static String syncUrl({String? baseUrlOverride}) {
+    if (_server != null) {
+      return baseUrlOverride == null
+          ? _server!.resolve(_server!.syncPath)
+          : '${baseUrlOverride.replaceAll(RegExp(r'/+$'), '')}${_server!.syncPath}';
+    }
     if (syncPath.startsWith('http://') || syncPath.startsWith('https://')) {
       return syncPath;
     }
@@ -288,6 +351,7 @@ class AppConfig {
   );
 
   static String get healthCheckUrl {
+    if (_server != null) return _server!.resolve(_server!.healthPath);
     if (healthPath.startsWith('http://') || healthPath.startsWith('https://')) {
       return healthPath;
     }

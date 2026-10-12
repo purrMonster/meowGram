@@ -1,17 +1,43 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/auth/auth_state.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
+import 'package:meowgram_client/src/config/server_config_controller.dart';
 import 'package:meowgram_client/src/widgets/meowgram_logo.dart';
 
 class LoginScreen extends StatelessWidget {
   final AuthController authController;
 
-  const LoginScreen({super.key, required this.authController});
+  /// Present in builds that learn their server at runtime (runbook §10.11).
+  final ServerConfigController? serverConfig;
+
+  const LoginScreen({
+    super.key,
+    required this.authController,
+    this.serverConfig,
+  });
+
+  /// A published build signs in only once it knows the server's issuer.
+  Future<void> _login() async {
+    final server = serverConfig;
+    if (server != null && !server.isReady && !await server.refresh()) return;
+    await authController.loginWithPurrBrews();
+  }
+
+  /// Native published builds can switch servers. Logging out first clears the
+  /// old server's cached messages and notifications.
+  Future<void> _changeServer() async {
+    await authController.logout();
+    await serverConfig?.forget();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final server = serverConfig;
+    final canChangeServer =
+        server != null && !kIsWeb && !AppConfig.hasBuiltInServer;
 
     return Scaffold(
       body: SafeArea(
@@ -22,11 +48,18 @@ class LoginScreen extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 480),
               child: AnimatedBuilder(
-                animation: authController,
+                animation: server == null
+                    ? authController
+                    : Listenable.merge([authController, server]),
                 builder: (context, _) {
                   final isAuthenticating =
-                      authController.status == AuthStatus.authenticating;
-                  final hasError = authController.status == AuthStatus.error;
+                      authController.status == AuthStatus.authenticating ||
+                          (server?.isLoading ?? false);
+                  final hasError = authController.status == AuthStatus.error ||
+                      (server != null && !server.isReady && server.error != null);
+                  final errorText = authController.status == AuthStatus.error
+                      ? authController.lastError
+                      : server?.error;
 
                   return Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -111,10 +144,10 @@ class LoginScreen extends StatelessWidget {
                                 ],
                               ),
                               const Divider(height: 20),
-                              const _ConfigRow(
+                              _ConfigRow(
                                   label: 'Domain', value: AppConfig.appDomain),
                               const SizedBox(height: 6),
-                              const _ConfigRow(
+                              _ConfigRow(
                                   label: 'Auth Domain',
                                   value: AppConfig.autheliaDomain),
                               const SizedBox(height: 6),
@@ -126,7 +159,7 @@ class LoginScreen extends StatelessWidget {
                                   label: 'API Base',
                                   value: AppConfig.apiBaseUrl),
                               const SizedBox(height: 6),
-                              const _ConfigRow(
+                              _ConfigRow(
                                   label: 'Client ID',
                                   value: AppConfig.autheliaClientId),
                               const SizedBox(height: 6),
@@ -157,8 +190,7 @@ class LoginScreen extends StatelessWidget {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  authController.lastError ??
-                                      'Authentication failed',
+                                  errorText ?? 'Authentication failed',
                                   style: TextStyle(
                                       color: theme.colorScheme.onErrorContainer,
                                       fontSize: 13),
@@ -207,7 +239,7 @@ class LoginScreen extends StatelessWidget {
                         ),
                       ] else ...[
                         FilledButton.icon(
-                          onPressed: () => authController.loginWithPurrBrews(),
+                          onPressed: _login,
                           icon: const Icon(Icons.login_rounded, size: 20),
                           label: const Text(
                             'Login with purrBrews',
@@ -222,6 +254,14 @@ class LoginScreen extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (canChangeServer) ...[
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: _changeServer,
+                            icon: const Icon(Icons.dns_rounded, size: 18),
+                            label: const Text('Change server'),
+                          ),
+                        ],
                       ],
 
                       const SizedBox(height: 24),

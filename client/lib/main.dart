@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:meowgram_client/firebase_options.dart';
 import 'package:meowgram_client/src/auth/auth_controller.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
+import 'package:meowgram_client/src/config/server_config_controller.dart';
 import 'package:meowgram_client/src/push/fcm_service.dart';
 import 'package:meowgram_client/src/routes/app_router.dart';
 import 'package:meowgram_client/src/services/background_message_service.dart';
@@ -21,6 +22,12 @@ import 'package:meowgram_client/src/storage/local_message_repository.dart';
 ///    These may prompt the user or hit the network, so they never block the UI.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Published builds carry no domain: apply the stored server (local read),
+  // and re-check it with the server after the first frame.
+  final serverConfig =
+      AppConfig.hasBuiltInServer ? null : ServerConfigController();
+  await serverConfig?.loadCached();
 
   // Print startup configuration banner for debug visibility
   debugPrint('====================================================');
@@ -45,8 +52,12 @@ Future<void> main() async {
   authController.addLogoutHook(() => NotificationService().cancelAll());
   await authController.initialize();
 
-  runApp(MeowGramApp(authController: authController));
+  runApp(MeowGramApp(
+    authController: authController,
+    serverConfig: serverConfig,
+  ));
 
+  if (serverConfig != null) unawaited(serverConfig.refresh());
   unawaited(_initDeferredServices(authController));
 }
 
@@ -77,8 +88,13 @@ Future<void> _initDeferredServices(AuthController authController) async {
 
 class MeowGramApp extends StatefulWidget {
   final AuthController authController;
+  final ServerConfigController? serverConfig;
 
-  const MeowGramApp({super.key, required this.authController});
+  const MeowGramApp({
+    super.key,
+    required this.authController,
+    this.serverConfig,
+  });
 
   @override
   State<MeowGramApp> createState() => _MeowGramAppState();
@@ -91,7 +107,10 @@ class _MeowGramAppState extends State<MeowGramApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _router = createAppRouter(widget.authController);
+    _router = createAppRouter(
+      widget.authController,
+      serverConfig: widget.serverConfig,
+    );
   }
 
   @override

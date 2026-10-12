@@ -1,9 +1,9 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.14.0
+> **Document Version**: 1.15.0
 > **Status**: Full codebase re-audit is in progress on `refactor/full-codebase-audit`; see [§12.10](#1210-review-hardening) and [§12.11](#1211-full-codebase-re-audit) for changes and deployment prerequisites. Release 1.0.1 remains the latest deployed release.
 > **Author**: Lead Developer / Antigravity IDE; §12 and corrections by Claude  
-> **Last Updated**: 2026-10-11
+> **Last Updated**: 2026-10-12
 
 > [!IMPORTANT]
 > Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; §§12.10–12.11 record code changes that are not yet deployed. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
@@ -787,6 +787,68 @@ registrants, `manifest.json`), and those changes are usually only line endings.
 Revert them unless their content actually changed. The status-bar icon's
 `pathData` is copied from `meowgram-icon-monochrome.svg`, so update it by hand
 if the silhouette changes.
+
+### 10.11 Published Packages & Runtime Server Configuration
+
+Published packages contain **no domain**, so the public repository can ship them
+(AGENTS.md: no real domain in tracked files). Each client learns its server at
+runtime.
+
+**`GET /api/client-config`** (server, public, no authentication; the path is fixed
+because a client calls it before it knows anything else). It returns the
+sign-in settings the server already has: `issuer` (`AUTHELIA_ISSUER`),
+`client_id` (`AUTHELIA_CLIENT_ID`) and the endpoint paths (`ws_path`,
+`ws_ticket_path`, `sync_path`, `push_devices_path`, `health_path`). Nothing in it
+is secret: the issuer and the public client ID appear in every login redirect.
+No new environment variable.
+
+**How each client finds its server:**
+
+| Build | Server |
+|---|---|
+| Web, published image | Its own origin. The web app and `/api` + `/ws` must share an origin, which the Traefik routes in `deploy/docker-compose.yml` already do |
+| Android, iOS, Windows, macOS, published | Asks for the server address on first launch (`ServerSetupScreen`), reads `/api/client-config`, stores the result next to the tokens. **Change server** on the sign-in screen logs out (clearing the cached messages) and asks again |
+| Any build with `APP_DOMAIN` or `API_BASE_URL` defined | Compiled in, as before (development, `build_all.*`, the compose web image) |
+
+- Offline-first still holds: the stored server is applied before the first
+  frame, and re-checked against `/api/client-config` in the background.
+- Plain `http://` is accepted only for `localhost` / `127.0.0.1`; a remote server
+  and its issuer must be `https://`.
+- The background sync isolate reads the stored server and does nothing until
+  there is one, so a token is never sent to a default host.
+- The Dockerfile's web build compiles in only the build arguments that are set.
+  Compose still passes them, so the self-built web image is pinned to its
+  domain exactly as before.
+
+**Release workflow** (`.github/workflows/release.yml`):
+
+| Trigger | Result |
+|---|---|
+| Tag `vX.Y.Z` (must equal `version:` in `client/pubspec.yaml`) | Scratch verification, then: `ghcr.io/purrmonster/meowgram-server` and `meowgram-web` (`linux/amd64` + `linux/arm64`, tags `X.Y.Z` and `latest`) pushed to GHCR; Android APK + AAB, Windows x64 zip, macOS zip, iOS `.ipa`, web bundle and `SHA256SUMS.txt` attached to a **draft** GitHub Release for the owner to review and publish |
+| Manual run (Actions → Release packages → Run workflow) | Builds every package as workflow artifacts; publishes nothing |
+
+Owner prerequisites (credentials stay with the owner, AGENTS.md §1.5):
+
+- **Android release key.** A tag build fails without one rather than publish a
+  debug-signed APK. Generate the keystore on your own machine (§10.3), then add
+  the repository secrets `ANDROID_KEYSTORE_BASE64` (the `.jks` file, base64),
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`.
+  Keep the keystore backed up: updates must be signed with the same key.
+- **Apple builds are unsigned.** The macOS app opens after right-click → Open;
+  the iOS `.ipa` has to be re-signed (AltStore, or Xcode with a developer
+  account, §10.4) before it installs.
+- **Push notifications** in published apps use this repo's Firebase project
+  (`google-services.json`, `firebase_options.dart`); a server delivers them only
+  with that project's service account. Other servers simply run without push.
+- **GHCR visibility.** Check the two packages under the account's Packages tab
+  after the first tag; set them public if others should pull them.
+
+To release: bump `version:` in `client/pubspec.yaml` on a branch, merge it, then
+tag `main`:
+
+```bash
+git tag v1.1.0 && git push origin v1.1.0
+```
 
 ---
 

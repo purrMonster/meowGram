@@ -7,6 +7,8 @@ import 'package:workmanager/workmanager.dart';
 import 'package:meowgram_client/src/auth/auth_state.dart';
 import 'package:meowgram_client/src/auth/token_storage.dart';
 import 'package:meowgram_client/src/config/app_config.dart';
+import 'package:meowgram_client/src/config/server_config_controller.dart';
+import 'package:meowgram_client/src/config/server_profile.dart';
 import 'package:meowgram_client/src/models/chat_message.dart';
 import 'package:meowgram_client/src/services/notification_service.dart';
 import 'package:meowgram_client/src/services/sync_service.dart';
@@ -80,6 +82,10 @@ Future<void> runBackgroundCheck({
   }
 
   final storage = cursorStorage ?? const FlutterSecureStorage();
+  // This isolate starts fresh: apply the server a published build stored.
+  await ServerConfigController(store: ServerProfileStore(storage: storage))
+      .loadCached();
+  if (AppConfig.needsServerSetup) return;
   final cursorRaw = await storage.read(key: _kCursorKey);
   DateTime? cursor;
   String? cursorId;
