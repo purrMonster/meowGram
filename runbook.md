@@ -1,6 +1,6 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.15.0
+> **Document Version**: 1.16.0
 > **Status**: Full codebase re-audit is in progress on `refactor/full-codebase-audit`; see [§12.10](#1210-review-hardening) and [§12.11](#1211-full-codebase-re-audit) for changes and deployment prerequisites. Release 1.0.1 remains the latest deployed release.
 > **Author**: Lead Developer / Antigravity IDE; §12 and corrections by Claude  
 > **Last Updated**: 2026-10-12
@@ -824,8 +824,8 @@ No new environment variable.
 
 | Trigger | Result |
 |---|---|
-| Tag `vX.Y.Z` (must equal `version:` in `client/pubspec.yaml`) | Scratch verification, then: `ghcr.io/purrmonster/meowgram-server` and `meowgram-web` (`linux/amd64` + `linux/arm64`, tags `X.Y.Z` and `latest`) pushed to GHCR; Android APK + AAB, Windows x64 zip, macOS zip, iOS `.ipa`, web bundle and `SHA256SUMS.txt` attached to a **draft** GitHub Release for the owner to review and publish |
-| Pull request changing `release.yml` or `client/pubspec.yaml` | Builds every package as workflow artifacts; publishes nothing. A version bump is therefore fully built before its tag |
+| Tag `vX.Y.Z` (must equal `version:` in `client/pubspec.yaml`) | Scratch verification, then: `ghcr.io/purrmonster/meowgram-server` and `meowgram-web` (`linux/amd64` + `linux/arm64`, tags `X.Y.Z` and `latest`) pushed to GHCR; `meowGram-X.Y.Z.apk`, `meowGram-X.Y.Z-setup.exe` (Windows installer), `meowGram-X.Y.Z-unsigned.dmg`, `meowGram-X.Y.Z-unsigned.ipa` and `SHA256SUMS.txt` attached to a **draft** GitHub Release, with install notes, for the owner to review and publish |
+| Pull request changing `release.yml`, `client/pubspec.yaml` or `client/windows/installer/` | Builds every package as workflow artifacts; publishes nothing. A version bump is therefore fully built before its tag |
 | Manual run (Actions → Release packages → Run workflow; needs the workflow on `main`) | Same: builds everything, publishes nothing |
 
 Owner prerequisites (credentials stay with the owner, AGENTS.md §1.5):
@@ -835,9 +835,17 @@ Owner prerequisites (credentials stay with the owner, AGENTS.md §1.5):
   the repository secrets `ANDROID_KEYSTORE_BASE64` (the `.jks` file, base64),
   `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`.
   Keep the keystore backed up: updates must be signed with the same key.
-- **Apple builds are unsigned.** The macOS app opens after right-click → Open;
-  the iOS `.ipa` has to be re-signed (AltStore, or Xcode with a developer
-  account, §10.4) before it installs.
+- **Apple builds are unsigned** (decision 2026-10-12: no paid Apple developer
+  account). The `.dmg`'s app is ad-hoc signed: first launch needs System
+  Settings → Privacy & Security → Open Anyway. The iOS `.ipa` has to be
+  re-signed with a free Apple ID (AltStore or Sideloadly; renewed every 7 days)
+  before it installs. Not yet tried on a Mac: whether `flutter_secure_storage`
+  can use the keychain from an ad-hoc-signed, sandboxed build; if sign-in
+  doesn't persist on macOS, start there.
+- **Windows installer** (`client/windows/installer/meowgram.iss`, Inno Setup):
+  per-user install with a Start-menu shortcut and an uninstaller, the Visual C++
+  runtime bundled next to the exe. Its `AppId` must never change (upgrades find
+  the installed copy by it). Not code-signed, so SmartScreen warns on first run.
 - **Push notifications** in published apps use this repo's Firebase project
   (`google-services.json`, `firebase_options.dart`); a server delivers them only
   with that project's service account. Other servers simply run without push.
