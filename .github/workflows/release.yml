@@ -2,10 +2,16 @@ name: Release packages
 # Domain-free packages (runbook §10.11):
 # - push a tag vX.Y.Z (matching client/pubspec.yaml) to build everything, push
 #   the images to GHCR and attach the apps to a draft GitHub Release;
-# - run it by hand (workflow_dispatch) to build everything without publishing.
+# - run it by hand (workflow_dispatch) to build everything without publishing;
+# - a pull request that changes this workflow or the app version builds
+#   everything too (never publishes), so a release is tested before its tag.
 on:
   push:
     tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - client/pubspec.yaml
   workflow_dispatch:
 permissions:
   contents: read
