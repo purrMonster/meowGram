@@ -12,6 +12,7 @@ on:
     paths:
       - .github/workflows/release.yml
       - client/pubspec.yaml
+      - client/windows/installer/**
   workflow_dispatch:
 permissions:
   contents: read
@@ -94,26 +95,6 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=NOASSERTION
 
-  web:
-    needs: [version, verify]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-      - working-directory: client
-        run: |
-          flutter pub get
-          flutter build web --release $APP_DEFINES
-          tar -czf "$GITHUB_WORKSPACE/meowGram-web-${{ needs.version.outputs.version }}.tar.gz" -C build/web .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web
-          path: meowGram-web-*.tar.gz
-
   android:
     needs: [version, verify]
     runs-on: ubuntu-latest
@@ -155,17 +136,15 @@ jobs:
       - working-directory: client
         run: |
           flutter pub get
-          flutter build apk --release $APP_DEFINES
-          flutter build appbundle --release $APP_DEFINES
-          v=${{ needs.version.outputs.version }}
-          cp build/app/outputs/flutter-apk/app-release.apk "$GITHUB_WORKSPACE/meowGram-android-$v$APK_SUFFIX.apk"
-          cp build/app/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/meowGram-android-$v$APK_SUFFIX.aab"
+          flutter build apk --release "$APP_DEFINES"
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "$GITHUB_WORKSPACE/meowGram-${{ needs.version.outputs.version }}$APK_SUFFIX.apk"
       - if: always()
         run: rm -f client/android/key.properties "$RUNNER_TEMP/release.jks"
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: meowGram-android-*
+          path: meowGram-*.apk
 
   windows:
     needs: [version, verify]
@@ -182,12 +161,25 @@ jobs:
         run: |
           flutter pub get
           flutter build windows --release $env:APP_DEFINES
-          Compress-Archive -Path build/windows/x64/runner/Release/* `
-            -DestinationPath "$env:GITHUB_WORKSPACE/meowGram-windows-x64-${{ needs.version.outputs.version }}.zip"
+          $release = Resolve-Path build/windows/x64/runner/Release
+          # Ship the Visual C++ runtime next to the exe (app-local), so the app
+          # starts on PCs without the VC++ redistributable installed.
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $crt = Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC14*.CRT" -Directory | Sort-Object FullName | Select-Object -Last 1
+          if (-not $crt) { throw "Visual C++ runtime not found under $vs" }
+          Copy-Item "$crt\*.dll" $release
+          $iscc = Get-Command iscc -ErrorAction SilentlyContinue
+          if (-not $iscc) {
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+            if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
+          }
+          & $iscc /Qp "/DAppVersion=${{ needs.version.outputs.version }}" "/DSourceDir=$release" `
+            "/DOutputDir=$env:GITHUB_WORKSPACE" windows/installer/meowgram.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: meowGram-windows-*.zip
+          path: meowGram-*-setup.exe
 
   apple:
     needs: [version, verify]
@@ -203,26 +195,29 @@ jobs:
         run: |
           v=${{ needs.version.outputs.version }}
           flutter pub get
-          # Unsigned: Apple signing needs the owner's developer account
-          # (runbook §10.4). The macOS app opens after right-click → Open;
-          # the iOS .ipa must be re-signed (e.g. AltStore) before installing.
-          flutter build macos --release $APP_DEFINES
-          ditto -c -k --keepParent build/macos/Build/Products/Release/meowGram.app \
-            "$GITHUB_WORKSPACE/meowGram-macos-$v-unsigned.zip"
-          flutter build ios --release --no-codesign $APP_DEFINES
+          # Unsigned: there is no paid Apple developer account (runbook §10.11).
+          # macOS: the .dmg's app is ad-hoc signed and opens via Open Anyway;
+          # iOS: the .ipa must be re-signed (AltStore/Sideloadly) to install.
+          flutter build macos --release "$APP_DEFINES"
+          mkdir -p dmg
+          cp -R build/macos/Build/Products/Release/meowGram.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "meowGram $v" -srcfolder dmg -ov -format UDZO \
+            "$GITHUB_WORKSPACE/meowGram-$v-unsigned.dmg"
+          flutter build ios --release --no-codesign "$APP_DEFINES"
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
-          zip -qry "$GITHUB_WORKSPACE/meowGram-ios-$v-unsigned.ipa" Payload
+          zip -qry "$GITHUB_WORKSPACE/meowGram-$v-unsigned.ipa" Payload
       - uses: actions/upload-artifact@v4
         with:
           name: apple
           path: |
-            meowGram-macos-*.zip
-            meowGram-ios-*.ipa
+            meowGram-*.dmg
+            meowGram-*.ipa
 
   release:
     if: needs.version.outputs.publish == 'true'
-    needs: [version, images, web, android, windows, apple]
+    needs: [version, images, android, windows, apple]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -237,16 +232,23 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           cd dist
-          sha256sum * > SHA256SUMS.txt
+          sha256sum -- meowGram-* > SHA256SUMS.txt
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           cat > notes.md <<EOF
-          Docker images:
-          - \`ghcr.io/$owner/meowgram-server:$VERSION\`
-          - \`ghcr.io/$owner/meowgram-web:$VERSION\` (serve it on the same origin as \`/api\` and \`/ws\`)
+          The apps contain no server address: on first launch they ask for your
+          meowGram server, and the web app uses its own origin.
 
-          The apps contain no server address: on first launch they ask for it, and
-          the web app uses its own origin. macOS and iOS builds are unsigned.
+          | File | Install |
+          |---|---|
+          | \`meowGram-$VERSION.apk\` | Android: open it on the phone and allow installing from this source |
+          | \`meowGram-$VERSION-setup.exe\` | Windows: run it (SmartScreen: More info → Run anyway; it isn't code-signed) |
+          | \`meowGram-$VERSION-unsigned.dmg\` | macOS: drag meowGram to Applications; first launch via System Settings → Privacy & Security → Open Anyway |
+          | \`meowGram-$VERSION-unsigned.ipa\` | iOS: re-sign and install with AltStore or Sideloadly (free Apple ID, renew every 7 days) |
+
+          Docker images (serve the web image on the same origin as \`/api\` and \`/ws\`):
+          - \`ghcr.io/$owner/meowgram-server:$VERSION\`
+          - \`ghcr.io/$owner/meowgram-web:$VERSION\`
           EOF
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
             --title "meowGram $VERSION" --notes-file notes.md --generate-notes \
-            $(ls | grep -v '^notes.md$')
+            meowGram-* SHA256SUMS.txt
