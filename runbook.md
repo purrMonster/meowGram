@@ -1349,3 +1349,30 @@ sender constraints and retained history passed. Backup/restore, Flutter analysis
 all 83 Flutter tests, release web build and production web smoke checks passed.
 Native builds and live LDAP authorization were not exercised. Migration 000005
 was executed only against disposable verification databases.
+## 13. Release 2 shared message service (UST-2.4.1)
+
+On 2026-10-17, the owner requested continuing independent R2 work while merges
+are deferred. `refactor/ust-2.4.1-shared-message-service` branches from and will
+target `feat/r2-epic-2.4-message-api`, which targets `release/r2`. See the
+[task delivery plan](docs/releases/release-2/message-service-delivery-plan.md)
+for scope and preservation of the uncommitted planning/investigation work.
+
+`chat.MessageService` centralizes principal message budgets, whitespace trimming,
+the 4,000-rune limit, bounded database writes and publication of committed rows.
+The WebSocket adapter retains raw-text/JSON decoding and existing error frames.
+Binary/empty attempts still consume budget. Services created through the Hub
+share its limiter across transports and reconnects. The Hub continues to own
+client fan-out, slow-client eviction and coalesced content-free notifications.
+
+The service returns a committed message alongside a distinct publication error
+if the Hub has stopped. Persistence failures never publish. This is a foundation
+for HTTP sending, not an HTTP endpoint or idempotency implementation. No new
+configuration, authentication behavior or database migration is introduced.
+
+Verification on 2026-10-17: the scratch harness passed Go race tests and vet,
+PostgreSQL integration and dump/restore checks, Flutter analysis, all 81 Flutter
+tests, the release web build and production web runtime smoke checks. New
+service tests cover commit-before-publication, failed/cancelled writes, Unicode
+limits, concurrent shared budgets, principal isolation and durable results on
+publication failure. Native platform builds were not rerun for this server
+refactor. No live deployment was changed.
