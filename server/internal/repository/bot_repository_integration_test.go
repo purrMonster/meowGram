@@ -73,7 +73,7 @@ func TestBotIdentityMigrationAndLifecycle(t *testing.T) {
 	if err := db.QueryRow(`SELECT id,sender_id,text_content,created_at FROM messages WHERE id=$1`, oldID).Scan(&id, &sub, &body, &at); err != nil {
 		t.Fatal(err)
 	}
-	if id != oldID || sub != "legacy" || body != "preserved" || at.Format(time.RFC3339) != oldAt {
+	if id != oldID || sub != "legacy" || body != "preserved" || at.UTC().Format(time.RFC3339) != oldAt {
 		t.Fatal("migration changed legacy message")
 	}
 	repo := NewBotRepository(db)
