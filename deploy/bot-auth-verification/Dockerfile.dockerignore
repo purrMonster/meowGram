@@ -1,0 +1,11 @@
+**
+!server/
+!server/go.mod
+!server/go.sum
+!server/internal/
+!server/internal/**
+!server/migrations/
+!server/migrations/**
+!deploy/
+!deploy/bot-auth-verification/
+!deploy/bot-auth-verification/Dockerfile

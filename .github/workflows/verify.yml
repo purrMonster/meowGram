@@ -7,6 +7,13 @@ on:
 permissions:
   contents: read
 jobs:
+  bot-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Go authentication against isolated LLDAP 0.6.3
+        run: sh deploy/scripts/verify-bot-auth.sh
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 45
