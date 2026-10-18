@@ -1322,3 +1322,30 @@ paths can admit Basic; human OIDC, WebSocket tickets, push and media stay separa
 No local token is issued. HTTPS proxy trust requires explicit peer CIDRs and a
 proxy that overwrites X-Forwarded-Proto and rejects plaintext before forwarding.
 Do not change live ingress or provision reader credentials without owner approval.
+## 13. Release 2 bot principals (UST-2.3.3)
+
+`feat/ust-2.3.3-bot-principals` targets the bot-identity epic; merges remain
+owner-deferred. The [task delivery plan](docs/releases/release-2/bot-principals-delivery-plan.md)
+records the branch hierarchy, migration/rollback constraints and integration needs.
+
+Migration 000005 adds separate bot principal and directory identity tables.
+Mapping keys are provider (`lldap`), stable directory namespace and directory
+UUID. Concurrent first provisioning creates one principal; display names are
+labels only. New bot messages reference that local UUID and existing human
+messages retain their OIDC sender FK. A constraint requires exactly one sender.
+Down migration retains schema/data and does not make old binaries compatible.
+
+REST and WebSocket messages now carry `sender_kind`; Flutter caches it, labels
+bots and compares kind plus ID for self-message and notification behavior.
+Missing kind means legacy human data. Clients must be upgraded before enabling
+bots. This task adds no endpoint, settings, credentials or authentication grants.
+LDAP authorization and HTTP sends remain separate tasks; profile existence must
+never substitute for current group membership. No live deployment was changed.
+
+Verification on 2026-10-17: Go race tests and vet passed, including a dedicated
+disposable database upgraded from populated schema v4 to v5; concurrent mapping,
+rename/recreation, directory separation, exact human/bot sender-ID collisions,
+sender constraints and retained history passed. Backup/restore, Flutter analysis,
+all 83 Flutter tests, release web build and production web smoke checks passed.
+Native builds and live LDAP authorization were not exercised. Migration 000005
+was executed only against disposable verification databases.
