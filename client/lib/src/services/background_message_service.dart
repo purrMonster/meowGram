@@ -155,7 +155,7 @@ Future<void> runBackgroundCheck({
       accessToken: tokens.accessToken,
       idToken: tokens.idToken,
     ).sub;
-    final fromOthers = messages.where((m) => m.senderId != mySub).toList();
+    final fromOthers = messages.where((m) => !m.isFromSelf(mySub)).toList();
     if (fromOthers.isEmpty) return;
 
     if (notify != null) {
