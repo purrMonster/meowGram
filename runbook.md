@@ -1395,3 +1395,41 @@ sender constraints and retained history passed. Backup/restore, Flutter analysis
 all 83 Flutter tests, release web build and production web smoke checks passed.
 Native builds and live LDAP authorization were not exercised. Migration 000005
 was executed only against disposable verification databases.
+
+### 13.4 Bot authentication gate (UST-2.3.2)
+
+`feat/ust-2.3.2-bot-auth` targets `feat/r2-epic-2.3-bot-identity`.
+See the [delivery plan](docs/releases/release-2/bot-auth-delivery-plan.md) for
+branch ancestry, integration steps, security boundaries and verification.
+Merges remain owner-deferred. This branch supplies a reusable LDAP/message gate;
+it does not enable a public bot route. Setting the feature flag true rejects
+startup until principal and message API integration replaces that guard.
+
+| Server setting | Default / meaning |
+|---|---|
+| `BOT_BASIC_AUTH_ENABLED` | `false`; activation blocked on this standalone task |
+| `BOT_LDAP_URL` | Required when constructing the gate; `ldaps://` origin only |
+| `BOT_LDAP_BASE_DN` | Required people search base, e.g. `ou=people,dc=example,dc=com` |
+| `BOT_LDAP_READER_DN` | Required least-privilege reader DN |
+| `BOT_LDAP_READER_PASSWORD_FILE` | Required host-local file, mounted under `/run/secrets` |
+| `BOT_LDAP_ALLOWED_GROUP` | Required full group DN, e.g. `cn=bots,ou=groups,dc=example,dc=com` |
+| `BOT_LDAP_DIRECTORY_NAMESPACE` | Required stable directory instance identifier; max 255 characters |
+| `BOT_LDAP_CA_FILE` | Empty uses system roots; optional PEM extends trust |
+| `BOT_LDAP_TIMEOUT` | `5s`; total auth deadline, greater than zero and at most `30s` |
+| `BOT_LDAP_MAX_CONCURRENT` | `8`; process-local operations, range 1..128 |
+| `BOT_TRUSTED_PROXY_CIDRS` | Empty trusts no forwarded HTTPS claims; explicit peer CIDRs only |
+
+All settings are server-only and wired into Compose; no credentials are tracked.
+Reader-secret files contain 1..4096 bytes; a final CRLF/LF is removed, spaces
+preserved. Restart after reader-secret rotation. Bot passwords are never cached.
+Use a reader in LLDAP's `lldap_strict_readonly` group with visibility of the
+configured people base, `entryUUID`, `cn` and `memberOf`.
+
+Each authentication performs a reader lookup, isolated password bind and fresh
+UUID/group lookup over verified LDAPS, under bounded concurrency and a shared
+deadline. Bad credentials return 401, valid nonmembers 403, dependency failures
+503. Group removal affects subsequent requests. Only GET sync and POST message
+paths can admit Basic; human OIDC, WebSocket tickets, push and media stay separate.
+No local token is issued. HTTPS proxy trust requires explicit peer CIDRs and a
+proxy that overwrites X-Forwarded-Proto and rejects plaintext before forwarding.
+Do not change live ingress or provision reader credentials without owner approval.
