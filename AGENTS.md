@@ -1,5 +1,7 @@
 # AGENTS.md: rules for every agent working on meowGram
 
+Release 2 work: read docs/releases/release-2/AGENT_PLAYBOOK.md before every session; its [OVERRIDE] rules are owner-approved.
+
 meowGram is the purrBrews household's cat-lounge chat: a Flutter client (web,
 Android, iOS, Windows, macOS) and a Go backend with PostgreSQL, deployed as
 containers. Read this file first, then [`runbook.md`](runbook.md) (current design
