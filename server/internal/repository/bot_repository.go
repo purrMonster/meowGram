@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -29,12 +30,10 @@ func (r *BotRepository) Resolve(ctx context.Context, namespace, externalID, user
 	if err != nil || id == uuid.Nil || namespace == "" || len([]rune(namespace)) > 255 {
 		return nil, errors.New("invalid directory identity")
 	}
-	username = strings.TrimSpace(username)
-	if username == "" {
-		return nil, errors.New("bot display name is required")
-	}
-	if runes := []rune(username); len(runes) > 100 {
-		username = string(runes[:100])
+	// Preserve the verified login ID exactly; truncation would change its meaning.
+	if username == "" || strings.TrimSpace(username) != username || !utf8.ValidString(username) ||
+		utf8.RuneCountInString(username) > 100 || strings.ContainsAny(username, "\x00\r\n") {
+		return nil, errors.New("valid bot login username of at most 100 characters is required")
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -57,9 +56,6 @@ func (r *BotRepository) Resolve(ctx context.Context, namespace, externalID, user
 			return nil, err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO bot_directory_identities(provider,directory_namespace,external_id,principal_id) VALUES('lldap',$1,$2,$3)`, namespace, id.String(), principal.ID)
-	} else if err == nil {
-		_, err = tx.ExecContext(ctx, `UPDATE bot_principals SET username=$1 WHERE id=$2`, username, principal.ID)
-		principal.Username = username
 	}
 	if err != nil {
 		return nil, err

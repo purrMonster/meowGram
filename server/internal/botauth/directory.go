@@ -24,7 +24,8 @@ var (
 	ErrUnavailable = errors.New("authentication unavailable")
 )
 
-type Identity struct{ Namespace, ExternalID, DisplayName string }
+// Username is the directory's canonical login uid, never cn or caller spelling.
+type Identity struct{ Namespace, ExternalID, Username string }
 
 // Options contains deployment configuration only. Reader passwords are loaded
 // from a host-local file and never accepted through a URL or a logging field.
@@ -162,6 +163,10 @@ func (d *Directory) Authenticate(ctx context.Context, username, password string)
 	if err != nil {
 		return Identity{}, err
 	}
+	beforeUsername, err := entryUsername(before)
+	if err != nil {
+		return Identity{}, err
+	}
 	beforeDN, err := ldap.ParseDN(before.DN)
 	if err != nil || len(beforeDN.RDNs) == 0 {
 		return Identity{}, ErrUnavailable
@@ -208,16 +213,19 @@ func (d *Directory) Authenticate(ctx context.Context, username, password string)
 	if !allowed {
 		return Identity{}, ErrForbidden
 	}
-	name := after.GetAttributeValue("cn")
-	if name == "" {
-		name = username
+	name, err := entryUsername(after)
+	if err != nil {
+		return Identity{}, err
 	}
-	return Identity{Namespace: d.options.Namespace, ExternalID: afterID, DisplayName: name}, nil
+	if name != beforeUsername {
+		return Identity{}, ErrCredentials
+	}
+	return Identity{Namespace: d.options.Namespace, ExternalID: afterID, Username: name}, nil
 }
 
 func (d *Directory) lookup(c connection, username string) (*ldap.Entry, error) {
 	result, err := c.Search(ldap.NewSearchRequest(d.options.BaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 2, 0, false,
-		"(uid="+ldap.EscapeFilter(username)+")", []string{"entryUUID", "cn", "memberOf"}, nil))
+		"(uid="+ldap.EscapeFilter(username)+")", []string{"entryUUID", "uid", "memberOf"}, nil))
 	if err != nil || result == nil || len(result.Referrals) > 0 {
 		return nil, ErrUnavailable
 	}
@@ -228,6 +236,15 @@ func (d *Directory) lookup(c connection, username string) (*ldap.Entry, error) {
 		return nil, ErrUnavailable
 	}
 	return result.Entries[0], nil
+}
+
+func entryUsername(e *ldap.Entry) (string, error) {
+	values := e.GetAttributeValues("uid")
+	if len(values) != 1 || values[0] == "" || strings.TrimSpace(values[0]) != values[0] ||
+		!utf8.ValidString(values[0]) || utf8.RuneCountInString(values[0]) > 100 || strings.ContainsAny(values[0], "\x00\r\n") {
+		return "", ErrUnavailable
+	}
+	return values[0], nil
 }
 
 func entryID(e *ldap.Entry) (string, error) {
