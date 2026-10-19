@@ -22,7 +22,7 @@ func TestBotIdentityMigrationAndLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if u.Path != "/verification" {
-		t.Fatal("requires disposable verification database")
+		t.Skip("requires disposable PostgreSQL: TEST_DATABASE_URL database must be /verification")
 	}
 	admin, err := sql.Open("pgx", dsn)
 	if err != nil {
