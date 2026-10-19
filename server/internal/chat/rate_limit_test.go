@@ -28,7 +28,7 @@ func TestReadPumpRejectsBeforeDatabaseWrite(t *testing.T) {
 			return
 		}
 		// A database write here would panic: rejected messages must never reach it.
-		client := NewClient(hub, conn, &model.User{AutheliaSub: "limited"}, nil, quietLogger())
+		client := NewClient(hub, conn, &model.User{AutheliaSub: "limited"}, nil, hub.MessageService(nil), quietLogger())
 		if !hub.RegisterClient(client) {
 			conn.Close()
 			return
