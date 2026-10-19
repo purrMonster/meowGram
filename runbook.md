@@ -1,9 +1,9 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.16.0
+> **Document Version**: 1.17.0
 > **Status**: Full codebase re-audit is in progress on `refactor/full-codebase-audit`; see [§12.10](#1210-review-hardening) and [§12.11](#1211-full-codebase-re-audit) for changes and deployment prerequisites. Release 1.0.1 remains the latest deployed release.
 > **Author**: Lead Developer / Antigravity IDE; §12 and corrections by Claude  
-> **Last Updated**: 2026-10-12
+> **Last Updated**: 2026-10-15
 
 > [!IMPORTANT]
 > Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; §§12.10–12.11 record code changes that are not yet deployed. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
@@ -16,6 +16,8 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 
 ### Architectural Mandate Updates
 - **Backend OIDC Pivot (Epic 1.2)**: All custom local authentication, password storage, user registration, and local JWT issuance are completely eliminated in favor of **Authelia OpenID Connect (OIDC)**.
+  Release 2 has an approved, unimplemented exception for directory-validated bot
+  Basic Auth on message HTTP endpoints only; see [§13](#13-release-2-planning).
 - **Client OIDC PKCE Integration (UST-1.2.3)**: The Flutter client implements the OAuth 2.0 Authorization Code Flow with Proof Key for Code Exchange (PKCE, RFC 7636). The client is purely public and stores **zero client secrets**.
 - **Real-Time WebSocket Core (Epic 1.3 - UST-1.3.1, UST-1.3.3, UST-1.3.4)**:
   - In-memory Go `Hub` manages active client registries via synchronized channels (`register`, `unregister`, `broadcast`).
@@ -1312,3 +1314,83 @@ sender constraints and retained history passed. Backup/restore, Flutter analysis
 all 83 Flutter tests, release web build and production web smoke checks passed.
 Native builds and live LDAP authorization were not exercised. Migration 000005
 was executed only against disposable verification databases.
+## 13. Release 2 planning
+
+Decision recorded 2026-10-15; planning only. The implementation and deployed
+configuration do not yet provide the bot authentication or HTTP send behavior
+specified here. See the [release plan](docs/releases/release-2/README.md),
+[API design](docs/releases/release-2/api-design.md) and
+[delivery plan](docs/releases/release-2/delivery-plan.md).
+
+Release 2 retains Immich media Epics 2.1–2.2 and adds API Epics 2.3–2.5. People
+continue using Authelia OAuth. The owner approved dedicated bot Basic Auth over
+HTTPS, restricted to the message send/read HTTP endpoints and gated by a
+configured LLDAP group (suggested name: `meowgram-api-bots`). Every Basic request
+must validate the password and current group membership over encrypted LDAP,
+without positive authentication caching. Directory failure denies bot access.
+Group membership grants both reading and sending in the single lounge.
+
+This is a narrow planned exception to the OIDC-only authentication mandate.
+It does not add local passwords, user registration or self-issued tokens.
+Basic Auth cannot obtain WebSocket tickets, register push devices or authorize
+media access. Human bearer authentication keeps its existing policy and does
+not depend on directory availability. Group removal blocks subsequent requests
+after the change is visible to the directory; already-authorized requests may
+finish. Revocation must preserve local profiles and message history.
+
+The planned new configurable send path defaults to `POST /api/messages`;
+`GET /api/messages/sync` retains its existing pagination contract. The design
+proposes transactional per-principal idempotency keys and a shared HTTP/WS
+message service. Proposed settings are listed in the API design, separately
+from the implemented configuration tables above. Add final settings to config,
+examples, Compose as needed and those tables in the implementing branches.
+
+Directory schema/transport compatibility and an additive stable identity mapping
+must be verified before implementation. The existing Authelia subject foreign
+key must not be repurposed as an unchecked LDAP username. Bot OAuth, granular
+read/send roles, email and bot attachments are deferred from API v1.
+
+No live deployment, external identity configuration, directory group/account,
+credential or database was changed for this plan. Those operations retain the
+owner-approval boundaries in AGENTS.md. Application verification remains a
+release gate; this planning record makes no new claim of passing code tests.
+
+### 13.1 Directory compatibility investigation (2026-10-17)
+
+`feat/ust-2.3.1-directory-identity` adds a disposable, network-isolated LLDAP
+v0.6.3 probe; run `deploy/scripts/verify-directory.ps1` or its `.sh` counterpart.
+Verified LDAPS, strict-readonly queries, direct membership removal, password
+rotation, stable UUID after display-name changes, and distinct UUID after
+account recreation passed. StartTLS is unavailable in this fixture; login-ID
+rename is not supported by the tested update API. The owner confirmed deployed
+version 0.6.3; live transport and configuration have not been inspected.
+
+The [identity investigation](docs/releases/release-2/directory-identity.md)
+selects separate bot principal/directory mapping tables, a new bot sender FK,
+and preservation of all existing OIDC sender values. A sender-kind discriminator
+and corresponding client changes are required to prevent human/bot identity
+collisions. No application migration or bot authentication is implemented here.
+The original proposal's StartTLS option is deferred and a stable directory
+namespace becomes a proposed server-only setting. Final implemented settings
+will enter the configuration tables with the implementing branches.
+
+All fixture credentials and certificates are generated inside the disposable
+container and discarded. No live service, credential or data was accessed.
+
+Verification on 2026-10-17: the v0.6.3 directory probe passed; the repository
+scratch harness passed Go race tests and vet, PostgreSQL integration and
+dump/restore checks, Flutter analysis and tests, release web build and non-root
+web runtime smoke checks. The existing optional Cupertino font warning remains.
+PowerShell/POSIX wrapper syntax, release-document local links and whitespace
+checks passed. No Android or Apple native build was run for this investigation.
+
+### 13.2 Release branch hierarchy (2026-10-17)
+
+The owner requested release/epic/task integration for divided work. R2 now uses
+`release/r2` above five epic branches; the current directory investigation is
+a task under `feat/r2-epic-2.3-bot-identity`. PRs target the immediate parent,
+with the final R2 PR targeting `main`. Release-wide planning targets the release
+directly. AGENTS.md records this workflow for future similarly structured work;
+standalone changes continue to branch from updated main. The exact branch map
+and local/uncommitted status are in the
+[delivery plan](docs/releases/release-2/delivery-plan.md#branch-hierarchy).
