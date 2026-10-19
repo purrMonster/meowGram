@@ -6,7 +6,7 @@ branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 
 ## R2 queue and dependencies
 
-1. Scope-split PR: docs/r2-scope-split → release/r2 | merge after nothing | records approved scope and pourOver contract (PR number added after creation).
+1. #33 Scope-split PR: docs/r2-scope-split → release/r2 | merge after nothing | records approved scope and pourOver contract.
 2. NEW UST-2.3.4: task from fetched feat/r2-epic-2.3-bot-identity → that epic | before epic release PR | uid-based stable usernames; no per-resolve overwrite; rename/recreation/human regressions; any migration additive and re-runnable with real golang-migrate tests.
 3. Epic 2.3 documentation fold, if needed: docs task → epic 2.3 | after 2.3.4 | fold logs/config, reconcile older release-plan files with the scope PR.
 4. feat/r2-epic-2.3-bot-identity → release/r2 | after 2.3.4 and doc-fold owner merges, full epic verification | identity integration.
