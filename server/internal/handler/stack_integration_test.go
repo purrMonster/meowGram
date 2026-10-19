@@ -3,8 +3,11 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -18,14 +21,26 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"meowgram/server/internal/auth"
+	"meowgram/server/internal/botauth"
 	"meowgram/server/internal/chat"
 	"meowgram/server/internal/config"
 	"meowgram/server/internal/database"
 	"meowgram/server/internal/model"
+	"meowgram/server/internal/ratelimit"
 	"meowgram/server/internal/repository"
 )
+
+type scratchDirectory struct{ id string }
+
+func (d scratchDirectory) Authenticate(_ context.Context, user, password string) (botauth.Identity, error) {
+	if user != "synthetic" || password != "synthetic" {
+		return botauth.Identity{}, botauth.ErrCredentials
+	}
+	return botauth.Identity{Namespace: "scratch", ExternalID: d.id, DisplayName: "synthetic bot"}, nil
+}
 
 // Emulates the issuer/JWKS locally and exercises actual auth middleware, tickets,
 // WebSocket persistence/broadcast, sync and device registration together.
@@ -85,6 +100,9 @@ func TestScratchAuthenticatedChatFlow(t *testing.T) {
 			t.Fatal(err)
 		}
 		req.Header.Set("Authorization", "Bearer "+bearer)
+		if strings.HasPrefix(bearer, "Basic ") {
+			req.Header.Set("Authorization", bearer)
+		}
 		res, err := server.Client().Do(req)
 		if err != nil {
 			t.Fatal("scratch HTTP request failed")
@@ -167,5 +185,77 @@ func TestScratchAuthenticatedChatFlow(t *testing.T) {
 		if res.StatusCode != 204 {
 			t.Fatalf("device %s failed", method)
 		}
+	}
+
+	// Real OIDC guard protects the bridge; a TLS callback checks exact signed bytes.
+	bridgeKey := []byte(strings.Repeat("k", 32))
+	callback := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		mac := hmac.New(sha256.New, bridgeKey)
+		mac.Write([]byte(r.Header.Get("X-Review-Timestamp") + "\nscratch-stack-user\n"))
+		mac.Write(raw)
+		if r.Header.Get("X-Review-Actor") != "scratch-stack-user" || r.Header.Get("X-Review-Signature") != hex.EncodeToString(mac.Sum(nil)) || r.Header.Get("Authorization") != "" {
+			t.Error("invalid signed bridge request")
+			w.WriteHeader(403)
+			return
+		}
+		_, _ = w.Write([]byte(`{"recorded":true}`))
+	}))
+	defer callback.Close()
+	mux.Handle("POST /review", guard(reviewBridge(config.Integration{ReviewURL: callback.URL, ReviewActors: map[string]bool{"scratch-stack-user": true}}, bridgeKey, callback.Client())))
+	for _, pair := range [][2]string{{"", "401"}, {sign("wrong-audience"), "401"}, {bearer, "200"}, {"Basic c3ludGhldGljOnN5bnRoZXRpYw==", "401"}} {
+		r := request("POST", "/review", pair[0], `{"action_id":"test"}`)
+		r.Body.Close()
+		if (pair[1] == "200" && r.StatusCode != 200) || (pair[1] == "401" && r.StatusCode != 401) {
+			t.Fatalf("review auth status %d", r.StatusCode)
+		}
+	}
+	// The bot gate validates credentials again even for replayed delivery keys.
+	bots := repository.NewBotRepository(db)
+	gate := botauth.Gate{Directory: scratchDirectory{uuid.NewString()}, Resolve: func(ctx context.Context, id botauth.Identity) (botauth.Principal, error) {
+		p, err := bots.Resolve(ctx, id.Namespace, id.ExternalID, id.DisplayName)
+		if err != nil {
+			return botauth.Principal{}, err
+		}
+		return botauth.Principal{ID: p.ID, DisplayName: p.Username}, nil
+	}, Ingress: ratelimit.New(1000, 100), API: ratelimit.New(1000, 100), HumanOnly: guard, Logger: logger, SendPath: "/send", Timeout: time.Second}
+	send, err := gate.Handler(SendHandler(hub.MessageService(messages)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	botServer := httptest.NewTLSServer(send)
+	defer botServer.Close()
+	idempotency := uuid.NewString()
+	receiptID := ""
+	for i, tc := range []struct {
+		text, password string
+		status         int
+	}{{"notice", "synthetic", 201}, {"notice", "synthetic", 200}, {"changed", "synthetic", 409}, {"notice", "wrong", 401}} {
+		raw, _ := json.Marshal(map[string]string{"text_content": tc.text})
+		req, _ := http.NewRequest("POST", botServer.URL+"/send", bytes.NewReader(raw))
+		req.SetBasicAuth("synthetic", tc.password)
+		req.Header.Set("Idempotency-Key", idempotency)
+		res, err := botServer.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != tc.status {
+			t.Fatalf("send %d got %d", i, res.StatusCode)
+		}
+		if res.StatusCode == 200 || res.StatusCode == 201 {
+			var receipt struct {
+				ID        string `json:"id"`
+				Key       string `json:"idempotency_key"`
+				Persisted bool   `json:"persisted"`
+			}
+			if json.NewDecoder(res.Body).Decode(&receipt) != nil || !receipt.Persisted || receipt.Key != idempotency || receipt.ID == "" {
+				t.Fatal("invalid receipt")
+			}
+			if receiptID != "" && receipt.ID != receiptID {
+				t.Fatal("duplicate notification")
+			}
+			receiptID = receipt.ID
+		}
+		res.Body.Close()
 	}
 }

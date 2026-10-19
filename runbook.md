@@ -1376,3 +1376,94 @@ service tests cover commit-before-publication, failed/cancelled writes, Unicode
 limits, concurrent shared budgets, principal isolation and durable results on
 publication failure. Native platform builds were not rerun for this server
 refactor. No live deployment was changed.
+# tabbyTally send and review integration — 18 October 2026
+
+The owner explicitly requested implementing and verifying the send endpoint and
+authenticated review-action bridge. Work is isolated on
+`feat/tabbytally-review-integration`, created from refreshed `origin/main` and
+locally integrating `feat/ust-2.3.2-bot-auth`, `feat/ust-2.3.3-bot-principals` and
+`refactor/ust-2.4.1-shared-message-service`. These local merges are dependencies,
+not owner approval to merge release PRs. Original checkout and live services are
+untouched. Conflict resolution retains both runbook histories and sender kind in
+the shared publication path.
+
+New optional settings (all empty/disabled by default), in `.env.example` and Compose:
+
+| Setting | Meaning |
+|---|---|
+| MESSAGE_SEND_ENDPOINT | Explicit POST route for durable text sends |
+| REVIEW_ACTION_ENDPOINT | Explicit POST route for human review actions |
+| REVIEW_CALLBACK_URL | Complete HTTPS processing callback URL; no credentials/query |
+| REVIEW_SIGNING_KEY_FILE | Server-only file containing the shared HMAC key, at least 32 bytes after trimming |
+| REVIEW_ALLOWED_SUBJECTS | Comma-separated stable OIDC subjects allowed to decide reviews |
+
+The send route uses existing human OIDC middleware or, when explicitly enabled,
+the existing LDAP-backed bot Basic gate (current group membership checked every
+request, TLS or explicitly trusted TLS proxy required). Bot access is limited to
+the send route; sync and review do not accept bot credentials. All messages go to
+the existing shared lounge, so notifications contain only review UUID/revision and
+generic status, never private banking data. No new human authentication system.
+
+Contract `durable-send-v1`: POST JSON `{"text_content":"..."}` with a nonzero UUID
+`Idempotency-Key`. First commit returns 201, identical replay 200, both with
+`{"id":"message UUID","idempotency_key":"request UUID","persisted":true}`.
+Same key with different original text returns 409. Keys are scoped to authenticated
+sender kind/ID. Migration 000006 stores receipts atomically with messages, retains
+them indefinitely, and refuses destructive downgrade while receipts exist. The
+shared service retains 4000-character validation, principal budgets and a five-
+second write deadline. Persistence precedes broadcast; committed messages retain
+successful receipts even if the hub stops. Replays do not broadcast again; existing
+sync/history repairs delivery gaps. No guarantee that every client has received a
+message is implied by `persisted`.
+
+The review route uses only existing human OIDC middleware plus the explicit
+subject allowlist. Body follows tabbyTally's action contract: action_id, review_id,
+revision, action, reason, optional facts/treatment. The bridge rejects extra fields,
+caps the body at 64 KiB, and forwards exact bytes to the fixed HTTPS callback. It
+derives `X-Review-Actor` from the verified subject, adds Unix timestamp and HMAC-
+SHA256 over timestamp + newline + actor + newline + body. The actor must also be
+in tabbyTally's REVIEW_ALLOWED_ACTORS. It strips client-supplied actor/signature and
+never forwards the bearer token. No redirects; eight-second overall HTTP timeout;
+bounded response. A stale/conflicting callback remains 409. Backend auth/config
+failure becomes generic 503; no remote response content is exposed on errors.
+The processing service retains financial validation, action replay receipts,
+revision fencing and decision/notification atomicity. Retry the same action ID and
+body on a lost response; refresh a stale review rather than auto-approving it.
+
+Before live enabling: owner merges/reviews dependencies, approves deployment and
+provisions local LDAP credentials and shared signing key. Set the two endpoint
+paths under the routed API prefix, the actual HTTPS callback, and matching actor
+allowlists. Mount files under existing read-only deploy/secrets. Set tabbyTally's
+MEOWGRAM_SEND_URL to the configured route and its verified-contract flag only
+after synthetic deployed replay/auth tests pass. No live credentials were created
+or read here. This increment provides HTTP APIs; it does not add Flutter review
+buttons or expose private source emails in the shared lounge.
+
+Verification completed 18 October 2026: `go test -race -count=1 ./...` and
+`go vet ./...` passed against scratch PostgreSQL, including 16 concurrent same-key
+sends, conflict rejection, repository recreation/replay, real OIDC guard, bot send
+authentication, signature/actor isolation and post-commit publication failure.
+The full Flutter harness passed analysis, **83 tests**, and release web compilation
+(existing optional Cupertino-font warning only). The backup/restore drill passed,
+including nonempty receipt counts and preserved message/receipt associations.
+
+Cross-project acceptance passed using tabbyTally's
+`processing/compose.bridge.test.yaml`: Go bridge -> temporary TLS proxy -> actual
+Python review API -> PostgreSQL. First action and identical replay succeeded;
+stale revision and conflicting action ID returned 409; only one decision persisted.
+An initial test compared JSON bytes and failed because PostgreSQL JSONB changes
+key order; corrected the assertion to compare decoded JSON values and reran
+successfully. This was a test assertion fix, not a production replay change.
+
+Reproduce Go/Flutter/restore with `deploy/scripts/verify.ps1`; reproduce the
+cross-project check from tabbyTally using its documented MEOWGRAM_SERVER_PATH.
+The cross-project test skips in a standalone meowGram suite without its explicit
+fixture URLs. Route tests emulate LDAP and a JWT issuer; no live LDAP, OIDC account,
+deployment or notification was exercised. Secrets remain unprovisioned locally.
+
+19 October 2026 resume: the usage limit had prevented automatic approval review
+from executing the final check and commit; it was not a safety rejection. Resumed
+from this worktree without restarting implementation. Formatted the final test
+change and reran `go test -race -count=1 ./internal/handler`: passed, including an
+actual Basic Authorization header rejected by the human-only review route.
+The earlier full Go/vet, Flutter, restore and cross-project results remain valid.

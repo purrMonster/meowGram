@@ -12,4 +12,9 @@ test "$(psql -d restored -Atc 'SELECT value FROM restore_probe WHERE id = 1')" =
 source_count=$(psql -Atc 'SELECT count(*) FROM messages')
 restored_count=$(psql -d restored -Atc 'SELECT count(*) FROM messages')
 test "$source_count" = "$restored_count"
+source_receipts=$(psql -Atc 'SELECT count(*) FROM message_receipts')
+restored_receipts=$(psql -d restored -Atc 'SELECT count(*) FROM message_receipts')
+test "$source_receipts" -gt 0
+test "$source_receipts" = "$restored_receipts"
+test "$(psql -d restored -Atc 'SELECT count(*) FROM message_receipts r LEFT JOIN messages m ON m.id=r.message_id WHERE m.id IS NULL')" = 0
 echo 'Backup/restore drill passed (probe and message count match).'

@@ -54,6 +54,44 @@ func NewMessageService(store MessageStore, publisher MessagePublisher, budget Me
 	return &MessageService{store: store, publisher: publisher, budget: budget}
 }
 
+type ReceiptStore interface {
+	CreateOnce(context.Context, string, string, string, string, string) (*model.Message, bool, error)
+}
+
+// SendOnce uses the same budget as WebSocket sends, but atomically persists a
+// replay receipt. Replays do not rebroadcast; history/sync recover delivery gaps.
+func (s *MessageService) SendOnce(ctx context.Context, kind, sender, name, key, text string) (*model.Message, bool, error) {
+	budgetKey := sender
+	if kind == "bot" {
+		budgetKey = "bot:" + sender
+	}
+	if s.budget != nil {
+		if ok, wait := s.budget.Allow(budgetKey); !ok {
+			return nil, false, &MessageRateError{RetryAfter: wait}
+		}
+	}
+	if strings.TrimSpace(text) == "" {
+		return nil, false, ErrEmptyMessage
+	}
+	if !utf8.ValidString(text) || utf8.RuneCountInString(strings.TrimSpace(text)) > MaxTextRunes {
+		return nil, false, ErrMessageTooLong
+	}
+	store, ok := s.store.(ReceiptStore)
+	if !ok {
+		return nil, false, ErrMessagePersistence
+	}
+	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	msg, replay, err := store.CreateOnce(writeCtx, kind, sender, name, key, text)
+	if err != nil {
+		return nil, false, err
+	}
+	if !replay && !s.publisher.Publish(&model.WSMessage{Type: "chat", ID: msg.ID, SenderID: msg.SenderID, SenderKind: msg.SenderKind, Username: msg.Username, TextContent: msg.TextContent, CreatedAt: msg.CreatedAt}) {
+		return msg, replay, ErrBroadcastStopped
+	}
+	return msg, replay, nil
+}
+
 // Send accepts text and an already authenticated sender. It does not authenticate.
 // Attempts consume budget before validation, retaining the WebSocket policy.
 // A non-nil message with ErrBroadcastStopped is durable; callers must not treat
@@ -80,7 +118,7 @@ func (s *MessageService) Send(ctx context.Context, senderID, username, text stri
 	if !s.publisher.Publish(&model.WSMessage{
 		Type: "chat", ID: message.ID, SenderID: message.SenderID,
 		SenderKind: message.SenderKind,
-		Username: message.Username, TextContent: message.TextContent, CreatedAt: message.CreatedAt,
+		Username:   message.Username, TextContent: message.TextContent, CreatedAt: message.CreatedAt,
 	}) {
 		return message, ErrBroadcastStopped
 	}

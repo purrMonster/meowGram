@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"meowgram/server/internal/auth"
+	"meowgram/server/internal/botauth"
 	"meowgram/server/internal/chat"
 	"meowgram/server/internal/config"
 	"meowgram/server/internal/database"
@@ -124,6 +125,50 @@ func main() {
 	verifyIdentity := auth.Middleware(oidcVerifier, userRepo, logger)
 	userBudget := middleware.UserRateLimit(ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst))
 	authMiddleware := func(next http.Handler) http.Handler { return verifyIdentity(userBudget(next)) }
+	integration, err := config.LoadIntegration()
+	if err != nil {
+		logger.Error("Invalid integration configuration")
+		os.Exit(1)
+	}
+	if integration.SendPath != "" {
+		var send http.Handler = handler.SendHandler(hub.MessageService(messageRepo))
+		botConfig, err := config.LoadBotAuth()
+		if err != nil {
+			logger.Error("Invalid bot configuration")
+			os.Exit(1)
+		}
+		if botConfig.Enabled {
+			directory, err := botauth.NewDirectory(botConfig.Directory)
+			if err != nil {
+				logger.Error("Cannot initialize bot directory")
+				os.Exit(1)
+			}
+			bots := repository.NewBotRepository(db)
+			gate := botauth.Gate{Directory: directory, Resolve: func(ctx context.Context, id botauth.Identity) (botauth.Principal, error) {
+				p, err := bots.Resolve(ctx, id.Namespace, id.ExternalID, id.DisplayName)
+				if err != nil {
+					return botauth.Principal{}, err
+				}
+				return botauth.Principal{ID: p.ID, DisplayName: p.Username}, nil
+			}, Ingress: ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst), API: ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst), HumanOnly: authMiddleware, Logger: logger, SendPath: integration.SendPath, TrustedProxies: botConfig.TrustedProxies, Timeout: botConfig.Directory.Timeout}
+			send, err = gate.Handler(send)
+			if err != nil {
+				logger.Error("Cannot initialize bot gate")
+				os.Exit(1)
+			}
+		} else {
+			send = authMiddleware(send)
+		}
+		mux.Handle("POST "+integration.SendPath, send)
+	}
+	if integration.ReviewPath != "" {
+		bridge, err := handler.ReviewBridge(integration)
+		if err != nil {
+			logger.Error("Cannot initialize review bridge")
+			os.Exit(1)
+		}
+		mux.Handle("POST "+integration.ReviewPath, authMiddleware(bridge))
+	}
 	ticketStore := auth.NewWSTicketStore()
 	wsHandler := handler.WebSocketHandler(hub, messageRepo, ticketStore, cfg, logger)
 	mux.Handle("/ws", wsHandler)
