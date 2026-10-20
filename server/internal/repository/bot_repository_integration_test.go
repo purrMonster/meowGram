@@ -78,9 +78,9 @@ func TestBotIdentityMigrationAndLifecycle(t *testing.T) {
 	}
 	repo := NewBotRepository(db)
 	external := uuid.NewString()
-	ids := make(chan string, 16)
+	ids := make(chan string, 20)
 	var wg sync.WaitGroup
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 20; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -109,7 +109,7 @@ func TestBotIdentityMigrationAndLifecycle(t *testing.T) {
 		t.Fatalf("orphan principals: %d %v", count, err)
 	}
 	renamed, err := repo.Resolve(ctx, "directory-a", external, "Renamed 🐾")
-	if err != nil || renamed.ID != principal {
+	if err != nil || renamed.ID != principal || renamed.Username != "bot" {
 		t.Fatalf("rename changed identity: %v", err)
 	}
 	recreated, err := repo.Resolve(ctx, "directory-a", uuid.NewString(), "Renamed 🐾")
@@ -165,7 +165,7 @@ func TestBotIdentityMigrationAndLifecycle(t *testing.T) {
 		for _, m := range rows {
 			if m.ID == bot.ID {
 				gotKind = m.SenderKind
-				if m.Username != "Renamed 🐾" {
+				if m.Username != "bot" {
 					t.Fatal("bot label lost")
 				}
 			}

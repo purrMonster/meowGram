@@ -177,8 +177,8 @@ func TestLLDAP(t *testing.T) {
 	check("unknown", secret(), ErrCredentials)
 	graphql(`mutation($u:UpdateUserInput!){updateUser(user:$u){ok}}`, map[string]any{"u": map[string]string{"id": "bot", "displayName": "Renamed bot"}})
 	renamed := check("bot", botPassword, nil)
-	if original.ExternalID != renamed.ExternalID || renamed.DisplayName != "Renamed bot" {
-		t.Fatal("rename changed identity or failed to refresh label")
+	if original.ExternalID != renamed.ExternalID || original.Username != "bot" || renamed.Username != "bot" {
+		t.Fatal("display-name rename changed login username or identity")
 	}
 	membership("bot", group, false)
 	check("bot", botPassword, ErrForbidden)
@@ -195,7 +195,7 @@ func TestLLDAP(t *testing.T) {
 	check("bot", rotated, ErrForbidden)
 	membership("bot", group, true)
 	recreated := check("bot", rotated, nil)
-	if recreated.ExternalID == original.ExternalID {
+	if recreated.ExternalID == original.ExternalID || recreated.Username != "bot" {
 		t.Fatal("recreation reused identity")
 	}
 	options.CAFile = ""

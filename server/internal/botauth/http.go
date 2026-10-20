@@ -22,7 +22,7 @@ type Authenticator interface {
 type Budget interface {
 	Allow(string) (bool, time.Duration)
 }
-type Principal struct{ ID, DisplayName string }
+type Principal struct{ ID, Username string }
 type Resolver func(context.Context, Identity) (Principal, error)
 type principalKey struct{}
 

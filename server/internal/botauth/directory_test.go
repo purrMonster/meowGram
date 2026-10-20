@@ -73,7 +73,7 @@ func (f *fakeConn) Bind(u, p string) error {
 func (f *fakeConn) Search(r *ldap.SearchRequest) (*ldap.SearchResult, error) { return f.search(r) }
 func (f *fakeConn) Close() error                                             { return nil }
 func entry(id string, member bool) *ldap.Entry {
-	attrs := map[string][]string{"entryUUID": {id}, "cn": {"Backup"}}
+	attrs := map[string][]string{"entryUUID": {id}, "uid": {"bot"}, "cn": {"Backup"}}
 	if member {
 		attrs["memberOf"] = []string{groupDN}
 	}
@@ -135,7 +135,7 @@ func TestDirectoryFailuresAndRevalidation(t *testing.T) {
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("outcome %v, expected %v", err, tt.want)
 			}
-			if err == nil && (got.ExternalID != testID || got.Namespace != "test" || got.DisplayName != "Backup" || searches != 2) {
+			if err == nil && (got.ExternalID != testID || got.Namespace != "test" || got.Username != "bot" || searches != 2) {
 				t.Fatal("invalid authenticated identity")
 			}
 		})
@@ -190,5 +190,65 @@ func TestConcurrencyAndCancellation(t *testing.T) {
 	}
 	if len(d.slots) != 0 {
 		t.Fatal("slot leaked")
+	}
+}
+
+func TestDirectoryUsesVerifiedUIDNotDisplayName(t *testing.T) {
+	for _, display := range []string{"First display", "Renamed display"} {
+		reader := &fakeConn{search: func(r *ldap.SearchRequest) (*ldap.SearchResult, error) {
+			if r.Filter != "(uid=BOT)" {
+				t.Fatal("unexpected lookup")
+			}
+			foundUID := false
+			for _, attr := range r.Attributes {
+				if attr == "uid" {
+					foundUID = true
+				}
+			}
+			if !foundUID {
+				t.Fatal("uid not requested")
+			}
+			return &ldap.SearchResult{Entries: []*ldap.Entry{ldap.NewEntry("uid=bot,ou=people,dc=example,dc=com", map[string][]string{
+				"entryUUID": {testID}, "uid": {"bot"}, "cn": {display}, "memberOf": {groupDN},
+			})}}, nil
+		}}
+		got, err := fakeDirectory(reader, &fakeConn{}).Authenticate(context.Background(), "BOT", "test-value")
+		if err != nil || got.Username != "bot" || got.ExternalID != testID {
+			t.Fatalf("canonical uid lost: %v", err)
+		}
+	}
+}
+
+func TestDirectoryRejectsInvalidOrChangingUID(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		before, after []string
+		want          error
+	}{
+		{"missing", nil, nil, ErrUnavailable},
+		{"empty", []string{""}, []string{""}, ErrUnavailable},
+		{"multiple", []string{"bot", "other"}, nil, ErrUnavailable},
+		{"oversized", []string{strings.Repeat("x", 101)}, nil, ErrUnavailable},
+		{"space", []string{" bot"}, nil, ErrUnavailable},
+		{"control", []string{"bot\n"}, nil, ErrUnavailable},
+		{"changed during bind", []string{"bot"}, []string{"other"}, ErrCredentials},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			reader := &fakeConn{search: func(*ldap.SearchRequest) (*ldap.SearchResult, error) {
+				values := test.before
+				calls++
+				if calls > 1 {
+					values = test.after
+				}
+				return &ldap.SearchResult{Entries: []*ldap.Entry{ldap.NewEntry("uid=bot,ou=people,dc=example,dc=com", map[string][]string{
+					"entryUUID": {testID}, "uid": values, "cn": {"fallback forbidden"}, "memberOf": {groupDN},
+				})}}, nil
+			}}
+			_, err := fakeDirectory(reader, &fakeConn{}).Authenticate(context.Background(), "bot", "test-value")
+			if !errors.Is(err, test.want) {
+				t.Fatalf("got %v want %v", err, test.want)
+			}
+		})
 	}
 }
