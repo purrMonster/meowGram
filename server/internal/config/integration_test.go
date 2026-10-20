@@ -2,6 +2,19 @@ package config
 
 import "testing"
 
+func TestIntegrationRejectsExistingRoutes(t *testing.T) {
+	for _, path := range []string{"/api/ws-ticket", "/custom-ticket", "/ws"} {
+		for _, c := range []Integration{{SendPath: path}, {ReviewPath: path}} {
+			if c.ValidateRoutes("/api/ws-ticket", "/custom-ticket", "/ws") == nil {
+				t.Fatal("route collision accepted")
+			}
+		}
+	}
+	if (Integration{SendPath: "/api/messages", ReviewPath: "/api/review/actions"}).ValidateRoutes("/api/ws-ticket") != nil {
+		t.Fatal("distinct routes rejected")
+	}
+}
+
 func TestIntegrationOptInAndValidation(t *testing.T) {
 	for _, key := range []string{"MESSAGE_SEND_ENDPOINT", "REVIEW_ACTION_ENDPOINT", "REVIEW_CALLBACK_URL", "REVIEW_SIGNING_KEY_FILE", "REVIEW_ALLOWED_SUBJECTS"} {
 		t.Setenv(key, "")

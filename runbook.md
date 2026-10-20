@@ -1467,3 +1467,32 @@ from this worktree without restarting implementation. Formatted the final test
 change and reran `go test -race -count=1 ./internal/handler`: passed, including an
 actual Basic Authorization header rejected by the human-only review route.
 The earlier full Go/vet, Flutter, restore and cross-project results remain valid.
+
+21 October 2026 integration review: optional route settings now reject collisions
+with canonical and configured existing endpoints before ServeMux registration.
+Added regression cases for send/review collisions and distinct routes. This fixes
+a configuration-triggered startup panic; it does not enable either endpoint.
+
+The user explicitly put deployment configuration on hold and clarified that R2
+covers the message API and pourOver polling. The tabbyTally push-review bridge is
+additional integration scope, not required for polling. No PR or new R2 story ID
+has been assigned. Individual OIDC subjects currently authorize and audit review
+decisions; group/role authorization would require a separate explicit policy and
+implementation. Real hostnames, subject IDs and credentials must not be inferred.
+Prepare placeholders only, read eventual real values from ignored host-local files,
+and do not deploy, change DNS, touch live services or provision credentials until
+the user resolves the scope. The placeholder inventory and detailed review record
+are in tabbyTally's processing/deployment/.env.example and INTEGRATION_REVIEW.md.
+
+21 October 2026 owner decision supersedes the callback design: tabbyTally will post
+review references, poll sync for replies and act locally as an R2 Basic-auth bot,
+like pourOver. No inbound callback, new hostname or exposed service. LLDAP reviewer
+group membership authorizes humans; the individual subject is audit identity only.
+Chat contains item IDs/counts only; amounts and merchants stay in tabbyTally.
+Recorded the short design and Where we stopped in
+docs/releases/release-2/tabbytally-review-design.md. All configuration remains
+placeholder-only. Park this branch; do not build the integration until UST-2.4.2
+and UST-2.4.3 are both merged into release/r2. Existing callback code is a superseded,
+undeployed prototype, not the future architecture. Targeted config/handler Go race
+tests passed after the review fixes; all 95 processing tests passed. No polling
+implementation or reviewer-group authorization was added.

@@ -12,6 +12,22 @@ type Integration struct {
 	ReviewActors                                   map[string]bool
 }
 
+// ValidateRoutes prevents optional routes from shadowing existing handlers or
+// causing ServeMux duplicate-pattern panics during deployment.
+func (c Integration) ValidateRoutes(existing ...string) error {
+	for _, endpoint := range []string{c.SendPath, c.ReviewPath} {
+		if endpoint == "" {
+			continue
+		}
+		for _, path := range existing {
+			if endpoint == path {
+				return errors.New("integration endpoint conflicts with an existing route")
+			}
+		}
+	}
+	return nil
+}
+
 func LoadIntegration() (Integration, error) {
 	c := Integration{SendPath: os.Getenv("MESSAGE_SEND_ENDPOINT"), ReviewPath: os.Getenv("REVIEW_ACTION_ENDPOINT"), ReviewURL: os.Getenv("REVIEW_CALLBACK_URL"), ReviewKeyFile: os.Getenv("REVIEW_SIGNING_KEY_FILE"), ReviewActors: map[string]bool{}}
 	for _, path := range []string{c.SendPath, c.ReviewPath} {

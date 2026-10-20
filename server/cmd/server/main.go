@@ -126,6 +126,9 @@ func main() {
 	userBudget := middleware.UserRateLimit(ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst))
 	authMiddleware := func(next http.Handler) http.Handler { return verifyIdentity(userBudget(next)) }
 	integration, err := config.LoadIntegration()
+	if err == nil {
+		err = integration.ValidateRoutes("/healthz", cfg.HealthEndpoint, handler.ClientConfigPath, "/ws", cfg.WSEndpoint, "/api/ws-ticket", cfg.WSTicketEndpoint, "/api/messages/sync", cfg.SyncEndpoint, cfg.PushDeviceEndpoint)
+	}
 	if err != nil {
 		logger.Error("Invalid integration configuration")
 		os.Exit(1)
