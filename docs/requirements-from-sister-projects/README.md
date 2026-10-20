@@ -11,6 +11,7 @@ dependencies and acceptance criteria.
 | Requesting project | Requirement | Status | Dependency |
 | --- | --- | --- | --- |
 | tabbyTally | [Financial review through a polling bot](tabbytally-review-bot.md) | Design accepted; implementation parked | UST-2.4.2 and UST-2.4.3 merged into `release/r2` |
+| pourOver | [Authenticated message API and polling replies](pourover-message-api.md) | Consumer adapter reported merged; provider contract pending verification | R2 send/idempotency and bot sync; channels deferred to R2.1 proposal |
 
 ## Document convention
 

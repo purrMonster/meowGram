@@ -1505,3 +1505,16 @@ responsibilities, completed prototype work, planned response, acceptance checks,
 placeholder configuration and Where we stopped. Updated references in both projects.
 This is documentation-only; the polling integration remains parked behind both R2
 merge dependencies. Previous test results are preserved, not represented as new runs.
+
+21 October 2026 sister-project register update: the owner also requested pourOver's
+requirements here. Added docs/requirements-from-sister-projects/pourover-message-api.md
+and its register entry, sourced from pourover-docs (19 October) and the separate
+meowGram development checkout's runbook sections 13.6–13.8 (21 October). Recorded
+Basic send/sync, composite pagination, prefixed idempotency keys, sender identity,
+stable bot usernames, polling/backoff and the channel request deferred to R2.1
+proposal-only scope. Distinguished reported consumer work from pending provider
+acceptance; historical tests are attributed, not claimed as rerun. The original
+external ten-item handoff was not inspected; PO IDs are this synthesis's IDs.
+Where we stopped: documentation only; tabbyTally remains parked until both
+UST-2.4.2 and UST-2.4.3 merge into release/r2. No live/config/credential changes.
+Verification: relative documentation links and git diff whitespace checks.
