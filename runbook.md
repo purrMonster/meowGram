@@ -1490,9 +1490,18 @@ like pourOver. No inbound callback, new hostname or exposed service. LLDAP revie
 group membership authorizes humans; the individual subject is audit identity only.
 Chat contains item IDs/counts only; amounts and merchants stay in tabbyTally.
 Recorded the short design and Where we stopped in
-docs/releases/release-2/tabbytally-review-design.md. All configuration remains
+docs/requirements-from-sister-projects/tabbytally-review-bot.md. All configuration remains
 placeholder-only. Park this branch; do not build the integration until UST-2.4.2
 and UST-2.4.3 are both merged into release/r2. Existing callback code is a superseded,
 undeployed prototype, not the future architecture. Targeted config/handler Go race
 tests passed after the review fixes; all 95 processing tests passed. No polling
 implementation or reviewer-group authorization was added.
+
+21 October 2026 documentation organization: the owner requested a dedicated
+“requirements from sister projects” folder. Moved and expanded the tabbyTally note
+to docs/requirements-from-sister-projects/tabbytally-review-bot.md and added a
+folder register/README. The document separates confirmed requirements, project
+responsibilities, completed prototype work, planned response, acceptance checks,
+placeholder configuration and Where we stopped. Updated references in both projects.
+This is documentation-only; the polling integration remains parked behind both R2
+merge dependencies. Previous test results are preserved, not represented as new runs.
