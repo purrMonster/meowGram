@@ -6,7 +6,7 @@ branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 
 ## R2 queue and dependencies
 
-1. Queue-refresh PR: docs/r2-identity-merge-queue → release/r2 | merge after nothing (#33 merged) | records the published identity task and runbook PRs.
+1. #36 Queue-refresh PR: docs/r2-identity-merge-queue → release/r2 | merge after nothing (#33 merged) | records the published identity task and runbook PRs.
 2. #34 feat/ust-2.3.4-stable-bot-usernames → feat/r2-epic-2.3-bot-identity | merge after nothing | DONE: verified uid, immutable username, rename/recreation/human regressions; no migration. UTC/IST 133 passes each, one separately covered LDAP skip each; Flutter 83 passes.
 3. #35 docs/r2-epic-2.3-runbook → feat/r2-epic-2.3-bot-identity | merge after #34 (stacked on it) | runbook folded through 2026-10-21, including migration hardening, stable usernames, approved scope and sibling epic completion status. Preserve release-parent planning copies at epic integration.
 4. feat/r2-epic-2.3-bot-identity → release/r2 | after 2.3.4 and doc-fold owner merges, full epic verification | identity integration.
