@@ -1,121 +1,106 @@
-# Release 2 delivery and acceptance
+# R2 API-only delivery and acceptance
 
-Status: updated 2026-10-17. UST-2.3.1 has passing isolated LLDAP v0.6.3
-evidence and a selected identity design, matching the owner's reported deployed
-version. Live transport remains a rollout gate. Other stories remain planned. See [scope](README.md),
-[API contract](api-design.md) and [investigation](directory-identity.md).
+Owner-approved revision: 2026-10-20. Outcome: pourOver live in the shared lounge.
+R2 contains epics 2.3, 2.4 and API-only 2.5. R2.1 channels is planning only.
+Media epics 2.1/2.2 are **deferred to R3**, unchanged; #32's contract stands.
+This decision supersedes older scope statements in the unchanged playbook.
 
-## Work breakdown
+## Completed foundations
 
-| Story | Deliverable | Acceptance / dependency |
-|---|---|---|
-| UST-2.1.1–2.1.2 | Existing Immich authentication/proxy and asset persistence stories | Retain roadmap scope; review current provider contract before implementation; secrets stay server-side |
-| UST-2.2.1–2.2.2 | Existing media picker and feed rendering stories | Depend on media contracts; verify supported platforms and offline behavior |
-| UST-2.3.1 | LLDAP compatibility and identity design | Isolated v0.6.3 probe passed, matching owner-reported version; LDAPS, direct membership, display-name stability and recreation verified. Login-ID rename is unsupported by the tested API. Identity design selected; live transport remains a rollout gate. See investigation. |
-| UST-2.3.2 | Group-gated Basic authentication | Depends on 2.3.1; only message routes accept it; credentials and membership checked per request; directory failure denies bots without affecting OAuth callers |
-| UST-2.3.3 | Principal mapping and lifecycle | Depends on 2.3.1; no OIDC collision or username linking; group removal blocks subsequent requests; history survives revocation |
-| UST-2.4.1 | Shared message service | Existing WS semantics retained; HTTP and WS use one validation, budget, persistence and broadcast path |
-| UST-2.4.2 | HTTP send and durable idempotency | Depends on 2.3.2–2.3.3 and 2.4.1; concurrent retries yield one row and original response; payload conflicts return 409 |
-| UST-2.4.3 | Authenticated bot sync and examples | Depends on 2.3.2–2.3.3; existing pagination contract retained; every page checks access; examples persist cursors and honor retry limits |
-| UST-2.5.1 | Integrated regression and security checks | All API acceptance cases below pass in disposable infrastructure |
-| UST-2.5.2 | Release documentation and authorized pilot | Configuration/runbook/examples complete; Go and Flutter suites pass; owner authorizes external provisioning and deployment |
+#27 workflow/playbook is merged into release/r2. #28 directory investigation,
+#29 bot principals (including repeatable migration 000005), and #30 bot auth
+are merged into epic 2.3. #31 shared message service is merged into epic 2.4.
+#32 media contract is merged into epic 2.1, deferred to R3. These task merges do
+not establish integrated R2 runtime readiness. Prior passing evidence remains
+in task logs; this scope PR makes no new application-test claim.
 
-Recommended API sequence: 2.3.1 → identity/auth implementation and shared
-message service → HTTP send/read → integration checks → authorized pilot.
-Use the release/epic/task hierarchy below and owner-merged PRs. Maintain
-Conventional Commits and the required repository author. Do not force-push or
-merge implementation branches on the owner's behalf.
+## Remaining work, in order
+
+| Story / step | Deliverable and Done check |
+|---|---|
+| Scope split | Docs-only PR into release/r2; pourOver contract, channels proposal and budget recorded |
+| NEW UST-2.3.4 | Stable bot username = verified LLDAP login ID (uid), not cn. Resolve must not rewrite it on each authentication. Display-name rename leaves username unchanged; deleted/recreated account gets a new principal; humans unaffected. Human and bot usernames are not cross-checked for uniqueness; identity is sender_kind + sender_id. Optional separate display_name only if cheap. Any migration is additive/re-runnable, with real golang-migrate down/up preservation tests and partial/repeated-up coverage equivalent to 000005. Document handling of existing cn-derived rows without destructive backfill. |
+| Identity integration | Doc-fold task PR first if needed, then verified epic 2.3 → release/r2 PR, only after UST-2.3.4 is owner-merged |
+| Message API sync | Owner-reviewed release/r2 → epic 2.4 sync; preserve SenderKind in MessageService.Send publication and SendHistory, with explicit bot/human publication regression |
+| UST-2.4.2 | POST send for human bearer and bot Basic; transactional durable idempotency; identical replay response; 409 on changed body; ≥20 concurrent duplicates produce one row/broadcast and at most one push; restart/expiry/DB-failure tests; CORS Idempotency-Key support |
+| UST-2.4.3 | Basic GET sync, fresh authorization per page, cursor compatibility and example with persistent cursor, deduplication, own-message filtering and 429/503 backoff; example runs in scratch infrastructure |
+| UST-2.5.1 | API verification matrix maps every acceptance row below to named passing tests; real PostgreSQL and disposable LLDAP; OAuth/Flutter regressions remain green |
+| UST-2.5.2 | API config/runbook/examples folded, statuses/queue updated, rollout/rollback/pourOver pilot prepared, verified epic PRs and release/r2 → main candidate PR; owner-only deployment/pilot |
+
+Do not start a task unless it can finish or park this session with tests green,
+branch pushed and a story log ending in "Where we stopped / next step".
 
 ## Branch hierarchy
 
-Owner-directed workflow, recorded 2026-10-17. These branches are local until
-published; naming does not imply an existing PR. Integration branches initially
-share the current `origin/main` baseline. Existing uncommitted planning and
-investigation files remain in the active task checkout; they are not yet commits
-on the integration branches.
+| Branch | Immediate PR target |
+|---|---|
+| docs/r2-scope-split | release/r2 |
+| feat/ust-2.3.4-stable-bot-usernames (planned) | feat/r2-epic-2.3-bot-identity |
+| feat/r2-epic-2.3-bot-identity | release/r2, after 2.3.4 and doc-fold |
+| feat/r2-epic-2.4-message-api | release/r2, after API tasks |
+| test/r2-epic-2.5-verification | release/r2, after API integration |
+| release/r2 | main |
+| feat/r2-epic-2.1-media-backend | future release/r3; deferred to R3 |
+| feat/r2-epic-2.2-media-client | future release/r3; deferred to R3 |
 
-| Branch | Parent / PR target | Scope |
-|---|---|---|
-| `release/r2` | `main` | Complete R2 integration, including media and API |
-| `feat/r2-epic-2.1-media-backend` | `release/r2` | Immich backend |
-| `feat/r2-epic-2.2-media-client` | `release/r2` | Flutter media experience |
-| `feat/r2-epic-2.3-bot-identity` | `release/r2` | Directory authentication and identity |
-| `feat/r2-epic-2.4-message-api` | `release/r2` | Shared message service, HTTP send/read |
-| `test/r2-epic-2.5-verification` | `release/r2` | Integrated verification and release readiness |
-| `feat/ust-2.3.1-directory-identity` | `feat/r2-epic-2.3-bot-identity` | Current directory investigation |
-| `docs/release-2-planning` | `release/r2` | Release-wide planning and workflow foundation |
-
-Before publishing, separate the existing uncommitted release-wide foundation
-from the investigation into their respective branches/PRs. Merge the foundation
-through owner review before integrating the investigation. New task branches
-start from their latest approved epic parent; epic PRs target `release/r2`.
-The completed release reaches `main` through one final owner-merged PR.
-For example, UST-2.4.1 starts from `feat/r2-epic-2.4-message-api`, not `main`.
-Shared dependencies reach `release/r2` through their epic PR before other epics
-incorporate them; do not cherry-pick sibling implementation as an implicit shortcut.
+Published branch names stay unchanged; do not rename/delete them. Create
+release/r3 only when R3 starts. Do not merge media into release/r2. New tasks
+start from the fetched remote epic. Merge updated parents into tasks without
+rebasing published history. No sibling implementation cherry-picks. Owner merges
+all PRs. Reconcile this document with the older epic copies during integration;
+retain this approved scope and the historical evidence from those copies.
 
 ## Required verification
 
-| Area | Evidence required |
+Every [pourOver contract](api-design.md) row requires an httptest-level test
+against the actual handler/auth path. Persistence claims additionally use real
+scratch PostgreSQL; directory claims use pinned disposable LLDAP 0.6.3.
+
+| Area | Required evidence |
 |---|---|
-| Authentication | Anonymous, empty, malformed and incorrect credentials rejected; valid nonmember denied; member accepted; ambiguous Authorization rejected; bearer failure cannot fall back to Basic |
-| Transport | Invalid LDAP certificate and failed StartTLS fail closed; insecure public ingress rejected; no secrets in logs or diagnostics |
-| Route isolation | Basic cannot obtain WS tickets, open sockets, register push devices or access future media routes; OAuth regression coverage remains green |
-| Lifecycle | Group removal, password rotation, deletion and directory outage tested between requests, including idempotent replays and successive read pages |
-| Identity | Rename preserves sender identity; deleted/recreated account does not inherit old identity; same-name OIDC account remains distinct; old messages remain readable |
-| Persistence | Concurrent duplicate keys create one message; changed content conflicts; principal isolation, restart replay, expiry boundary and rollback on failed writes verified against PostgreSQL |
-| Delivery | Committed HTTP message reaches connected clients; DB failure emits nothing; post-commit failure recoverable via retry/sync; no duplicate push on replay |
-| Reading | More than 500 messages, equal timestamps, empty pages, restarts and UUID deduplication exercised |
-| Budgets | LDAP concurrency/timeouts, pre-auth budgets, per-principal limits and 429 Retry-After behavior verified; slow clients do not block broadcast |
-| Compatibility | Existing Flutter login, history, live chat and cache remain functional; configured endpoints and web CORS idempotency header work |
+| Sync | Basic GET; RFC3339 after and UUID after_id; 200 JSON array, oldest first, ≤500, all six fields; X-Has-More true when more remain; empty results are [] |
+| Boundaries | Same created_at spanning pages returns each UUID once; unencoded +00:00 arriving as a space parses; exactly 500 may advertise more and next request returns 200 [] |
+| Send | Idempotency-Key accepts pourover-reply-<original message id>; text_content body; 2xx on success; same key/body returns identical response and one message; different body gives 409 |
+| Backoff/load | Integer Retry-After ≥1 on 429; Retry-After on overloaded/directory-unavailable 503; bot budgets ≥30 requests/min; single bot's 3-second polling is not throttled by shared pre-auth budgets |
+| Identity | uid stability despite cn rename; recreated account distinct; humans unchanged; same-name humans/bots remain distinct; sender_kind + sender_id filters own messages |
+| Security | Anonymous/malformed/wrong auth denied; nonmember 403; failed bearer never falls back to Basic; group/password/deletion/outage changes checked between requests, replay and pages; Basic denied outside GET sync/POST send; verified TLS and bounded LDAP work; no credential logging |
+| Durability | Principal-isolated keys, concurrent duplicates, restart replay, retention boundary, write rollback, no broadcast on failure, no duplicate replay push; post-commit retry/sync recovery |
+| Compatibility | Human OAuth, WS tickets, push, history/cache, Unicode text rules, UTC ordering, shared budgets, slow-client eviction and configured routes/CORS remain correct |
 
-Run `go test ./...` from `server` and `flutter test` from `client` before asking
-for merge. Use the repository scratch harness for race detection, Go vet,
-PostgreSQL migrations, Flutter analysis and web build as appropriate. Extend
-it with a disposable directory fixture; use synthetic identities, no live
-environment files or credentials. Record actual results, not planned passes.
+Run full Go -race and vet under UTC and Asia/Kolkata, restore, Flutter analysis
+and tests, web build/smoke, and the provider harness. Report skips separately.
+No media implementation or media fixture is an R2 acceptance requirement.
 
-Documentation-only changes require link/consistency and whitespace checks;
-this plan does not claim application suites have run for implementation that
-does not exist yet.
+## Rollout and rollback
 
-## Release gates
+Basic stays disabled until the integrated API is reviewed. After explicit owner
+authorization, validate reader/group visibility, TLS and cellar's proxy header
+pass-through using [owner checks](owner-checks.md). Pilot pourOver every 3 seconds:
+read a human message, reply once using its original-message key, retry safely,
+restart with persisted cursor, ignore its own messages, remove membership and
+confirm denial while human OAuth continues to work. Replies are plain @username
+text, not structured mentions. Roll back by disabling Basic or removing bot group
+membership, retaining additive schema and message history. Live deployment and
+credential provisioning remain owner-gated.
 
-1. Directory and identity design resolved with reproducible evidence; remaining
-   proposed configuration defaults settled and recorded.
-2. API and media stories complete, or owner explicitly approves a narrower
-   release. API v1 completion alone is not Release 2 completion.
-3. Required suites and integration checks pass; examples explain idempotency
-   retention, cursor handling and access revocation semantics.
-4. Additive migrations preserve existing users/messages and support disabling
-   the feature without deleting data. Review compatibility before any binary
-   rollback; do not run destructive down migrations as a rollback shortcut.
-5. Owner authorizes group/account/reader-credential provisioning and any live
-   deployment or external identity changes. Secrets are generated on their
-   target host and retained only in ignored environment files or secret mounts.
-6. Pilot one dedicated bot: send, read, retry, remove group membership, confirm
-   denial, and verify a human OAuth session remains operational. Any restoration
-   of group membership is part of the approved pilot procedure.
+## Remaining R2 estimate
 
-## Rollout and rollback design
+Focused engineering days of 8 hours, including tests/review fixes; excludes
+elapsed owner/CI waiting. This replaces the prior media-inclusive estimate.
 
-Deploy with Basic disabled by default. Validate configured HTTPS ingress and
-encrypted directory access, then enable for the pilot group only after owner
-approval. Monitor sanitized auth outcomes, LDAP latency, 429/503 rates and
-message insertion counts. Define acceptable operating thresholds during the
-pilot; no throughput claims are made here.
+| Work | Days |
+|---|---:|
+| UST-2.3.4 stable usernames and regressions | 0.5–1 |
+| Doc-fold, epic integration and SenderKind sync | 1–2 |
+| UST-2.4.2 send/idempotency | 1.5–3 |
+| UST-2.4.3 sync/example and cursor edge cases | 1–1.5 |
+| UST-2.5.1 API integration/security verification | 1.5–2.5 |
+| UST-2.5.2 release docs/candidate/pilot preparation | 1–2 |
+| **Base remaining implementation** | **6.5–12 (52–96 hours)** |
+| **With 25% contingency, rounded up to half-days** | **8.5–15 (68–120 hours)** |
 
-The primary rollback is disabling Basic Auth while retaining human OAuth and
-persisted messages. Group removal stops an individual bot. Preserve additive
-identity/idempotency data for investigation and a subsequent forward fix.
-No credential, account, live server or database changes are performed by
-creating these planning documents.
-
-## Estimate
-
-API work is provisionally 1–2 days for directory/identity validation, 2–4 days
-for authentication and identity persistence, 2–4 days for send/read and retry
-handling, and 1–3 days for integration/docs: roughly 6–13 focused engineering
-days. These are estimates, not a deadline; schema constraints may change them.
-Existing media work is additional and needs separate estimation after provider
-and platform review.
+Reserve 1–2 owner hours separately for the authorized API pilot/config checks.
+R2.1 planning does not authorize implementation; its estimate is in the channels
+proposal. R3 retains the #32 estimate of 8–12 days for media implementation,
+subject to provider/platform verification when it starts. These are effort
+budgets, not credit-consumption or release-date guarantees.
