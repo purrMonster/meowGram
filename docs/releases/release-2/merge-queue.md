@@ -1,14 +1,14 @@
 # Release merge queue — owner-approved split, 2026-10-20
 
 Only the owner merges. R2 is API-only; R2.1 channels is planning only; media
-is deferred to R3. #27–#32 are merged into their original parents. No published
+is deferred to R3. #27–#33 are merged into their original parents. No published
 branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 
 ## R2 queue and dependencies
 
-1. #33 Scope-split PR: docs/r2-scope-split → release/r2 | merge after nothing | records approved scope and pourOver contract.
-2. NEW UST-2.3.4: task from fetched feat/r2-epic-2.3-bot-identity → that epic | before epic release PR | uid-based stable usernames; no per-resolve overwrite; rename/recreation/human regressions; any migration additive and re-runnable with real golang-migrate tests.
-3. Epic 2.3 documentation fold, if needed: docs task → epic 2.3 | after 2.3.4 | fold logs/config, reconcile older release-plan files with the scope PR.
+1. Queue-refresh PR: docs/r2-identity-merge-queue → release/r2 | merge after nothing (#33 merged) | records the published identity task and runbook PRs.
+2. #34 feat/ust-2.3.4-stable-bot-usernames → feat/r2-epic-2.3-bot-identity | merge after nothing | DONE: verified uid, immutable username, rename/recreation/human regressions; no migration. UTC/IST 133 passes each, one separately covered LDAP skip each; Flutter 83 passes.
+3. #35 docs/r2-epic-2.3-runbook → feat/r2-epic-2.3-bot-identity | merge after #34 (stacked on it) | runbook folded through 2026-10-21, including migration hardening, stable usernames, approved scope and sibling epic completion status. Preserve release-parent planning copies at epic integration.
 4. feat/r2-epic-2.3-bot-identity → release/r2 | after 2.3.4 and doc-fold owner merges, full epic verification | identity integration.
 5. release/r2 → feat/r2-epic-2.4-message-api sync PR | after identity epic release merge; #31 already merged | unblocks HTTP API.
    Required resolution: MessageService.Send's published WSMessage carries `SenderKind: message.SenderKind`; SendHistory retains SenderKind. Add a store-returning-bot publishes bot / human publishes human regression. Preserve both behaviours when resolving client.go conflicts. Behaviour fixes get a separate fix commit/test; verify full suite. Use the approved sync PR workflow, no direct integration pushes or sibling cherry-picks.
