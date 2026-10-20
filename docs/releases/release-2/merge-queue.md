@@ -1,26 +1,46 @@
-# Release 2 merge queue
+# Release merge queue — owner-approved split, 2026-10-20
 
-Only the owner merges. Queue verified 2026-10-18; task evidence is in each PR and story log.
+Only the owner merges. R2 is API-only; R2.1 channels is planning only; media
+is deferred to R3. #27–#32 are merged into their original parents. No published
+branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 
-1. #27 docs/r2-agent-playbook → release/r2 | merge after nothing | unblocks approved R2 workflow
-2. #28 feat/ust-2.3.1-directory-identity → feat/r2-epic-2.3-bot-identity | merge after #27 | unblocks identity/auth integration
-3. #29 feat/ust-2.3.3-bot-principals → feat/r2-epic-2.3-bot-identity | merge after #28 | unblocks bot principal persistence
-4. #30 feat/ust-2.3.2-bot-auth → feat/r2-epic-2.3-bot-identity | merge after #29 | unblocks bot-identity epic integration
-5. #31 refactor/ust-2.4.1-shared-message-service → feat/r2-epic-2.4-message-api | merge after the bot-identity epic PR described below | unblocks shared HTTP/WS send service
+## R2 queue and dependencies
 
-6. #32 docs/ust-2.1.0-immich-contract → feat/r2-epic-2.1-media-backend | merge after #27 | unblocks UST-2.1.1–2.2.2; independent media lane
+1. #33 Scope-split PR: docs/r2-scope-split → release/r2 | merge after nothing | records approved scope and pourOver contract.
+2. NEW UST-2.3.4: task from fetched feat/r2-epic-2.3-bot-identity → that epic | before epic release PR | uid-based stable usernames; no per-resolve overwrite; rename/recreation/human regressions; any migration additive and re-runnable with real golang-migrate tests.
+3. Epic 2.3 documentation fold, if needed: docs task → epic 2.3 | after 2.3.4 | fold logs/config, reconcile older release-plan files with the scope PR.
+4. feat/r2-epic-2.3-bot-identity → release/r2 | after 2.3.4 and doc-fold owner merges, full epic verification | identity integration.
+5. release/r2 → feat/r2-epic-2.4-message-api sync PR | after identity epic release merge; #31 already merged | unblocks HTTP API.
+   Required resolution: MessageService.Send's published WSMessage carries `SenderKind: message.SenderKind`; SendHistory retains SenderKind. Add a store-returning-bot publishes bot / human publishes human regression. Preserve both behaviours when resolving client.go conflicts. Behaviour fixes get a separate fix commit/test; verify full suite. Use the approved sync PR workflow, no direct integration pushes or sibling cherry-picks.
+6. UST-2.4.2 task → epic 2.4 | after sync | send + durable idempotency and pourOver httptest acceptance.
+7. UST-2.4.3 task → epic 2.4 | after send | bot sync, cursor edge cases, example and backoff acceptance.
+8. Epic 2.4 doc-fold and verified epic → release/r2 | after API task merges | complete API implementation.
+9. Sync integrated API into epic 2.5 through owner PR; UST-2.5.1/2.5.2 tasks → epic 2.5, doc-fold, verified epic → release/r2 | API-only acceptance, owner pilot instructions and release docs.
+10. release/r2 → main | after API release gates | owner-reviewed release candidate; separately authorized pourOver live pilot.
 
-Between #30 and #31: open feat/r2-epic-2.3-bot-identity → release/r2 after #28–#30 are owner-merged and epic verification is green. It cannot be opened yet because the integration branch has no implementation commits. Fold the epic log fragments through its documentation task first where needed.
+Merge updated remote parents INTO task branches, never rebase/force-push.
+Preserve directory AND bot-auth CI jobs ahead of verify, retain chronological
+runbook entries, and require go mod tidy to produce no module diff. #30's prior
+conflict resolution is complete. Keep approved scope/contract when older epic
+copies of README, delivery-plan or api-design conflict with this scope PR.
+Do not start work that cannot finish or park green, pushed and logged this session.
 
-After #31 and the bot-identity epic merge: open release/r2 → feat/r2-epic-2.4-message-api as a sync PR. Its owner merge unblocks UST-2.4.2. No cross-epic cherry-picks or direct integration pushes.
+## R2.1 — channels planning only
 
-Existing task PRs append to runbook.md. If an owner merge creates a conflict in a later task, the agent merges the remote epic into that task, preserves both entries, reruns checks and pushes the resolution. The owner need not resolve code conflicts.
+See ../release-2.1/channels-proposal.md. No channel schema, code or implementation
+branch is authorized by this planning step. Field name is channel_id, recommend
+UUID internally and opaque string to pourOver. Lounge remains implicit/null.
 
-## Required resolutions from the 2026-10-19 review
+## R3 — deferred media integration requirements
 
-Perform each resolution only after the owner merges its prerequisite. Fetch and merge the updated remote parent INTO the task branch; never rebase or force-push. Preserve both behaviours, rerun checks and push.
+Epics 2.1 and 2.2 are deferred to R3 unchanged. #32's contract stands on
+feat/r2-epic-2.1-media-backend at its existing release-2/media-contract.md path.
+Preserve branch names; future epic PRs target release/r3, created ONLY when R3
+starts. Their current ancestry does not authorize merging them into release/r2.
 
-- After #28 merges, update #29 from origin/feat/r2-epic-2.3-bot-identity. Preserve both runbook.md entries in date order.
-- After #29 merges, update #30 from origin/feat/r2-epic-2.3-bot-identity. In .github/workflows/verify.yml retain BOTH directory (2.3.1) and bot-auth (2.3.2) jobs ahead of verify. Preserve both runbook entries. Run go mod tidy and require no diff in server/go.mod or server/go.sum.
-- **At the release/r2 → feat/r2-epic-2.4-message-api sync step above:** reconcile the client.go broadcast move into MessageService.Send with bot principal sender kinds. The WSMessage published by MessageService.Send MUST include `SenderKind: message.SenderKind`; SendHistory MUST retain SenderKind. Add a regression test proving a store returning SenderKind "bot" publishes "bot", and a human message publishes "human". Keep this behaviour fix and its test in a separate fix commit if it goes beyond mechanical conflict resolution. Run the full harness before the owner merges the sync PR.
-- When epic 2.1 (including #32) reaches release/r2: merge the two owner-checks.md additions into ONE file, identity/ingress checks 1–3 first, media checks M1–M4 after them. In roadmap.html preserve the 2.3.1 status line AND #32's endpoint and placeholder-host corrections.
+At R3 integration, combine owner-checks.md into one file: identity/ingress checks
+1–3 first (and retain later API checks), then media M1–M4. Preserve roadmap's
+2.3.1 status line AND #32's /api/server/version and placeholder-host corrections,
+plus the approved R2/R2.1/R3 split. Resolve these through R3 task/sync PRs and run
+appropriate checks. The old ephemeral-media roadmap is an unassigned backlog,
+not part of the newly approved R3 Immich scope.
