@@ -1,70 +1,37 @@
-# Release 2: media sharing and the message API
+# Release 2: authenticated message API
 
-Status: directory investigation verified; application implementation pending.
-Updated: 2026-10-17. No release date is committed.
+Owner-approved scope split, 2026-10-20. Goal: **pourOver live in the shared lounge**.
+This decision supersedes the older media-inclusive R2 scope, including scope
+statements in the unchanged AGENT_PLAYBOOK.md. Proposed playbook edits are in
+the scope-split PR body for owner approval; AGENTS.md is unchanged.
 
-Release 2 retains the existing Immich media work in Epics 2.1 and 2.2 and adds
-an authenticated text-message API in Epics 2.3–2.5. The first API version is
-part of Release 2; references to “API v1” do not mean application Release 1.
-
-## Documents
-
-- [Directory compatibility and identity investigation](directory-identity.md):
-  UST-2.3.1 fixture evidence, selected schema and remaining deployment gate.
-- [API and identity design](api-design.md): authentication boundaries, message
-  contract, directory integration and proposed settings.
-- [Delivery and acceptance plan](delivery-plan.md): stories, dependencies,
-  verification and release gates.
-- [Existing roadmap](../../../roadmap.html#release-2): retained media stories.
-- [Runbook](../../../runbook.md#13-release-2-planning): decision record and
-  distinction between current implementation and planned behavior.
-
-## Agreed direction
-
-People keep Authelia OAuth/OIDC and PKCE. Human API calls use bearer access
-tokens. Bots use HTTP Basic Auth with dedicated LLDAP usernames and passwords,
-over HTTPS, on the message send/read endpoints only. Membership in one
-configured LLDAP group gates this Basic Auth path. `meowgram-api-bots` is the
-proposed group name, not an existing group or a hardcoded requirement.
-
-Each Basic request checks credentials and current group membership through an
-encrypted LDAP connection. No positive authentication or membership cache is
-planned for API v1. Directory failures deny bot operations. The application
-stores neither bot passwords nor locally issued authentication tokens.
-
-The group grants both read and send access to the shared lounge. Separate
-read-only/send-only roles are deferred; they were an earlier proposal, not part
-of the agreed minimal group policy. Group membership is an administrator's
-explicit grant of access to lounge history as well as new messages.
-
-## Scope
-
-| Workstream | Release 2 scope | Boundary |
+| Release | Scope | State |
 |---|---|---|
-| Existing media, Epics 2.1–2.2 | Server-side Immich proxy, asset references, picker and feed rendering | Existing stories retained; provider compatibility and detailed media contracts still need implementation-time review |
-| Identity, Epic 2.3 | Dedicated bot accounts, configurable group, per-request validation, stable sender identity | No bot OAuth, local passwords, provisioning UI or automatic human/bot account linking |
-| Message API, Epic 2.4 | HTTP text send, paginated read, persistent retry deduplication, shared message processing | One lounge; no email, direct messages, new rooms or bot media uploads |
-| Verification, Epic 2.5 | Isolated integration checks, usage examples, operational instructions and pilot | Live configuration and credential work require owner authorization |
+| R2 | Epics 2.3 bot identity, 2.4 message API, 2.5 API verification/release | Implementation and integration remaining |
+| R2.1 | Channels | Planning only; [proposal](../release-2.1/channels-proposal.md) |
+| R3 | Epics 2.1 Immich backend and 2.2 Flutter media, unchanged | Deferred to R3; #32 contract stands |
 
-The API can be implemented and verified independently of media. Completing it
-alone does not mark all of Release 2 complete. Splitting the release or moving
-the media work requires an explicit scope decision.
+#27–#32 are owner-merged into their respective parents. Bot identity and the
+shared message service are implemented on their epic branches, not yet combined
+on release/r2. Bot activation remains blocked until API integration. The media
+spike is design evidence, not an implemented media feature.
 
-## Design defaults and unresolved evidence
+Read the [delivery plan](delivery-plan.md), [API contract](api-design.md),
+[merge queue](merge-queue.md), and [owner checks](owner-checks.md).
+Next implementation: **UST-2.3.4 stable bot usernames**, before the identity epic
+PR. Then integrate identity, sync the API epic, implement send/idempotency and
+bot sync/examples, and complete API-only verification and rollout preparation.
 
-The detailed API contract and configuration names are proposed implementation
-defaults. The settled product decisions are human OAuth, bot Basic Auth,
-LLDAP group gating, unattended operation and chat rather than email.
+R2 preserves human OIDC and adds bot Basic Auth only to GET sync and POST send,
+with fresh directory credentials/group validation on every request. Bots may
+post in the shared lounge. No bot OAuth, local passwords, new channels, media,
+provisioning UI, granular bot roles or automatic human/bot linking is added.
 
-Before implementing directory authentication, verify the deployed LLDAP schema,
-stable account identifier, group lookup semantics and encrypted connection
-support in an isolated equivalent. Before changing persistence, select an
-additive identity schema compatible with the existing sender foreign key.
-These are engineering gates, not reasons to return to the discarded bot OAuth
-design. No live configuration was inspected or changed to produce this plan.
+Do not merge media epic 2.1/2.2 into release/r2. Preserve published branch names;
+their eventual epic PRs target release/r3, created only when R3 starts. The
+[contract from #32](https://github.com/purrMonster/meowGram/blob/feat/r2-epic-2.1-media-backend/docs/releases/release-2/media-contract.md)
+remains authoritative for media despite its historical release-2 path.
 
-## Completion
-
-Use the gates in [the delivery plan](delivery-plan.md). UST-2.3.1 now has isolated
-fixture evidence; application features remain planned. This documentation does not authorize a
-deployment, create accounts/groups, or change credentials.
+Completion means API acceptance tests and release checks pass, the owner merges
+the release candidate, and a separately authorized pourOver pilot succeeds.
+Scope approval does not authorize live configuration or credential changes.
