@@ -7,6 +7,17 @@ import (
 	"net/http"
 )
 
+// RegisterSyncRoutes retains the default human-compatible alias without registering it twice.
+func RegisterSyncRoutes(mux *http.ServeMux, configured string, repo *repository.MessageRepository, logger *slog.Logger, human func(http.Handler) http.Handler, gate *botauth.Gate) error {
+	if err := RegisterSyncRoute(mux, "/api/messages/sync", repo, logger, human, gate); err != nil {
+		return err
+	}
+	if configured != "/api/messages/sync" {
+		return RegisterSyncRoute(mux, configured, repo, logger, human, gate)
+	}
+	return nil
+}
+
 func RegisterSyncRoute(mux *http.ServeMux, path string, repo *repository.MessageRepository, logger *slog.Logger, human func(http.Handler) http.Handler, gate *botauth.Gate) error {
 	var route http.Handler = SyncHandler(repo, logger)
 	if gate == nil {

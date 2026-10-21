@@ -157,15 +157,9 @@ func main() {
 	mux.Handle("PUT "+cfg.PushDeviceEndpoint, deviceHandler)
 	mux.Handle("DELETE "+cfg.PushDeviceEndpoint, deviceHandler)
 
-	syncPaths := []string{"/api/messages/sync"}
-	if cfg.SyncEndpoint != "/api/messages/sync" {
-		syncPaths = append(syncPaths, cfg.SyncEndpoint)
-	}
-	for _, path := range syncPaths {
-		if err := handler.RegisterSyncRoute(mux, path, messageRepo, logger, authMiddleware, botGate); err != nil {
-			logger.Error("Failed to configure sync route", "error", err)
-			os.Exit(1)
-		}
+	if err := handler.RegisterSyncRoutes(mux, cfg.SyncEndpoint, messageRepo, logger, authMiddleware, botGate); err != nil {
+		logger.Error("Failed to configure sync route", "error", err)
+		os.Exit(1)
 	}
 	if err := handler.RegisterSendRoute(mux, cfg.SendEndpoint, hub.MessageService(messageRepo), cfg.IdempotencyRetention, authMiddleware, botGate); err != nil {
 		logger.Error("Failed to configure message send route", "error", err)
