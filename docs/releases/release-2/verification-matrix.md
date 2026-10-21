@@ -21,3 +21,5 @@ not release sign-off; UST-2.4.3 and 2.5 must close the remaining rows.
 | Bot GET sync, paging/equal timestamps/unencoded offset/empty page | UST-2.4.3 | Pending implementation |
 | Sustained polling plus replies, cursor/retry example | UST-2.4.3 | Pending implementation |
 | Integrated release, owner pilot, native device | UST-2.5.1/2.5.2 and owner-checks.md | Pending integration |
+| Human deletion cascades through HTTP-sent message and key | TestHTTPSendContract/user_deletion_cascades_idempotency | UTC/IST pass, 2026-10-21 |
+| Transactional expiry cleanup bounded at 100; replay cleanup; active keys preserved | TestIdempotencyBoundedExpiredCleanup | UTC/IST pass, 2026-10-21 |
