@@ -9,8 +9,8 @@ branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 Completed: #34–#41 are owner-merged. Identity is in release/r2; #39 synchronized
 identity into epic 2.4, and #40/#41 complete its API tasks at 6f98957.
 
-1. Epic 2.4 doc-fold: docs/r2-epic-2.4-runbook → feat/r2-epic-2.4-message-api | merge first | runbook, delivery status, approved AGENTS wording.
-2. Epic 2.4 → release/r2 | merge after doc-fold | integrated API; STOP for owner merges before Step B.
+1. #42 Epic 2.4 doc-fold: docs/r2-epic-2.4-runbook → feat/r2-epic-2.4-message-api | merge first | runbook, delivery status, approved AGENTS wording.
+2. #43 Epic 2.4 → release/r2 | merge after #42 doc-fold | integrated API; STOP for owner merges before Step B.
 3. release/r2 → test/r2-epic-2.5-verification sync via child PR | after step 2 | replace old-main ancestry by merging, not rebasing; owner merge before tasks.
 4. UST-2.5.1 task → epic 2.5 | after sync | combined real-server/PostgreSQL/LDAPS acceptance and matrix with command/result/date.
 5. UST-2.5.2 task → epic 2.5 | after acceptance | rollout, rollback/image compatibility, final timed owner checks and pourOver pilot.
