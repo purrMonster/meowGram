@@ -458,8 +458,10 @@
 
     <div class="nav-bar">
         <a href="#release-1" class="nav-btn active">Release 1: Core Chat (v1.0.0+1)</a>
-        <a href="#release-2" class="nav-btn">Release 2: Immich Media (Next)</a>
-        <a href="#release-3" class="nav-btn">Release 3: Ephemeral Media (Planned)</a>
+        <a href="#release-2" class="nav-btn">Release 2: Message API</a>
+        <a href="#release-2-1" class="nav-btn">Release 2.1: Channels (Planning)</a>
+        <a href="#release-3" class="nav-btn">Release 3: Immich Media</a>
+        <a href="#future-ephemeral" class="nav-btn">Ephemeral Media (Unassigned)</a>
     </div>
 
     <!-- Release 1 Production Milestone Dashboard -->
@@ -797,20 +799,38 @@
         </details>
     </div>
 
-    <!-- Phase 2 -->
     <div class="release-section" id="release-2">
+        <div class="release-title"><span>Release 2: Authenticated Message API</span><span class="badge badge-planned">In Progress</span></div>
+        <div class="release-overview">Owner-approved scope split, 2026-10-20. Goal: pourOver live in the shared lounge. R2 contains epics 2.3, 2.4 and API-only 2.5. Media is deferred to R3; channels are planning-only for R2.1. See the <a href="docs/releases/release-2/README.md">release scope</a>, <a href="docs/releases/release-2/delivery-plan.md">delivery plan and budget</a>, <a href="docs/releases/release-2/api-design.md">pourOver API contract</a> and <a href="docs/releases/release-2/merge-queue.md">merge queue</a>.</div>
+        <details class="epic" open><summary><span>Epic 2.3: Bot Identity</span><span class="badge">Task foundations merged; integration pending</span></summary><div class="epic-details">
+            <p>UST-2.3.1: directory compatibility verified against isolated LLDAP 0.6.3 (#28). UST-2.3.2 group-gated authentication (#30) and UST-2.3.3 principal mapping (#29) are merged into their epic. Bot routes remain disabled until API integration.</p>
+            <p>NEW UST-2.3.4: stable bot usernames from uid, not cn; preserve username across display-name changes, distinguish recreated accounts and leave humans unaffected. Complete before the epic release PR.</p>
+        </div></details>
+        <details class="epic" open><summary><span>Epic 2.4: Message API</span><span class="badge">In Progress</span></summary><div class="epic-details">
+            <p>UST-2.4.1 shared message service merged (#31). Next: identity sync with SenderKind publication/history regression, UST-2.4.2 HTTP send and durable idempotency, UST-2.4.3 Basic sync and retry-safe example. All pourOver contract points require handler-level tests.</p>
+        </div></details>
+        <details class="epic"><summary><span>Epic 2.5: API Verification and Release</span><span class="badge">Planned</span></summary><div class="epic-details">
+            <p>UST-2.5.1 API/security acceptance matrix; UST-2.5.2 documentation, rollout/rollback and owner-authorized pourOver pilot. Check reader group visibility and cellar Authorization pass-through. No media release gate in R2.</p>
+        </div></details>
+    </div>
+    <div class="release-section" id="release-2-1">
+        <div class="release-title"><span>Release 2.1: Channels</span><span class="badge badge-planned">Planning Only</span></div>
+        <div class="release-overview">Proposed channel membership, send/sync channel_id, per-channel WebSocket and push, and Flutter navigation/cache changes. Recommend UUID channel IDs treated as opaque strings; null preserves the lounge. No implementation in this step. Read the <a href="docs/releases/release-2.1/channels-proposal.md">channels proposal and estimate</a>.</div>
+    </div>
+    <!-- R3: existing media scope retained -->
+    <div class="release-section" id="release-3">
         <div class="release-title">
-            <span>Release 2: Immich Integration (Rich Media Sharing)</span>
+            <span>Release 3: Immich Media — Epics 2.1 and 2.2 deferred to R3</span>
             <span class="badge badge-planned">Next Release Cycle</span>
         </div>
 
         <div class="release-overview">
-            <strong>Release 2 Architectural Strategy:</strong> Bridges meowGram with self-hosted Immich instances for enterprise-grade photo and video ingestion, machine learning tagging, and transcoding. meowGram acts as a secure streaming proxy so client devices never receive direct Immich master credentials. Media asset IDs are linked to chat timeline messages in PostgreSQL.
+            <strong>R3 strategy (scope unchanged; #32 contract stands):</strong> Bridges meowGram with self-hosted Immich instances for enterprise-grade photo and video ingestion, machine learning tagging, and transcoding. meowGram acts as a secure streaming proxy so client devices never receive direct Immich master credentials. Media asset IDs are linked to chat timeline messages in PostgreSQL.
         </div>
         
         <details class="epic" open>
             <summary>
-                <span>Epic 2.1: Backend Media Routing</span>
+                <span>Epic 2.1: Backend Media Routing — deferred to R3</span>
                 <span class="badge">Pending</span>
             </summary>
             <div class="epic-details">
@@ -821,9 +841,9 @@
                             <span class="ust-title">UST-2.1.1: Immich API Authentication Pipeline</span>
                             <span class="badge">Pending</span>
                         </div>
-                        <div class="ust-desc">Authenticate server proxy requests against the Immich REST API using pre-shared API keys and service accounts. Implement health check verification against <span class="code-pill">/api/server-info/version</span>.</div>
+                        <div class="ust-desc">Authenticate server proxy requests against the Immich REST API using pre-shared API keys and service accounts. Implement health check verification against <span class="code-pill">/api/server/version</span>.</div>
                         <div class="ust-meta">
-                            <span class="meta-tag"><strong>Target Endpoint:</strong> <span class="code-pill">https://immich.purrbrews.cc/api</span></span>
+                            <span class="meta-tag"><strong>Target Endpoint:</strong> <span class="code-pill">https://immich.example.home.arpa/api</span></span>
                             <span class="meta-tag"><strong>Auth Mode:</strong> API Key Header <span class="code-pill">x-api-key</span></span>
                         </div>
                     </div>
@@ -844,7 +864,7 @@
 
         <details class="epic" open>
             <summary>
-                <span>Epic 2.2: Frontend Feed UI</span>
+                <span>Epic 2.2: Frontend Feed UI — deferred to R3</span>
                 <span class="badge">Pending</span>
             </summary>
             <div class="epic-details">
@@ -877,15 +897,15 @@
         </details>
     </div>
 
-    <!-- Phase 3 -->
-    <div class="release-section" id="release-3">
+    <!-- Historical backlog: not assigned to approved R2, R2.1 or R3 -->
+    <div class="release-section" id="future-ephemeral">
         <div class="release-title">
-            <span>Release 3: Ephemeral Media (Self-Destruct)</span>
+            <span>Unassigned Backlog: Ephemeral Media (Self-Destruct)</span>
             <span class="badge badge-planned">Future Horizon</span>
         </div>
 
         <div class="release-overview">
-            <strong>Release 3 Architectural Strategy:</strong> Introduces privacy-centric disappearing messages and view-once media. Ephemeral state is governed by Redis TTL keyspace notifications, while binary objects are stored in an isolated MinIO S3 bucket with strict hardware lifecycle auto-purges. The client enforces hold-to-view gestures and OS screenshot deterrence.
+            <strong>Historical proposal, no release assigned:</strong> Introduces privacy-centric disappearing messages and view-once media. Ephemeral state is governed by Redis TTL keyspace notifications, while binary objects are stored in an isolated MinIO S3 bucket with strict hardware lifecycle auto-purges. The client enforces hold-to-view gestures and OS screenshot deterrence.
         </div>
         
         <details class="epic">

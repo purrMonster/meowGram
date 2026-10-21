@@ -79,7 +79,8 @@ func (s *MessageService) Send(ctx context.Context, senderID, username, text stri
 	}
 	if !s.publisher.Publish(&model.WSMessage{
 		Type: "chat", ID: message.ID, SenderID: message.SenderID,
-		Username: message.Username, TextContent: message.TextContent, CreatedAt: message.CreatedAt,
+		SenderKind: message.SenderKind,
+		Username:   message.Username, TextContent: message.TextContent, CreatedAt: message.CreatedAt,
 	}) {
 		return message, ErrBroadcastStopped
 	}

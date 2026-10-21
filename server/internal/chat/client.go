@@ -218,6 +218,7 @@ func (c *Client) SendHistory(ctx context.Context, limit int) {
 			Type:        "history",
 			ID:          msg.ID,
 			SenderID:    msg.SenderID,
+			SenderKind:  msg.SenderKind,
 			Username:    msg.Username,
 			TextContent: msg.TextContent,
 			CreatedAt:   msg.CreatedAt,
