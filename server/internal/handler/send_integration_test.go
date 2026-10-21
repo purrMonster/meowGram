@@ -247,7 +247,7 @@ func TestHTTPSendContract(t *testing.T) {
 		writeDenied.Store(false)
 	})
 	t.Run("validation", func(t *testing.T) {
-		for _, bad := range []string{`{}`, `null`, `{"text_content":3}`, `{"text_content":"x","sender_id":"spoof"}`, `{"text_content":"x","id":"spoof"}`, `{"text_content":"x"} {}`, `{"text_content":" "}`, `{"text_content":"` + strings.Repeat("🐾", 4001) + `"}`} {
+		for _, bad := range []string{`{"text_content":"x","channel_id":"lounge"}`, `{}`, `null`, `{"text_content":3}`, `{"text_content":"x","sender_id":"spoof"}`, `{"text_content":"x","id":"spoof"}`, `{"text_content":"x"} {}`, `{"text_content":" "}`, `{"text_content":"` + strings.Repeat("🐾", 4001) + `"}`} {
 			if w := request(route, uuid.NewString(), bad, "synthetic"); w.Code != 400 {
 				t.Fatalf("bad body status %d", w.Code)
 			}

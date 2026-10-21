@@ -100,3 +100,15 @@ X-Has-More and Retry-After where required; do not broaden allowed origins for bo
 Settings must be wired through server config, .env.example, Compose where needed
 and the runbook at epic doc-fold. Basic stays disabled until integration is ready.
 No live configuration is changed by this contract. See [owner checks](owner-checks.md).
+
+### Send body compatibility (UST-2.4.2 review)
+
+Send rejects unknown JSON body fields. In R2, `channel_id` returns HTTP 400;
+channels are planned for R2.1. pourOver must keep `MEOWGRAM_CHANNEL` empty
+and send only `text_content`.
+
+Successful sends and identical replays remove at most 100 expired idempotency
+rows in the same transaction, skipping rows locked by concurrent requests.
+Cleanup preserves messages and unexpired keys. Deleting a message cascades to
+its idempotency record, so deleting a human user can still cascade through their
+messages. Migration 000006 was corrected in place before merge/deployment.
