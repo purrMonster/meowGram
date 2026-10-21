@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"meowgram/server/internal/auth"
+	"meowgram/server/internal/botauth"
 	"meowgram/server/internal/chat"
 	"meowgram/server/internal/config"
 	"meowgram/server/internal/database"
@@ -147,6 +148,23 @@ func main() {
 		mux.Handle("GET "+cfg.SyncEndpoint, authMiddleware(handler.SyncHandler(messageRepo, logger)))
 	}
 
+	// Basic is restricted to the configured POST send route; bot sync follows in UST-2.4.3.
+	var botGate *botauth.Gate
+	if cfg.BotAuth.Enabled {
+		directory, err := botauth.NewDirectory(cfg.BotAuth.Directory)
+		if err != nil {
+			logger.Error("Invalid bot directory configuration", "error", err)
+			os.Exit(1)
+		}
+		botGate = &botauth.Gate{Directory: directory, Resolve: botauth.RepositoryResolver(repository.NewBotRepository(db)),
+			Ingress: ratelimit.New(cfg.RateLimits.GlobalPerMinute, cfg.RateLimits.GlobalBurst),
+			API:     ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst),
+			Logger:  logger, Timeout: cfg.BotAuth.Directory.Timeout, TrustedProxies: cfg.BotAuth.TrustedProxies}
+	}
+	if err := handler.RegisterSendRoute(mux, cfg.SendEndpoint, hub.MessageService(messageRepo), cfg.IdempotencyRetention, authMiddleware, botGate); err != nil {
+		logger.Error("Failed to configure message send route", "error", err)
+		os.Exit(1)
+	}
 	// Global Middleware chain: RequestLogger -> CORS -> Mux
 	var rootHandler http.Handler = mux
 	rootHandler = middleware.GlobalRateLimit(ratelimit.New(cfg.RateLimits.GlobalPerMinute, cfg.RateLimits.GlobalBurst), cfg.HealthEndpoint)(rootHandler)

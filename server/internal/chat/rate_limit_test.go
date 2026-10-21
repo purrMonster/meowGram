@@ -16,7 +16,7 @@ import (
 
 func TestReadPumpRejectsBeforeDatabaseWrite(t *testing.T) {
 	limiter := ratelimit.New(1, 1)
-	limiter.Allow("limited")
+	limiter.Allow("human:limited")
 	hub := NewHub(quietLogger(), nil, limiter)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
