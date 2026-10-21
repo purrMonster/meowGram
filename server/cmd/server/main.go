@@ -138,17 +138,7 @@ func main() {
 		mux.Handle("POST "+cfg.WSTicketEndpoint, authMiddleware(handler.WSTicketHandler(ticketStore, logger)))
 	}
 
-	// Protected catch-up synchronization endpoint (UST-1.4.3)
-	deviceHandler := authMiddleware(handler.PushDeviceHandler(deviceRepo))
-	mux.Handle("PUT "+cfg.PushDeviceEndpoint, deviceHandler)
-	mux.Handle("DELETE "+cfg.PushDeviceEndpoint, deviceHandler)
-
-	mux.Handle("GET /api/messages/sync", authMiddleware(handler.SyncHandler(messageRepo, logger)))
-	if cfg.SyncEndpoint != "/api/messages/sync" {
-		mux.Handle("GET "+cfg.SyncEndpoint, authMiddleware(handler.SyncHandler(messageRepo, logger)))
-	}
-
-	// Basic is restricted to the configured POST send route; bot sync follows in UST-2.4.3.
+	// Both message routes share bot authentication and API budgets; no other route admits Basic.
 	var botGate *botauth.Gate
 	if cfg.BotAuth.Enabled {
 		directory, err := botauth.NewDirectory(cfg.BotAuth.Directory)
@@ -160,6 +150,22 @@ func main() {
 			Ingress: ratelimit.New(cfg.RateLimits.GlobalPerMinute, cfg.RateLimits.GlobalBurst),
 			API:     ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst),
 			Logger:  logger, Timeout: cfg.BotAuth.Directory.Timeout, TrustedProxies: cfg.BotAuth.TrustedProxies}
+	}
+
+	// Protected catch-up synchronization endpoint (UST-1.4.3)
+	deviceHandler := authMiddleware(handler.PushDeviceHandler(deviceRepo))
+	mux.Handle("PUT "+cfg.PushDeviceEndpoint, deviceHandler)
+	mux.Handle("DELETE "+cfg.PushDeviceEndpoint, deviceHandler)
+
+	syncPaths := []string{"/api/messages/sync"}
+	if cfg.SyncEndpoint != "/api/messages/sync" {
+		syncPaths = append(syncPaths, cfg.SyncEndpoint)
+	}
+	for _, path := range syncPaths {
+		if err := handler.RegisterSyncRoute(mux, path, messageRepo, logger, authMiddleware, botGate); err != nil {
+			logger.Error("Failed to configure sync route", "error", err)
+			os.Exit(1)
+		}
 	}
 	if err := handler.RegisterSendRoute(mux, cfg.SendEndpoint, hub.MessageService(messageRepo), cfg.IdempotencyRetention, authMiddleware, botGate); err != nil {
 		logger.Error("Failed to configure message send route", "error", err)
