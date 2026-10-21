@@ -247,7 +247,7 @@ func TestHTTPSendContract(t *testing.T) {
 		writeDenied.Store(false)
 	})
 	t.Run("validation", func(t *testing.T) {
-		for _, bad := range []string{`{}`, `null`, `{"text_content":3}`, `{"text_content":"x","sender_id":"spoof"}`, `{"text_content":"x","id":"spoof"}`, `{"text_content":"x"} {}`, `{"text_content":" "}`, `{"text_content":"` + strings.Repeat("🐾", 4001) + `"}`} {
+		for _, bad := range []string{`{"text_content":"x","channel_id":"lounge"}`, `{}`, `null`, `{"text_content":3}`, `{"text_content":"x","sender_id":"spoof"}`, `{"text_content":"x","id":"spoof"}`, `{"text_content":"x"} {}`, `{"text_content":" "}`, `{"text_content":"` + strings.Repeat("🐾", 4001) + `"}`} {
 			if w := request(route, uuid.NewString(), bad, "synthetic"); w.Code != 400 {
 				t.Fatalf("bad body status %d", w.Code)
 			}
@@ -300,6 +300,25 @@ func TestHTTPSendContract(t *testing.T) {
 		w := request(mux, "shared-budget", body, "human")
 		if w.Code != 429 {
 			t.Fatalf("transport reset write budget: %d", w.Code)
+		}
+	})
+	t.Run("user deletion cascades idempotency", func(t *testing.T) {
+		w := request(route, "delete-user", body, "human")
+		if w.Code != 201 {
+			t.Fatalf("send: %d %s", w.Code, w.Body)
+		}
+		var count int
+		if err := db.QueryRow(`SELECT count(*) FROM message_idempotency WHERE sender_kind='human' AND sender_id='human-send'`).Scan(&count); err != nil || count == 0 {
+			t.Fatalf("missing sent key: %d %v", count, err)
+		}
+		if _, err := db.Exec(`DELETE FROM users WHERE authelia_sub='human-send'`); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.QueryRow(`SELECT count(*) FROM message_idempotency WHERE sender_kind='human' AND sender_id='human-send'`).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("orphan keys: %d %v", count, err)
+		}
+		if err := db.QueryRow(`SELECT count(*) FROM messages WHERE sender_id='human-send'`).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("orphan messages: %d %v", count, err)
 		}
 	})
 	t.Run("cors", func(t *testing.T) {
