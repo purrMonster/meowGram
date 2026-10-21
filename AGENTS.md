@@ -77,7 +77,7 @@ where the two disagree, the runbook wins.
 - **No local authentication.** No passwords, user registration or self-issued
   tokens in meowGram. Identity is Authelia OpenID Connect; users are
   auto-provisioned from the token's `sub`.
-  **Approved Release 2 exception (planned, not implemented):** dedicated bot
+  **Approved Release 2 exception (implemented; disabled by default (BOT_BASIC_AUTH_ENABLED=false) until the authorized rollout):** dedicated bot
   accounts may use HTTP Basic Auth on message send/read endpoints over HTTPS.
   Validate passwords and membership in a configured LLDAP group on every
   request over encrypted LDAP; never persist passwords or issue local tokens.
