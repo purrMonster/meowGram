@@ -6,17 +6,14 @@ branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 
 ## R2 queue and dependencies
 
-1. #37 chore/r2-identity-parent-sync → feat/r2-epic-2.3-bot-identity | merge after nothing | resolves four release-scope conflicts; full integration verification green.
-2. #38 feat/r2-epic-2.3-bot-identity → release/r2 | merge after #37; draft until reconciliation lands and mergeability is checked | integrates verified bot identity foundations.
+Completed: #34–#38 are owner-merged. Identity is integrated in release/r2.
 
-Completed: #34 stable usernames, #35 runbook fold and #36 queue refresh are owner-merged. Use merge commits for parent synchronization so ancestry is retained.
-5. release/r2 → feat/r2-epic-2.4-message-api sync PR | after identity epic release merge; #31 already merged | unblocks HTTP API.
-   Required resolution: MessageService.Send's published WSMessage carries `SenderKind: message.SenderKind`; SendHistory retains SenderKind. Add a store-returning-bot publishes bot / human publishes human regression. Preserve both behaviours when resolving client.go conflicts. Behaviour fixes get a separate fix commit/test; verify full suite. Use the approved sync PR workflow, no direct integration pushes or sibling cherry-picks.
-6. UST-2.4.2 task → epic 2.4 | after sync | send + durable idempotency and pourOver httptest acceptance.
-7. UST-2.4.3 task → epic 2.4 | after send | bot sync, cursor edge cases, example and backoff acceptance.
-8. Epic 2.4 doc-fold and verified epic → release/r2 | after API task merges | complete API implementation.
-9. Sync integrated API into epic 2.5 through owner PR; UST-2.5.1/2.5.2 tasks → epic 2.5, doc-fold, verified epic → release/r2 | API-only acceptance, owner pilot instructions and release docs.
-10. release/r2 → main | after API release gates | owner-reviewed release candidate; separately authorized pourOver live pilot.
+1. Message API sync PR: chore/r2-message-api-sync → feat/r2-epic-2.4-message-api | merge after nothing | merges release/r2 identity, preserves shared service and history, fixes SenderKind publication with bot/human regression. Use a merge commit to retain synchronization ancestry.
+2. UST-2.4.2 task → epic 2.4 | after sync | send + durable idempotency and pourOver httptest acceptance.
+3. UST-2.4.3 task → epic 2.4 | after send | bot sync, cursor edge cases, example and backoff acceptance.
+4. Epic 2.4 doc-fold and verified epic → release/r2 | after API task merges | complete API implementation.
+5. Sync integrated API into epic 2.5 through owner PR; UST-2.5.1/2.5.2 tasks → epic 2.5, doc-fold, verified epic → release/r2 | API-only acceptance, owner pilot instructions and release docs.
+6. release/r2 → main | after API release gates | owner-reviewed release candidate; separately authorized pourOver live pilot.
 
 Merge updated remote parents INTO task branches, never rebase/force-push.
 Preserve directory AND bot-auth CI jobs ahead of verify, retain chronological
