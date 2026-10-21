@@ -10,7 +10,7 @@ Completed: #34–#38 are owner-merged. Identity is integrated in release/r2.
 
 Completed #39 Message API sync PR: chore/r2-message-api-sync → feat/r2-epic-2.4-message-api | merge after nothing | merges release/r2 identity, preserves shared service and history, fixes SenderKind publication with bot/human regression. Use a merge commit to retain synchronization ancestry.
 1. #40 feat/ust-2.4.2-http-send-idempotency → feat/r2-epic-2.4-message-api | merge after nothing (#39 merged) | verified authenticated send and durable idempotency.
-3. UST-2.4.3 task → epic 2.4 | after send | bot sync, cursor edge cases, example and backoff acceptance.
+2. #41 feat/ust-2.4.3-bot-sync-example → feat/r2-epic-2.4-message-api | stacked on/merge after #40 | verified bot sync, cursor edge cases, durable example and backoff; merge updated remote epic into task after #40.
 4. Epic 2.4 doc-fold and verified epic → release/r2 | after API task merges | complete API implementation.
 5. Sync integrated API into epic 2.5 through owner PR; UST-2.5.1/2.5.2 tasks → epic 2.5, doc-fold, verified epic → release/r2 | API-only acceptance, owner pilot instructions and release docs.
 6. release/r2 → main | after API release gates | owner-reviewed release candidate; separately authorized pourOver live pilot.

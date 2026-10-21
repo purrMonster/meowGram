@@ -112,3 +112,18 @@ rows in the same transaction, skipping rows locked by concurrent requests.
 Cleanup preserves messages and unexpired keys. Deleting a message cascades to
 its idempotency record, so deleting a human user can still cascade through their
 messages. Migration 000006 was corrected in place before merge/deployment.
+
+## Bot sync and example (UST-2.4.3)
+
+Optional Basic authentication now covers exact GET sync as well as exact POST
+send. The default sync alias remains registered once, alongside a distinct
+configured alias; humans retain their bearer-authenticated access to both.
+Every bot page rechecks credentials/group membership. Sync responses are
+no-store; unavailable storage returns 503 with Retry-After: 1.
+
+The [stdlib Go lounge example](../../../server/examples/lounge-bot/README.md)
+polls every three seconds, persists timestamp/UUID cursors and pending reply
+bodies/keys, and resumes an ambiguous send by replay before advancing. It handles
+429/503 Retry-After and skips its own sender_kind + sender_id. It starts from
+the Unix epoch when no state exists; configure private durable state and use a
+controlled pilot. Live deployment and account creation remain owner checks.
