@@ -21,6 +21,28 @@ func (f storeFunc) Create(c context.Context, id, name, text string) (*model.Mess
 
 type publishFunc func(*model.WSMessage) bool
 
+func TestMessageServicePublishesStoredSenderKind(t *testing.T) {
+	for _, kind := range []string{"bot", "human"} {
+		t.Run(kind, func(t *testing.T) {
+			stored := &model.Message{ID: "persisted", SenderID: "sender", SenderKind: kind, TextContent: "hello"}
+			published := 0
+			service := NewMessageService(storeFunc(func(context.Context, string, string, string) (*model.Message, error) {
+				return stored, nil
+			}), publishFunc(func(message *model.WSMessage) bool {
+				published++
+				if message.SenderKind != kind || message.SenderID != stored.SenderID || message.ID != stored.ID {
+					t.Fatalf("publication lost stored identity: %+v", message)
+				}
+				return true
+			}), nil)
+			result, err := service.Send(context.Background(), "sender", "name", "hello")
+			if err != nil || result != stored || published != 1 {
+				t.Fatalf("send result=%v err=%v publications=%d", result, err, published)
+			}
+		})
+	}
+}
+
 func (f publishFunc) Publish(m *model.WSMessage) bool { return f(m) }
 
 func TestMessageServiceCommitBeforePublication(t *testing.T) {
