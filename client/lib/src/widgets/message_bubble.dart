@@ -138,7 +138,9 @@ class MessageBubble extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      displayName,
+                      message.senderKind == 'bot'
+                          ? '$displayName · Bot'
+                          : displayName,
                       style: theme.textTheme.labelSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
