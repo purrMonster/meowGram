@@ -6,6 +6,7 @@ import "time"
 type Message struct {
 	ID          string    `json:"id"`
 	SenderID    string    `json:"sender_id"`
+	SenderKind  string    `json:"sender_kind"`
 	Username    string    `json:"username"`
 	TextContent string    `json:"text_content"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -23,6 +24,7 @@ type WSMessage struct {
 	Type        string         `json:"type"` // "chat", "system", "welcome", "history", "presence"
 	ID          string         `json:"id,omitempty"`
 	SenderID    string         `json:"sender_id,omitempty"`
+	SenderKind  string         `json:"sender_kind,omitempty"`
 	Username    string         `json:"username,omitempty"`
 	TextContent string         `json:"text_content,omitempty"`
 	Users       []UserPresence `json:"users,omitempty"`

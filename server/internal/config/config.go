@@ -43,6 +43,16 @@ func Load() (*Config, error) {
 	// 1. Attempt loading from candidate .env files if present
 	loadDotenv()
 
+	// UST-2.3.2 supplies the gate; message-route integration follows once its
+	// sibling principal and API tasks reach the release integration branch.
+	botAuth, err := LoadBotAuth()
+	if err != nil {
+		return nil, err
+	}
+	if botAuth.Enabled {
+		return nil, errors.New("bot Basic authentication requires the R2 message-route integration; leave BOT_BASIC_AUTH_ENABLED=false on this branch")
+	}
+
 	// Port fallback precedence: PORT -> HTTP_PORT -> 8080
 	port := os.Getenv("PORT")
 	if port == "" {

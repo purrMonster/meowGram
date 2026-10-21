@@ -10,7 +10,7 @@ This decision supersedes older scope statements in the unchanged playbook.
 #27 workflow/playbook is merged into release/r2. #28 directory investigation,
 #29 bot principals (including repeatable migration 000005), and #30 bot auth
 are merged into epic 2.3. #31 shared message service is merged into epic 2.4.
-#32 media contract is merged into epic 2.1, deferred to R3. These task merges do
+#32 media contract is merged into epic 2.1, deferred to R3. #33 scope split and #36 queue are merged into release/r2; #34 stable usernames and #35 runbook fold are merged into epic 2.3. These task merges do
 not establish integrated R2 runtime readiness. Prior passing evidence remains
 in task logs; this scope PR makes no new application-test claim.
 
@@ -19,7 +19,7 @@ in task logs; this scope PR makes no new application-test claim.
 | Story / step | Deliverable and Done check |
 |---|---|
 | Scope split | Docs-only PR into release/r2; pourOver contract, channels proposal and budget recorded |
-| NEW UST-2.3.4 | Stable bot username = verified LLDAP login ID (uid), not cn. Resolve must not rewrite it on each authentication. Display-name rename leaves username unchanged; deleted/recreated account gets a new principal; humans unaffected. Human and bot usernames are not cross-checked for uniqueness; identity is sender_kind + sender_id. Optional separate display_name only if cheap. Any migration is additive/re-runnable, with real golang-migrate down/up preservation tests and partial/repeated-up coverage equivalent to 000005. Document handling of existing cn-derived rows without destructive backfill. |
+| UST-2.3.4 — DONE (#34) | Stable bot username = verified LLDAP login ID (uid), not cn. Resolve must not rewrite it on each authentication. Display-name rename leaves username unchanged; deleted/recreated account gets a new principal; humans unaffected. Human and bot usernames are not cross-checked for uniqueness; identity is sender_kind + sender_id. Optional separate display_name only if cheap. Any migration is additive/re-runnable, with real golang-migrate down/up preservation tests and partial/repeated-up coverage equivalent to 000005. Document handling of existing cn-derived rows without destructive backfill. |
 | Identity integration | Doc-fold task PR first if needed, then verified epic 2.3 → release/r2 PR, only after UST-2.3.4 is owner-merged |
 | Message API sync | Owner-reviewed release/r2 → epic 2.4 sync; preserve SenderKind in MessageService.Send publication and SendHistory, with explicit bot/human publication regression |
 | UST-2.4.2 | POST send for human bearer and bot Basic; transactional durable idempotency; identical replay response; 409 on changed body; ≥20 concurrent duplicates produce one row/broadcast and at most one push; restart/expiry/DB-failure tests; CORS Idempotency-Key support |
@@ -35,7 +35,7 @@ branch pushed and a story log ending in "Where we stopped / next step".
 | Branch | Immediate PR target |
 |---|---|
 | docs/r2-scope-split | release/r2 |
-| feat/ust-2.3.4-stable-bot-usernames (planned) | feat/r2-epic-2.3-bot-identity |
+| feat/ust-2.3.4-stable-bot-usernames (merged #34) | feat/r2-epic-2.3-bot-identity |
 | feat/r2-epic-2.3-bot-identity | release/r2, after 2.3.4 and doc-fold |
 | feat/r2-epic-2.4-message-api | release/r2, after API tasks |
 | test/r2-epic-2.5-verification | release/r2, after API integration |

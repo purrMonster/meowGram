@@ -82,6 +82,10 @@ Only the repository owner merges and authorizes changes to the live deployment.
 
 ## Releases
 
+[Release 2 planning](docs/releases/release-2/README.md) retains Immich media
+sharing and adds a message API: human OAuth plus dedicated bot Basic Auth gated
+by an LLDAP group. This is planned behavior, not a currently available API.
+
 Tagged releases (`vX.Y.Z`) publish domain-free packages: the server and web
 images on GHCR, and Android, Windows, macOS and iOS apps on the GitHub Release.
 The apps ask for your server's address on first launch and read its sign-in
