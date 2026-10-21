@@ -302,6 +302,25 @@ func TestHTTPSendContract(t *testing.T) {
 			t.Fatalf("transport reset write budget: %d", w.Code)
 		}
 	})
+	t.Run("user deletion cascades idempotency", func(t *testing.T) {
+		w := request(route, "delete-user", body, "human")
+		if w.Code != 201 {
+			t.Fatalf("send: %d %s", w.Code, w.Body)
+		}
+		var count int
+		if err := db.QueryRow(`SELECT count(*) FROM message_idempotency WHERE sender_kind='human' AND sender_id='human-send'`).Scan(&count); err != nil || count == 0 {
+			t.Fatalf("missing sent key: %d %v", count, err)
+		}
+		if _, err := db.Exec(`DELETE FROM users WHERE authelia_sub='human-send'`); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.QueryRow(`SELECT count(*) FROM message_idempotency WHERE sender_kind='human' AND sender_id='human-send'`).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("orphan keys: %d %v", count, err)
+		}
+		if err := db.QueryRow(`SELECT count(*) FROM messages WHERE sender_id='human-send'`).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("orphan messages: %d %v", count, err)
+		}
+	})
 	t.Run("cors", func(t *testing.T) {
 		r := httptest.NewRequest("OPTIONS", "https://example.home.arpa/api/messages", nil)
 		r.Header.Set("Origin", "https://example.home.arpa")
