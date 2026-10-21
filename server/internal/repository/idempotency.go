@@ -49,6 +49,9 @@ func (r *MessageRepository) CreateIdempotent(ctx context.Context, p SendPrincipa
 		if err := json.Unmarshal(body, &message); err != nil {
 			return nil, err
 		}
+		if err := finishIdempotent(ctx, tx); err != nil {
+			return nil, err
+		}
 		return &SendResult{Message: &message, Body: body, Replay: true}, nil
 	}
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -78,8 +81,23 @@ func (r *MessageRepository) CreateIdempotent(ctx context.Context, p SendPrincipa
 	if err != nil {
 		return nil, err
 	}
-	if err = tx.Commit(); err != nil {
+	if err = finishIdempotent(ctx, tx); err != nil {
 		return nil, err
 	}
 	return &SendResult{Message: message, Body: body}, nil
+}
+
+// Cleanup shares the send transaction and never waits for another send's rows.
+// The expiry index bounds candidate discovery; the batch bounds write work.
+func finishIdempotent(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `WITH expired AS (
+ SELECT sender_kind,sender_id,operation_key FROM message_idempotency
+ WHERE expires_at <= clock_timestamp() ORDER BY expires_at
+ LIMIT 100 FOR UPDATE SKIP LOCKED
+ ) DELETE FROM message_idempotency m USING expired e
+ WHERE m.sender_kind=e.sender_kind AND m.sender_id=e.sender_id AND m.operation_key=e.operation_key`)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
