@@ -60,7 +60,7 @@ func NewMessageService(store MessageStore, publisher MessagePublisher, budget Me
 // it as a failed insert. Publication does not acknowledge delivery to clients.
 func (s *MessageService) Send(ctx context.Context, senderID, username, text string) (*model.Message, error) {
 	if s.budget != nil {
-		if allowed, retry := s.budget.Allow(senderID); !allowed {
+		if allowed, retry := s.budget.Allow("human:" + senderID); !allowed {
 			return nil, &MessageRateError{RetryAfter: retry}
 		}
 	}

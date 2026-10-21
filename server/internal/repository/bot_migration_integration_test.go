@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -56,6 +57,28 @@ func botMigrationDatabase(t *testing.T) (*sql.DB, *migrate.Migrate, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Keep this historical Up/down/Up regression pinned to migration 000005
+	// even after later migrations are added to the application.
+	bounded := t.TempDir()
+	files, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		prefix, _, ok := strings.Cut(file.Name(), "_")
+		version, err := strconv.Atoi(prefix)
+		if !ok || err != nil || version > 5 || file.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(root, file.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(bounded, file.Name()), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root = bounded
 	source := (&url.URL{Scheme: "file", Path: filepath.ToSlash(root)}).String()
 	m, err := migrate.New(source, u.String())
 	if err != nil {

@@ -13,29 +13,32 @@ import (
 
 // Config represents runtime configuration loaded strictly from environment variables and .env files.
 type Config struct {
-	RateLimits         RateLimits
-	Port               string
-	AppDomain          string
-	CORSOrigins        []string
-	Environment        string
-	LogLevel           string
-	DatabaseURL        string
-	AutheliaDomain     string
-	AutheliaIssuer     string
-	AutheliaJWKSURL    string
-	AutheliaClientID   string
-	AutheliaAudience   string
-	GoogleCredentials  string
-	SyncEndpoint       string
-	HealthEndpoint     string
-	WSEndpoint         string
-	WSTicketEndpoint   string
-	PushDeviceEndpoint string
-	ImmichDomain       string
-	ImmichAPIURL       string
-	ReadTimeout        time.Duration
-	WriteTimeout       time.Duration
-	IdleTimeout        time.Duration
+	BotAuth              BotAuth
+	SendEndpoint         string
+	IdempotencyRetention time.Duration
+	RateLimits           RateLimits
+	Port                 string
+	AppDomain            string
+	CORSOrigins          []string
+	Environment          string
+	LogLevel             string
+	DatabaseURL          string
+	AutheliaDomain       string
+	AutheliaIssuer       string
+	AutheliaJWKSURL      string
+	AutheliaClientID     string
+	AutheliaAudience     string
+	GoogleCredentials    string
+	SyncEndpoint         string
+	HealthEndpoint       string
+	WSEndpoint           string
+	WSTicketEndpoint     string
+	PushDeviceEndpoint   string
+	ImmichDomain         string
+	ImmichAPIURL         string
+	ReadTimeout          time.Duration
+	WriteTimeout         time.Duration
+	IdleTimeout          time.Duration
 }
 
 // Load populates and validates Config from process environment and candidate .env files.
@@ -43,16 +46,21 @@ func Load() (*Config, error) {
 	// 1. Attempt loading from candidate .env files if present
 	loadDotenv()
 
-	// UST-2.3.2 supplies the gate; message-route integration follows once its
-	// sibling principal and API tasks reach the release integration branch.
 	botAuth, err := LoadBotAuth()
 	if err != nil {
 		return nil, err
 	}
-	if botAuth.Enabled {
-		return nil, errors.New("bot Basic authentication requires the R2 message-route integration; leave BOT_BASIC_AUTH_ENABLED=false on this branch")
+	retention := 168 * time.Hour
+	if raw := os.Getenv("IDEMPOTENCY_RETENTION"); raw != "" {
+		retention, err = time.ParseDuration(raw)
+		if err != nil || retention < 168*time.Hour || retention > 8760*time.Hour {
+			return nil, errors.New("IDEMPOTENCY_RETENTION must be between 168h and 8760h")
+		}
 	}
-
+	sendEndpoint := normalizePath(os.Getenv("MESSAGE_SEND_ENDPOINT"), "/api/messages")
+	if strings.ContainsAny(sendEndpoint, " {}?*\t\r\n") || strings.HasSuffix(sendEndpoint, "/") {
+		return nil, errors.New("MESSAGE_SEND_ENDPOINT must be an exact absolute path")
+	}
 	// Port fallback precedence: PORT -> HTTP_PORT -> 8080
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -242,7 +250,16 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	if botAuth.Enabled && (limits.APIPerMinute < 30 || limits.GlobalPerMinute < 60) {
+		return nil, errors.New("bot API budget must be at least 30/min and shared ingress at least 60/min")
+	}
+	for _, reserved := range []string{"/api/ws-ticket", wsTicketEndpoint, "/ws", wsEndpoint, "/api/push/devices", normalizePath(os.Getenv("PUSH_DEVICE_ENDPOINT"), "/api/push/devices"), "/healthz", healthEndpoint, "/api/client-config"} {
+		if sendEndpoint == reserved {
+			return nil, errors.New("MESSAGE_SEND_ENDPOINT conflicts with a reserved route")
+		}
+	}
 	return &Config{
+		BotAuth: botAuth, SendEndpoint: sendEndpoint, IdempotencyRetention: retention,
 		RateLimits:         limits,
 		Port:               port,
 		AppDomain:          appDomain,
