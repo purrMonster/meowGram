@@ -18,8 +18,11 @@ not release sign-off; UST-2.4.3 and 2.5 must close the remaining rows.
 | Expiry boundary, message/key transaction failure | TestIdempotencyExpiryAndTransactionFailure | UTC/IST pass, 2026-10-21 |
 | Disabled default, retention bounds, minimum bot budgets, route configuration | TestHTTPSendConfiguration | UTC/IST pass, 2026-10-21 |
 | Real LDAP behavior | TestLLDAP | PASS 2.79s, dedicated LLDAP 0.6.3 harness |
-| Bot GET sync, paging/equal timestamps/unencoded offset/empty page | UST-2.4.3 | Pending implementation |
-| Sustained polling plus replies, cursor/retry example | UST-2.4.3 | Pending implementation |
+| Bot GET sync, 1000 equal-time rows, unencoded offset, empty page, per-page group checks | TestBotSyncPagingAndPolling | UTC/IST pass, 2026-10-21 |
+| 20 polls + 10 replies/min with minimum budgets | TestBotSyncPagingAndPolling | UTC/IST pass, 2026-10-21 |
 | Integrated release, owner pilot, native device | UST-2.5.1/2.5.2 and owner-checks.md | Pending integration |
 | Human deletion cascades through HTTP-sent message and key | TestHTTPSendContract/user_deletion_cascades_idempotency | UTC/IST pass, 2026-10-21 |
 | Transactional expiry cleanup bounded at 100; replay cleanup; active keys preserved | TestIdempotencyBoundedExpiredCleanup | UTC/IST pass, 2026-10-21 |
+| Default/custom sync aliases, human access, exact Basic methods | TestSyncRouteAliasesAndBasicIsolation | UTC/IST pass, 2026-10-21 |
+| Example durable cursor, lost-response replay, own filtering, 429/503, retention cutoff | TestExampleScratchRestartAndBackoff | UTC/IST pass, 2026-10-21 |
+| Example HTTPS endpoint boundaries | TestExampleRequiresSecureEndpoints | UTC/IST pass, 2026-10-21 |
