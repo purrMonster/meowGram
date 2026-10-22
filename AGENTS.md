@@ -1,5 +1,7 @@
 # AGENTS.md: rules for every agent working on meowGram
 
+Release 2 work: read docs/releases/release-2/AGENT_PLAYBOOK.md before every session; its [OVERRIDE] rules are owner-approved.
+
 meowGram is the purrBrews household's cat-lounge chat: a Flutter client (web,
 Android, iOS, Windows, macOS) and a Go backend with PostgreSQL, deployed as
 containers. Read this file first, then [`runbook.md`](runbook.md) (current design
@@ -9,11 +11,30 @@ where the two disagree, the runbook wins.
 ## 1. Workflow
 
 1. **Every change gets its own new branch.** Never commit to `main` directly.
-   - Branch from an up-to-date `main`: `git fetch origin`, then
+   - For standalone changes, branch from up-to-date `main`: `git fetch origin`, then
      `git switch -c <type>/<short-name> origin/main`.
+   - **For work divided into releases, epics and tasks, use matching branch
+     layers.** Create `release/<release>` from updated `origin/main`; create
+     `<type>/<release>-epic-<number>-<name>` from the release branch; create
+     individual story/task branches from their epic branch. Omit unused layers
+     for two-level work. Git has no literal sub-branches: starting points and
+     PR bases establish the hierarchy.
+   - Record each branch's parent and PR target in the delivery plan. Fetch
+     before starting a child and use the latest owner-approved parent state
+     (the remote parent once published). Release work must not branch from
+     `main` or a sibling instead of its declared parent.
+   - PRs move one layer at a time: task -> epic -> release -> `main`.
+     Release-wide planning/workflow branches may target the release directly.
+     Integration branches collect owner-merged PRs; do not commit implementation
+     directly to them or merge your own PRs at any layer. Shared dependencies
+     must reach the common integration parent before other epics incorporate
+     them. Update children without resetting them or rewriting published history.
+     Cross-layer exceptions require the owner's instruction and a recorded reason.
    - Name it `<type>/<what>` with the commit types below, e.g.
      `feat/ust-1.5.1-typing-indicator`, `fix/ws-reconnect-backoff`,
-     `docs/agents-guide`. One topic per branch.
+     `docs/agents-guide`. One topic per task branch; integration branches group
+     only their declared release or epic scope. The current R2 branch map lives
+     in `docs/releases/release-2/delivery-plan.md`.
    - It reaches `main` only through a pull request the owner merges. Don't merge
      your own branch, and don't push to `main`.
    - Never rewrite history that's been pushed (no force-push, no rebase of a
@@ -56,6 +77,13 @@ where the two disagree, the runbook wins.
 - **No local authentication.** No passwords, user registration or self-issued
   tokens in meowGram. Identity is Authelia OpenID Connect; users are
   auto-provisioned from the token's `sub`.
+  **Approved Release 2 exception (implemented; disabled by default (BOT_BASIC_AUTH_ENABLED=false) until the authorized rollout):** dedicated bot
+  accounts may use HTTP Basic Auth on message send/read endpoints over HTTPS.
+  Validate passwords and membership in a configured LLDAP group on every
+  request over encrypted LDAP; never persist passwords or issue local tokens.
+  Human OAuth remains unchanged. Basic Auth must not grant WebSocket tickets,
+  push-device access or media access. See
+  [Release 2 API design](docs/releases/release-2/api-design.md).
 - **The Flutter app holds no client secret.** It's a public OAuth 2.0 client
   using Authorization Code + PKCE (S256), with client ID `meowgram`. The backend
   verifies access tokens (JWTs) against Authelia's JWKS: issuer

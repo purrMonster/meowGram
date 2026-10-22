@@ -1,0 +1,11 @@
+# Owner-only rollback overlay. See runbook §14 before using: a version-6 DB
+# cannot start v1.1.0 without the documented human-only version reset or restore.
+services:
+  server:
+    image: meowgram-server:pre-r2
+    pull_policy: never
+    environment:
+      BOT_BASIC_AUTH_ENABLED: "false"
+  web:
+    image: meowgram-web:pre-r2
+    pull_policy: never

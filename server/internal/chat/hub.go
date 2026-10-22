@@ -98,6 +98,15 @@ func (h *Hub) stopped() bool {
 // Done is closed when Run has returned.
 func (h *Hub) Done() <-chan struct{} { return h.done }
 
+// MessageService creates a transport-independent sender using this hub's shared
+// principal budget. HTTP and WebSocket adapters must share this budget.
+func (h *Hub) MessageService(store MessageStore) *MessageService {
+	if h.messageLimit == nil {
+		return NewMessageService(store, h, nil)
+	}
+	return NewMessageService(store, h, h.messageLimit)
+}
+
 // RegisterClient hands a client to the Hub. It returns false if the Hub has stopped.
 func (h *Hub) RegisterClient(c *Client) bool {
 	select {
