@@ -7,7 +7,7 @@ Exact commands and recovery limits: [runbook rollout procedure](rollout.md).
 
 | Order / check | Time | Expected result |
 |---|---|---|
-| 1. GHCR access | 5–10 min | After reviewing the image-inspection evidence, make meowgram-server and meowgram-web public OR provision a private read:packages token for cellar. Pull both exact 2.0.0 tags; record digests. No token in logs, Git or chat. No public recommendation until image inspection completes. |
+| 1. GHCR access | 5–10 min | After reviewing the image-inspection evidence, make meowgram-server and meowgram-web public OR provision a private read:packages token for cellar. Pull both exact 2.0.0 tags; record digests. No token in logs, Git or chat. Local candidate inspection passed: see image-inspection.md; recheck if published inputs/artifacts differ. |
 | 2. Backup and previous image identity | 15–30 min | Completed real dump copied off-node with matching checksum, restored in isolated PG with matching message count; actual previous release and both image IDs recorded/tagged pre-r2. v1.1.0 compatibility proof does not identify the running image. |
 | 3. Pre-bot human smoke | 15 min | Health 200, OIDC login, old history visible, phone and web sends persist/reconnect once, no Bot label on human messages. Basic remains false. |
 | 4. Least-privilege LLDAP reader | 10 min | Reader can see uid, entryUUID and direct memberOf for the allowed bot group under the people base; configured namespace stays stable. Valid member passes; nonmember gets 403; removal appears on next request. Reader secret remains in a private host-local mounted file. |
