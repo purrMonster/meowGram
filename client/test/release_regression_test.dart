@@ -521,6 +521,10 @@ void main() {
           return http.Response(
             jsonEncode([
               chat('1', DateTime.utc(2026, 10, 7, 9), sender: 'me').toJson(),
+              {
+                ...chat('bot', DateTime.utc(2026, 10, 7, 9), sender: 'me').toJson(),
+                'sender_kind': 'bot',
+              },
               chat(
                 '2',
                 DateTime.utc(2026, 10, 7, 10),
@@ -545,7 +549,8 @@ void main() {
 
         await run();
         expect(requests, 1);
-        expect(notifiedCount, 1, reason: 'own message excluded');
+        expect(notifiedCount, 2,
+            reason: 'own human message excluded, colliding bot retained');
         expect(jsonDecode(cursorStore.store['meowgram_bg_sync_cursor']!), {
           'created_at': '2026-10-07T10:00:00.000Z',
           'id': '2',

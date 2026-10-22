@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"meowgram/server/internal/auth"
+	"meowgram/server/internal/botauth"
 	"meowgram/server/internal/model"
 	"meowgram/server/internal/repository"
 )
@@ -45,19 +46,22 @@ const SyncPageSize = 500
 
 func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 1. Enforce authenticated context from Authelia OIDC middleware
-		user, hasUser := auth.UserFromContext(r.Context())
-		if !hasUser || user == nil {
-			writeSyncJSONError(w, http.StatusUnauthorized, "unauthorized", "valid Authelia OIDC token required")
+		w.Header().Set("Cache-Control", "no-store")
+		var senderID, username string
+		if bot, ok := botauth.PrincipalFromContext(r.Context()); ok {
+			senderID, username = bot.ID, bot.Username
+		} else if user, ok := auth.UserFromContext(r.Context()); ok && user != nil {
+			senderID, username = user.AutheliaSub, user.Username
+		} else {
+			writeSyncJSONError(w, 401, "unauthorized", "authenticated sender required")
 			return
 		}
-
 		// 2. Validate mandatory 'after' query parameter
 		rawAfter := r.URL.Query().Get("after")
 		if strings.TrimSpace(rawAfter) == "" {
 			logger.Warn("Sync request missing 'after' parameter",
 				"remote_addr", r.RemoteAddr,
-				"sub", user.AutheliaSub,
+				"sub", senderID,
 			)
 			writeSyncJSONError(w, http.StatusBadRequest, "bad_request", "missing required query parameter 'after' (expected ISO 8601 / RFC 3339 timestamp)")
 			return
@@ -68,7 +72,7 @@ func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) htt
 		if err != nil {
 			logger.Warn("Sync request provided malformed timestamp",
 				"remote_addr", r.RemoteAddr,
-				"sub", user.AutheliaSub,
+				"sub", senderID,
 				"raw_after", rawAfter,
 				"error", err,
 			)
@@ -85,11 +89,12 @@ func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) htt
 		messages, err := msgRepo.GetMessagesAfter(r.Context(), afterTime, afterID, SyncPageSize)
 		if err != nil {
 			logger.Error("Failed to query messages for sync",
-				"sub", user.AutheliaSub,
+				"sub", senderID,
 				"after", afterTime,
 				"error", err,
 			)
-			writeSyncJSONError(w, http.StatusInternalServerError, "internal_error", "failed to retrieve catch-up messages from database")
+			w.Header().Set("Retry-After", "1")
+			writeSyncJSONError(w, http.StatusServiceUnavailable, "unavailable", "message storage unavailable")
 			return
 		}
 
@@ -99,8 +104,8 @@ func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) htt
 		}
 
 		logger.Info("Catch-up sync served successfully",
-			"sub", user.AutheliaSub,
-			"username", user.Username,
+			"sub", senderID,
+			"username", username,
 			"after_utc", afterTime.Format(time.RFC3339Nano),
 			"delivered_count", len(messages),
 		)

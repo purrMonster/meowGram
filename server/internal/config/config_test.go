@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // cleanEnv blanks every variable Load reads, so tests don't leak into each other
@@ -11,7 +12,7 @@ import (
 func cleanEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
-		"PORT", "HTTP_PORT", "APP_DOMAIN", "ENVIRONMENT", "APP_ENV", "LOG_LEVEL",
+		"MESSAGE_SEND_ENDPOINT", "IDEMPOTENCY_RETENTION", "BOT_BASIC_AUTH_ENABLED", "PORT", "HTTP_PORT", "APP_DOMAIN", "ENVIRONMENT", "APP_ENV", "LOG_LEVEL",
 		"DATABASE_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB",
 		"AUTHELIA_DOMAIN", "AUTHELIA_ISSUER", "AUTHELIA_ISSUER_URL", "AUTHELIA_JWKS_URL",
 		"AUTHELIA_CLIENT_ID", "OIDC_CLIENT_ID", "CLIENT_ID", "AUTHELIA_AUDIENCE", "OIDC_AUDIENCE",
@@ -218,5 +219,42 @@ func TestRateLimitConfiguration(t *testing.T) {
 	limits, err := loadRateLimits()
 	if err != nil || limits.APIPerMinute != 240 {
 		t.Fatal("rate override ignored")
+	}
+}
+
+func TestHTTPSendConfiguration(t *testing.T) {
+	cleanEnv(t)
+	t.Setenv("AUTHELIA_ISSUER", "http://localhost:9091")
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SendEndpoint != "/api/messages" || cfg.IdempotencyRetention != 168*time.Hour || cfg.BotAuth.Enabled {
+		t.Fatal("unsafe send defaults")
+	}
+	for _, bad := range []string{"0h", "167h", "8761h", "invalid"} {
+		t.Setenv("IDEMPOTENCY_RETENTION", bad)
+		if _, err := Load(); err == nil {
+			t.Fatal("invalid retention accepted")
+		}
+	}
+	t.Setenv("IDEMPOTENCY_RETENTION", "168h")
+	for _, bad := range []string{"/api/ws-ticket", "/ws", "/api/push/devices", "/bad/{id}", "/bad/", "/bad?x"} {
+		t.Setenv("MESSAGE_SEND_ENDPOINT", bad)
+		if _, err := Load(); err == nil {
+			t.Fatal("unsafe route accepted")
+		}
+	}
+	t.Setenv("MESSAGE_SEND_ENDPOINT", "/custom/send")
+	t.Setenv("BOT_BASIC_AUTH_ENABLED", "true")
+	t.Setenv("API_RATE_PER_MINUTE", "29")
+	if _, err := Load(); err == nil {
+		t.Fatal("bot budget below polling contract accepted")
+	}
+	t.Setenv("API_RATE_PER_MINUTE", "30")
+	t.Setenv("GLOBAL_RATE_PER_MINUTE", "60")
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
 	}
 }
