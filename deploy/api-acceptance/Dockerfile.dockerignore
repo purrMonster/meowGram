@@ -1,0 +1,15 @@
+**
+!server/
+!server/go.mod
+!server/go.sum
+!server/cmd/
+!server/cmd/**
+!server/internal/
+!server/internal/**
+!server/integration/
+!server/integration/**
+!server/migrations/
+!server/migrations/**
+!deploy/
+!deploy/api-acceptance/
+!deploy/api-acceptance/Dockerfile
