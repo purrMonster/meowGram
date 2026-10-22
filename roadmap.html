@@ -802,15 +802,15 @@
     <div class="release-section" id="release-2">
         <div class="release-title"><span>Release 2: Authenticated Message API</span><span class="badge badge-planned">In Progress</span></div>
         <div class="release-overview">Owner-approved scope split, 2026-10-20. Goal: pourOver live in the shared lounge. R2 contains epics 2.3, 2.4 and API-only 2.5. Media is deferred to R3; channels are planning-only for R2.1. See the <a href="docs/releases/release-2/README.md">release scope</a>, <a href="docs/releases/release-2/delivery-plan.md">delivery plan and budget</a>, <a href="docs/releases/release-2/api-design.md">pourOver API contract</a> and <a href="docs/releases/release-2/merge-queue.md">merge queue</a>.</div>
-        <details class="epic" open><summary><span>Epic 2.3: Bot Identity</span><span class="badge">Task foundations merged; integration pending</span></summary><div class="epic-details">
-            <p>UST-2.3.1: directory compatibility verified against isolated LLDAP 0.6.3 (#28). UST-2.3.2 group-gated authentication (#30) and UST-2.3.3 principal mapping (#29) are merged into their epic. Bot routes remain disabled until API integration.</p>
-            <p>NEW UST-2.3.4: stable bot usernames from uid, not cn; preserve username across display-name changes, distinguish recreated accounts and leave humans unaffected. Complete before the epic release PR.</p>
+        <details class="epic" open><summary><span>Epic 2.3: Bot Identity</span><span class="badge">Integrated into release/r2 (#38)</span></summary><div class="epic-details">
+            <p>UST-2.3.1: directory compatibility verified against isolated LLDAP 0.6.3 (#28). UST-2.3.2 group-gated authentication (#30) and UST-2.3.3 principal mapping (#29) are merged into their epic. Bot routes are implemented and disabled by default until authorized rollout.</p>
+            <p>UST-2.3.4 complete (#34): stable usernames from uid, preserved across display-name changes; recreated accounts get distinct principals and humans remain unaffected.</p>
         </div></details>
-        <details class="epic" open><summary><span>Epic 2.4: Message API</span><span class="badge">In Progress</span></summary><div class="epic-details">
-            <p>UST-2.4.1 shared message service merged (#31). Next: identity sync with SenderKind publication/history regression, UST-2.4.2 HTTP send and durable idempotency, UST-2.4.3 Basic sync and retry-safe example. All pourOver contract points require handler-level tests.</p>
+        <details class="epic" open><summary><span>Epic 2.4: Message API</span><span class="badge">Integrated into release/r2 (#43)</span></summary><div class="epic-details">
+            <p>Shared message service, SenderKind publication/history regression, HTTP send/idempotency and Basic sync with durable example are complete (#31, #39–#41). Handler and real PostgreSQL tests cover the pourOver contract.</p>
         </div></details>
-        <details class="epic"><summary><span>Epic 2.5: API Verification and Release</span><span class="badge">Planned</span></summary><div class="epic-details">
-            <p>UST-2.5.1 API/security acceptance matrix; UST-2.5.2 documentation, rollout/rollback and owner-authorized pourOver pilot. Check reader group visibility and cellar Authorization pass-through. No media release gate in R2.</p>
+        <details class="epic"><summary><span>Epic 2.5: API Verification and Release</span><span class="badge">Tasks merged; release integration pending</span></summary><div class="epic-details">
+            <p>UST-2.5.1 real-server/LDAPS acceptance and UST-2.5.2 GHCR/readiness are merged (#45/#46). Rollback paths are tested; image inspection and build-only release packaging passed. Next: doc-fold and epic owner merges, then a draft release PR. Basic remains off; live owner checks and pourOver pilot are not run. No media release gate in R2.</p>
         </div></details>
     </div>
     <div class="release-section" id="release-2-1">
