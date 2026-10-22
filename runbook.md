@@ -1,9 +1,9 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.19.0
+> **Document Version**: 1.20.0
 > **Status**: R2 API-only development is in progress; see §13 for implemented foundations, integration boundaries and remaining work. Deployment has not been changed or re-verified by this work; prior deployment prerequisites in §§12.10–12.11 still apply.
 > **Author**: Lead Developer / Antigravity IDE; §12 and corrections by Claude  
-> **Last Updated**: 2026-10-21
+> **Last Updated**: 2026-10-22
 
 > [!IMPORTANT]
 > Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; §§12.10–12.11 record code changes that are not yet deployed. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
@@ -1647,3 +1647,50 @@ and [verification matrix](docs/releases/release-2/verification-matrix.md). Handl
 repository, example, Flutter and separate LLDAP tests establish component behavior.
 A single real-server/real-LDAP end-to-end acceptance run is still UST-2.5.1 work;
 no live rollout or release-candidate readiness is claimed by this fold.
+
+## 14. R2 release readiness and GHCR rollout (2026-10-22)
+
+UST-2.5.1 is owner-merged in #45: the real server binary, PostgreSQL 16 and
+LLDAP 0.6.3 over LDAPS pass the combined API acceptance harness. R2 remains
+API-only; channels are R2.1 planning and media is deferred to R3.
+
+Production Compose now pulls versioned GHCR server/web images using required
+MEOWGRAM_VERSION (example 2.0.0, must match a published tag). Build sections live
+in the explicit docker-compose.build.yml local-dev override. No latest tag is
+used or published by release.yml. Client version is 2.0.0+4; the owner release tag
+must be v2.0.0. workflow_dispatch builds packages without publishing. Neither
+verify.compose.yml nor api-acceptance.compose.yml changed.
+
+The [owner rollout procedure](docs/releases/release-2/rollout.md) is part of this
+runbook and contains the exact cellar commands, in order: quiesce writers;
+run db_backup.sh; copy the completed dump off-node; restore that REAL dump into
+a network-isolated throwaway PostgreSQL and compare counts; tag current image
+IDs as local pre-r2; pull/up with Basic false; smoke health/OIDC/history/phone/web;
+record actual pulled digests. The synthetic verify_restore.sh drill is not proof
+of the production dump. The deployment record remains explicitly unfilled.
+
+**Rollback correction:** v1.1.0 cannot start with schema version 6: golang-migrate
+reports missing version-6 migration files. Merely disabling Basic and reverting
+images is NOT a rollback. Recovery A stops writers, verifies zero bot messages
+and clean version 6, then runs UPDATE schema_migrations SET version=4, dirty=false
+before selecting the local pre-r2 images with docker-compose.rollback.yml. Keep
+all tables/columns and human/idempotency rows. The old binary can start after
+that reset even with bot rows, but its history/sync fails on NULL sender_id;
+therefore this path is forbidden once any bot message exists. The actual
+v1.1.0 binary (tag commit 4aa9319) is tested, not assumed to match cellar's image.
+Rolling forward re-applies 000005/000006 and preserves rows. Recovery B restores
+the verified pre-upgrade backup with the previous image and loses ALL changes
+since the backup. See the linked procedure for guarded SQL and restore commands.
+
+Bot enablement is a separate owner-authorized step after the timed
+[owner checks](docs/releases/release-2/owner-checks.md). The rollout procedure
+lists reader secret/CA file mounts, trusted proxy CIDRs, directory configuration
+and the pourOver/example pilot with MEOWGRAM_CHANNEL empty. Stop the pilot by
+stopping its process, retaining state, disabling Basic and recreating the current
+server. No schema or image rollback is required to stop it.
+
+R2.1 follow-up (recorded only): the owner must decide whether binaries may start
+with a database ahead of their migration files and what compatibility guarantees
+that requires. R2 does not implement a startup-version bypass. Image-inspection,
+rollback and release-workflow evidence belongs in the UST-2.5.2 story log; no
+live changes, package visibility change or release publication was performed.
