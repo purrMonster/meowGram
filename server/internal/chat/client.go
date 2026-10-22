@@ -3,10 +3,10 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"meowgram/server/internal/model"
 	"meowgram/server/internal/repository"
@@ -29,10 +29,6 @@ const (
 
 	// Client send channel buffer size to absorb traffic bursts without dropping frames.
 	sendBufferSize = 256
-
-	// MaxTextRunes caps a single chat message. It keeps frames, rows and push
-	// payloads small; longer messages are rejected with an error frame.
-	MaxTextRunes = 4000
 )
 
 // InboundPayload represents an incoming client message format.
@@ -47,6 +43,7 @@ type Client struct {
 	send    chan *model.WSMessage
 	user    *model.User
 	msgRepo *repository.MessageRepository
+	service *MessageService
 	logger  *slog.Logger
 }
 
@@ -56,6 +53,7 @@ func NewClient(
 	conn *websocket.Conn,
 	user *model.User,
 	msgRepo *repository.MessageRepository,
+	service *MessageService,
 	logger *slog.Logger,
 ) *Client {
 	return &Client{
@@ -64,6 +62,7 @@ func NewClient(
 		send:    make(chan *model.WSMessage, sendBufferSize),
 		user:    user,
 		msgRepo: msgRepo,
+		service: service,
 		logger:  logger,
 	}
 }
@@ -108,76 +107,29 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		// Only process text frames for chat messaging
-		if c.hub.messageLimit != nil {
-			if allowed, _ := c.hub.messageLimit.Allow(c.user.AutheliaSub); !allowed {
-				c.sendError("Message rate limit reached. Please wait before sending again.")
-				continue
+		// Keep transport decoding here; even ignored binary/empty frames consume
+		// the same attempt budget as before the service extraction.
+		textContent := ""
+		if messageType == websocket.TextMessage {
+			textContent = strings.TrimSpace(string(payload))
+			var parsed InboundPayload
+			if err := json.Unmarshal(payload, &parsed); err == nil && parsed.TextContent != "" {
+				textContent = parsed.TextContent
 			}
 		}
-		if messageType != websocket.TextMessage {
+		_, err = c.service.Send(context.Background(), c.user.AutheliaSub, c.user.Username, textContent)
+		switch {
+		case err == nil, errors.Is(err, ErrEmptyMessage):
 			continue
-		}
-
-		rawText := strings.TrimSpace(string(payload))
-		if rawText == "" {
-			continue
-		}
-
-		// Parse input: accept either raw string or JSON envelope {"text_content": "..."}
-		textContent := rawText
-		var parsed InboundPayload
-		if err := json.Unmarshal(payload, &parsed); err == nil && parsed.TextContent != "" {
-			textContent = strings.TrimSpace(parsed.TextContent)
-		}
-
-		if textContent == "" {
-			continue
-		}
-
-		if utf8.RuneCountInString(textContent) > MaxTextRunes {
+		case errors.Is(err, ErrMessageRateLimited):
+			c.sendError("Message rate limit reached. Please wait before sending again.")
+		case errors.Is(err, ErrMessageTooLong):
 			c.sendError("Message too long: the limit is 4000 characters.")
-			continue
-		}
-
-		// =====================================================================
-		// MANDATE: Message Persistence Before Broadcast
-		// Commit message to PostgreSQL ledger before pushing to Hub channel.
-		// =====================================================================
-		dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		persistedMsg, err := c.msgRepo.Create(dbCtx, c.user.AutheliaSub, c.user.Username, textContent)
-		cancel()
-
-		if err != nil {
-			c.logger.Error("Failed to persist message to PostgreSQL; aborting broadcast",
-				"error", err,
-				"sub", c.user.AutheliaSub,
-			)
-
-			// Inform sender of write failure (routed through the Hub, which owns c.send)
+		case errors.Is(err, ErrBroadcastStopped):
+			return
+		default:
+			c.logger.Error("Failed to persist message to PostgreSQL; aborting broadcast", "error", err, "sub", c.user.AutheliaSub)
 			c.sendError("Message delivery failed: could not persist to database.")
-			continue
-		}
-
-		c.logger.Debug("Message persisted to PostgreSQL successfully",
-			"message_id", persistedMsg.ID,
-			"sub", c.user.AutheliaSub,
-			"username", c.user.Username,
-		)
-
-		// Dispatch verified persisted message to the Broadcast Hub
-		broadcastMsg := &model.WSMessage{
-			Type:        "chat",
-			ID:          persistedMsg.ID,
-			SenderID:    persistedMsg.SenderID,
-			SenderKind:  persistedMsg.SenderKind,
-			Username:    c.user.Username,
-			TextContent: persistedMsg.TextContent,
-			CreatedAt:   persistedMsg.CreatedAt,
-		}
-
-		if !c.hub.Publish(broadcastMsg) {
-			return // Hub stopped (server shutting down)
 		}
 	}
 }

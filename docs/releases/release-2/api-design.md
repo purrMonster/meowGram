@@ -100,3 +100,30 @@ X-Has-More and Retry-After where required; do not broaden allowed origins for bo
 Settings must be wired through server config, .env.example, Compose where needed
 and the runbook at epic doc-fold. Basic stays disabled until integration is ready.
 No live configuration is changed by this contract. See [owner checks](owner-checks.md).
+
+### Send body compatibility (UST-2.4.2 review)
+
+Send rejects unknown JSON body fields. In R2, `channel_id` returns HTTP 400;
+channels are planned for R2.1. pourOver must keep `MEOWGRAM_CHANNEL` empty
+and send only `text_content`.
+
+Successful sends and identical replays remove at most 100 expired idempotency
+rows in the same transaction, skipping rows locked by concurrent requests.
+Cleanup preserves messages and unexpired keys. Deleting a message cascades to
+its idempotency record, so deleting a human user can still cascade through their
+messages. Migration 000006 was corrected in place before merge/deployment.
+
+## Bot sync and example (UST-2.4.3)
+
+Optional Basic authentication now covers exact GET sync as well as exact POST
+send. The default sync alias remains registered once, alongside a distinct
+configured alias; humans retain their bearer-authenticated access to both.
+Every bot page rechecks credentials/group membership. Sync responses are
+no-store; unavailable storage returns 503 with Retry-After: 1.
+
+The [stdlib Go lounge example](../../../server/examples/lounge-bot/README.md)
+polls every three seconds, persists timestamp/UUID cursors and pending reply
+bodies/keys, and resumes an ambiguous send by replay before advancing. It handles
+429/503 Retry-After and skips its own sender_kind + sender_id. It starts from
+the Unix epoch when no state exists; configure private durable state and use a
+controlled pilot. Live deployment and account creation remain owner checks.

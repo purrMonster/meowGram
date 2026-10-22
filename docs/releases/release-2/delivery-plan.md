@@ -10,22 +10,24 @@ This decision supersedes older scope statements in the unchanged playbook.
 #27 workflow/playbook is merged into release/r2. #28 directory investigation,
 #29 bot principals (including repeatable migration 000005), and #30 bot auth
 are merged into epic 2.3. #31 shared message service is merged into epic 2.4.
-#32 media contract is merged into epic 2.1, deferred to R3. #33 scope split and #36 queue are merged into release/r2; #34 stable usernames and #35 runbook fold are merged into epic 2.3. These task merges do
-not establish integrated R2 runtime readiness. Prior passing evidence remains
-in task logs; this scope PR makes no new application-test claim.
+#32 media contract is merged into epic 2.1, deferred to R3. #33 scope split and #36 queue are merged into release/r2; #34 stable usernames and #35 runbook fold are merged into epic 2.3. These task merges do not establish release readiness; evidence is recorded in story logs.
 
-## Remaining work, in order
+Identity epic integration is owner-merged as #38 (release/r2 at 3cfbfe8). Message API sync #39 and tasks #40/#41 are owner-merged into epic 2.4 at 6f98957. Send, sync and the durable example are implemented; doc-fold and epic-to-release owner merges are next. Combined real-server/LLDAP acceptance remains UST-2.5.1.
+
+## Delivery status and remaining gates
 
 | Story / step | Deliverable and Done check |
 |---|---|
-| Scope split | Docs-only PR into release/r2; pourOver contract, channels proposal and budget recorded |
+| Scope split — DONE (#33) | Docs-only PR into release/r2; pourOver contract, channels proposal and budget recorded |
 | UST-2.3.4 — DONE (#34) | Stable bot username = verified LLDAP login ID (uid), not cn. Resolve must not rewrite it on each authentication. Display-name rename leaves username unchanged; deleted/recreated account gets a new principal; humans unaffected. Human and bot usernames are not cross-checked for uniqueness; identity is sender_kind + sender_id. Optional separate display_name only if cheap. Any migration is additive/re-runnable, with real golang-migrate down/up preservation tests and partial/repeated-up coverage equivalent to 000005. Document handling of existing cn-derived rows without destructive backfill. |
-| Identity integration | Doc-fold task PR first if needed, then verified epic 2.3 → release/r2 PR, only after UST-2.3.4 is owner-merged |
-| Message API sync | Owner-reviewed release/r2 → epic 2.4 sync; preserve SenderKind in MessageService.Send publication and SendHistory, with explicit bot/human publication regression |
-| UST-2.4.2 | POST send for human bearer and bot Basic; transactional durable idempotency; identical replay response; 409 on changed body; ≥20 concurrent duplicates produce one row/broadcast and at most one push; restart/expiry/DB-failure tests; CORS Idempotency-Key support |
-| UST-2.4.3 | Basic GET sync, fresh authorization per page, cursor compatibility and example with persistent cursor, deduplication, own-message filtering and 429/503 backoff; example runs in scratch infrastructure |
-| UST-2.5.1 | API verification matrix maps every acceptance row below to named passing tests; real PostgreSQL and disposable LLDAP; OAuth/Flutter regressions remain green |
-| UST-2.5.2 | API config/runbook/examples folded, statuses/queue updated, rollout/rollback/pourOver pilot prepared, verified epic PRs and release/r2 → main candidate PR; owner-only deployment/pilot |
+| Identity integration — DONE (#38) | Doc-fold task PR first if needed, then verified epic 2.3 → release/r2 PR, only after UST-2.3.4 is owner-merged |
+| Message API sync — DONE (#39) | Owner-reviewed release/r2 → epic 2.4 sync; preserve SenderKind in MessageService.Send publication and SendHistory, with explicit bot/human publication regression |
+| UST-2.4.2 — DONE (#40) | POST send for human bearer and bot Basic; transactional durable idempotency; identical replay response; 409 on changed body; ≥20 concurrent duplicates produce one row/broadcast and at most one push; restart/expiry/DB-failure tests; CORS Idempotency-Key support |
+| UST-2.4.3 — DONE (#41) | Basic GET sync, fresh authorization per page, cursor compatibility and example with persistent cursor, deduplication, own-message filtering and 429/503 backoff; example runs in scratch infrastructure |
+| Epic 2.4 closure — awaiting owner merges | docs/r2-epic-2.4-runbook → epic 2.4, then epic 2.4 → release/r2; fresh UTC/IST, Flutter, restore and web evidence |
+| Epic 2.5 parent sync — after 2.4 release merge | Owner PR merges release/r2 into the existing test/r2-epic-2.5-verification (currently 0e41333); no task starts from old main |
+| UST-2.5.1 — pending | One end-to-end scratch run of the release/r2 server binary, PostgreSQL and pinned LLDAP 0.6.3 over LDAPS, Basic enabled only in scratch: 401 wrong password, 403 nonmember/revoked member, 201 send, identical one-row replay, 409 conflict, bot sync discriminator, 429 integer Retry-After, directory-down 503, channel_id 400; human OIDC send/sync/WS and Flutter Bot-label/self-identity regressions. CI job if practical, otherwise scripted recorded harness. Matrix row per check with command/result/date |
+| UST-2.5.2 — pending | API config/runbook/examples folded, statuses/queue updated, rollout/rollback/pourOver pilot prepared, previous-image tag/schema compatibility explicitly established or declared incompatible; final timed owner checks and pourOver placeholders/stop procedure; verified epic PRs, then release/r2 → main DRAFT for owner/Claude review; owner-only deployment/pilot |
 
 Do not start a task unless it can finish or park this session with tests green,
 branch pushed and a story log ending in "Where we stopped / next step".
@@ -35,6 +37,10 @@ branch pushed and a story log ending in "Where we stopped / next step".
 | Branch | Immediate PR target |
 |---|---|
 | docs/r2-scope-split | release/r2 |
+| docs/r2-epic-2.4-runbook (from remote epic 2.4 at 6f98957) | feat/r2-epic-2.4-message-api |
+| feat/ust-2.4.2-http-send-idempotency (merged #40) | feat/r2-epic-2.4-message-api |
+| feat/ust-2.4.3-bot-sync-example (merged #41) | feat/r2-epic-2.4-message-api |
+| chore/r2-message-api-sync (from remote epic 2.4, merges release/r2) | feat/r2-epic-2.4-message-api |
 | feat/ust-2.3.4-stable-bot-usernames (merged #34) | feat/r2-epic-2.3-bot-identity |
 | feat/r2-epic-2.3-bot-identity | release/r2, after 2.3.4 and doc-fold |
 | feat/r2-epic-2.4-message-api | release/r2, after API tasks |
@@ -83,9 +89,9 @@ text, not structured mentions. Roll back by disabling Basic or removing bot grou
 membership, retaining additive schema and message history. Live deployment and
 credential provisioning remain owner-gated.
 
-## Remaining R2 estimate
+## Original API-only estimate (2026-10-20)
 
-Focused engineering days of 8 hours, including tests/review fixes; excludes
+Historical baseline, not today's remaining balance: 2.3.4 and 2.4 tasks are now complete; integration and API-only 2.5 remain. Focused engineering days of 8 hours, including tests/review fixes; excludes
 elapsed owner/CI waiting. This replaces the prior media-inclusive estimate.
 
 | Work | Days |
@@ -96,7 +102,7 @@ elapsed owner/CI waiting. This replaces the prior media-inclusive estimate.
 | UST-2.4.3 sync/example and cursor edge cases | 1–1.5 |
 | UST-2.5.1 API integration/security verification | 1.5–2.5 |
 | UST-2.5.2 release docs/candidate/pilot preparation | 1–2 |
-| **Base remaining implementation** | **6.5–12 (52–96 hours)** |
+| **Original base implementation** | **6.5–12 (52–96 hours)** |
 | **With 25% contingency, rounded up to half-days** | **8.5–15 (68–120 hours)** |
 
 Reserve 1–2 owner hours separately for the authorized API pilot/config checks.

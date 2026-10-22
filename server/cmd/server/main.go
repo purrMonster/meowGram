@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"meowgram/server/internal/auth"
+	"meowgram/server/internal/botauth"
 	"meowgram/server/internal/chat"
 	"meowgram/server/internal/config"
 	"meowgram/server/internal/database"
@@ -137,16 +138,33 @@ func main() {
 		mux.Handle("POST "+cfg.WSTicketEndpoint, authMiddleware(handler.WSTicketHandler(ticketStore, logger)))
 	}
 
+	// Both message routes share bot authentication and API budgets; no other route admits Basic.
+	var botGate *botauth.Gate
+	if cfg.BotAuth.Enabled {
+		directory, err := botauth.NewDirectory(cfg.BotAuth.Directory)
+		if err != nil {
+			logger.Error("Invalid bot directory configuration", "error", err)
+			os.Exit(1)
+		}
+		botGate = &botauth.Gate{Directory: directory, Resolve: botauth.RepositoryResolver(repository.NewBotRepository(db)),
+			Ingress: ratelimit.New(cfg.RateLimits.GlobalPerMinute, cfg.RateLimits.GlobalBurst),
+			API:     ratelimit.New(cfg.RateLimits.APIPerMinute, cfg.RateLimits.APIBurst),
+			Logger:  logger, Timeout: cfg.BotAuth.Directory.Timeout, TrustedProxies: cfg.BotAuth.TrustedProxies}
+	}
+
 	// Protected catch-up synchronization endpoint (UST-1.4.3)
 	deviceHandler := authMiddleware(handler.PushDeviceHandler(deviceRepo))
 	mux.Handle("PUT "+cfg.PushDeviceEndpoint, deviceHandler)
 	mux.Handle("DELETE "+cfg.PushDeviceEndpoint, deviceHandler)
 
-	mux.Handle("GET /api/messages/sync", authMiddleware(handler.SyncHandler(messageRepo, logger)))
-	if cfg.SyncEndpoint != "/api/messages/sync" {
-		mux.Handle("GET "+cfg.SyncEndpoint, authMiddleware(handler.SyncHandler(messageRepo, logger)))
+	if err := handler.RegisterSyncRoutes(mux, cfg.SyncEndpoint, messageRepo, logger, authMiddleware, botGate); err != nil {
+		logger.Error("Failed to configure sync route", "error", err)
+		os.Exit(1)
 	}
-
+	if err := handler.RegisterSendRoute(mux, cfg.SendEndpoint, hub.MessageService(messageRepo), cfg.IdempotencyRetention, authMiddleware, botGate); err != nil {
+		logger.Error("Failed to configure message send route", "error", err)
+		os.Exit(1)
+	}
 	// Global Middleware chain: RequestLogger -> CORS -> Mux
 	var rootHandler http.Handler = mux
 	rootHandler = middleware.GlobalRateLimit(ratelimit.New(cfg.RateLimits.GlobalPerMinute, cfg.RateLimits.GlobalBurst), cfg.HealthEndpoint)(rootHandler)
