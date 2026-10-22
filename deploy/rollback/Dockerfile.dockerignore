@@ -1,0 +1,6 @@
+**
+!server
+!server/**
+server/.env*
+server/bin
+server/*.exe

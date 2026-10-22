@@ -1,9 +1,9 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.19.0
-> **Status**: R2 API-only development is in progress; see §13 for implemented foundations, integration boundaries and remaining work. Deployment has not been changed or re-verified by this work; prior deployment prerequisites in §§12.10–12.11 still apply.
+> **Document Version**: 1.21.0
+> **Status**: R2 API-only implementation and verification are complete on epic 2.5; its doc-fold and release integration await owner merges. See §§13–14 for evidence and rollout limits. Deployment has not been changed or re-verified by this work; prior deployment prerequisites in §§12.10–12.11 still apply.
 > **Author**: Lead Developer / Antigravity IDE; §12 and corrections by Claude  
-> **Last Updated**: 2026-10-21
+> **Last Updated**: 2026-10-22
 
 > [!IMPORTANT]
 > Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; §§12.10–12.11 record code changes that are not yet deployed. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
@@ -1565,12 +1565,12 @@ The implementation merged in #40/#41 satisfies the following tested contract:
   persists its cursor, ignores its own sender_kind/sender_id and honors 429/503
   Retry-After. These endpoints are implemented, with Basic disabled until authorized rollout.
 
-#34–#41 are owner-merged through epic 2.4. Next: owner merge the epic 2.4 doc-fold,
-then epic 2.4 into release/r2. Only afterwards sync release/r2 into epic 2.5 via
-an owner PR. UST-2.5.1 will run the server binary, PostgreSQL and real pinned LLDAP
-together; UST-2.5.2 prepares rollout/rollback and pilot instructions. After owner
-integration of 2.5, open release/r2 → main as a DRAFT for owner review. No deployment,
-live service, credential or DNS change is included in these development steps.
+#34–#46 are owner-merged into their declared parents. Identity and message API
+are in release/r2; #44 synced that release into epic 2.5, #45 added combined
+acceptance and #46 added release readiness. Epic 2.5 is at b9bfc99. Next: owner
+merge its documentation fold, then epic 2.5 → release/r2. Only afterwards open
+release/r2 → main as a DRAFT for owner/Claude review. No deployment, live service,
+credential or DNS change is included in these development steps.
 Before the authorized pilot, owner checks include reader visibility of uid and
 the bot group, and the cellar reverse proxy passing Authorization to /api/*
 unchanged without Basic-to-SSO interception. Basic remains off until integration
@@ -1645,5 +1645,103 @@ text. Pending sends older than 168h stop for manual reconciliation.
 Evidence and boundaries: see the [epic fold log](docs/releases/release-2/log/2026-10-21-epic-2.4-fold.md)
 and [verification matrix](docs/releases/release-2/verification-matrix.md). Handler,
 repository, example, Flutter and separate LLDAP tests establish component behavior.
-A single real-server/real-LDAP end-to-end acceptance run is still UST-2.5.1 work;
-no live rollout or release-candidate readiness is claimed by this fold.
+Combined real-server/real-LDAP acceptance is now complete in owner-merged #45;
+§14.1 records the integrated verification. Live rollout remains owner-only.
+
+## 14. R2 release readiness and GHCR rollout (2026-10-22)
+
+UST-2.5.1 is owner-merged in #45: the real server binary, PostgreSQL 16 and
+LLDAP 0.6.3 over LDAPS pass the combined API acceptance harness. R2 remains
+API-only; channels are R2.1 planning and media is deferred to R3.
+
+Production Compose now pulls versioned GHCR server/web images using required
+MEOWGRAM_VERSION (example 2.0.0, must match a published tag). Build sections live
+in the explicit docker-compose.build.yml local-dev override. No latest tag is
+used or published by release.yml. Client version is 2.0.0+4; the owner release tag
+must be v2.0.0. workflow_dispatch builds packages without publishing. Neither
+verify.compose.yml nor api-acceptance.compose.yml changed.
+
+The [owner rollout procedure](docs/releases/release-2/rollout.md) is part of this
+runbook and contains the exact cellar commands, in order: quiesce writers;
+run db_backup.sh; copy the completed dump off-node; restore that REAL dump into
+a network-isolated throwaway PostgreSQL and compare counts; tag current image
+IDs as local pre-r2; pull/up with Basic false; smoke health/OIDC/history/phone/web;
+record actual pulled digests. The synthetic verify_restore.sh drill is not proof
+of the production dump. The deployment record remains explicitly unfilled.
+
+**Rollback correction:** v1.1.0 cannot start with schema version 6: golang-migrate
+reports missing version-6 migration files. Merely disabling Basic and reverting
+images is NOT a rollback. Recovery A stops writers, verifies zero bot messages
+and clean version 6, then runs UPDATE schema_migrations SET version=4, dirty=false
+before selecting the local pre-r2 images with docker-compose.rollback.yml. Keep
+all tables/columns and human/idempotency rows. The old binary can start after
+that reset even with bot rows, but its history/sync fails on NULL sender_id;
+therefore this path is forbidden once any bot message exists. The actual
+v1.1.0 binary (tag commit 4aa9319) is tested, not assumed to match cellar's image.
+Rolling forward re-applies 000005/000006 and preserves rows. Recovery B restores
+the verified pre-upgrade backup with the previous image and loses ALL changes
+since the backup. See the linked procedure for guarded SQL and restore commands.
+
+Bot enablement is a separate owner-authorized step after the timed
+[owner checks](docs/releases/release-2/owner-checks.md). The rollout procedure
+lists reader secret/CA file mounts, trusted proxy CIDRs, directory configuration
+and the pourOver/example pilot with MEOWGRAM_CHANNEL empty. Stop the pilot by
+stopping its process, retaining state, disabling Basic and recreating the current
+server. No schema or image rollback is required to stop it.
+
+R2.1 follow-up (recorded only): the owner must decide whether binaries may start
+with a database ahead of their migration files and what compatibility guarantees
+that requires. R2 does not implement a startup-version bypass. Image-inspection,
+rollback and release-workflow evidence belongs in the UST-2.5.2 story log; no
+live changes, package visibility change or release publication was performed.
+
+| Deployment setting | Default/example | Meaning |
+|---|---|---|
+| MEOWGRAM_VERSION | required; example 2.0.0 | Compose-only version for both GHCR images; must match a published image tag. Not a Go server setting. |
+
+
+### 14.1 Epic 2.5 verification folded from story logs
+
+Owner merges #44 (parent sync), #45 (UST-2.5.1) and #46 (UST-2.5.2) produce
+b9bfc99 on test/r2-epic-2.5-verification. This fold consolidates those decisions;
+it changes no application, migration, Compose or workflow behavior.
+
+The api-acceptance CI job builds the actual server binary and combines it with
+PostgreSQL 16, digest-pinned LLDAP 0.6.3 over verified LDAPS, and a synthetic
+OIDC/JWKS issuer and HTTPS proxy. Fifteen subchecks exercise wrong password 401,
+nonmember 403, human OIDC HTTP send/sync and WebSocket send, bot send 201/live
+sender kind, identical replay with one row, changed-body 409, bot sync kind,
+channel_id 400, Basic route isolation, immediate membership revocation, burst
+429 with integer Retry-After, directory-down 503 with Retry-After, human
+independence during outage, and clean startup migrations. The fixture is isolated,
+uses generated credentials/certificates and publishes no host ports. Flutter
+regressions establish the Bot peer label, kind-aware identity and cache behavior;
+physical-device notification delivery remains an owner check.
+
+The rollback CI job builds the actual v1.1.0 source and current server, each with
+its own migrations. Five subchecks establish version-6 startup rejection, the
+human-only version-reset recovery, forward reapplication with retained rows,
+old history failure with a bot row, and full pre-upgrade backup restore with
+loss of post-backup messages. Disabling bots is not an old-image rollback.
+The guarded commands and restrictions in §14 and rollout.md remain authoritative.
+
+Generic Go runs deliberately skip TestLLDAP, TestAPIEndToEnd and
+TestReleaseRollback when their dedicated fixtures are absent. Their dedicated
+provider, acceptance and rollback harnesses must pass separately; never include
+those skips in the generic pass count. verification-matrix.md maps each required
+check to its command, result and date. Fresh fold evidence is recorded in
+[the epic 2.5 fold log](docs/releases/release-2/log/2026-10-22-epic-2.5-fold.md).
+
+UST-2.5.2's historical [release dispatch](https://github.com/purrMonster/meowGram/actions/runs/39785349125)
+passed all seven applicable verification/build jobs, including both multi-arch
+images and Android/Windows/Apple packages. Publication was intentionally skipped.
+The [image inspection](docs/releases/release-2/image-inspection.md) records the
+local amd64 candidates, complete layer/history/config inspection and its limits;
+these are not deployed GHCR digests. No image or tag was published by that run.
+
+Remaining gates: merge this fold into epic 2.5; merge epic 2.5 into release/r2;
+verify the integrated release and open release/r2 → main as DRAFT. Do not mark
+it ready automatically. Owner/Claude review precedes release merge and the
+owner's v2.0.0 tag. Package access, real-dump verification, deployment and the
+pourOver pilot are separate owner steps, all still NOT RUN. Basic stays false.
+R2.1 channels/startup compatibility policy remain planning; R3 media stays deferred.

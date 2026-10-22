@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: verification
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d verification]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    networks: [scratch]
+  rollback:
+    image: meowgram-rollback:verification
+    environment:
+      TEST_DATABASE_URL: postgres://postgres@db:5432/verification?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=128m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [scratch]
+networks:
+  scratch:
+    internal: true
