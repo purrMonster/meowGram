@@ -1,9 +1,9 @@
 # meowGram Engineering Runbook & Architectural Decision Record (ADR)
 
-> **Document Version**: 1.16.0
-> **Status**: Full codebase re-audit is in progress on `refactor/full-codebase-audit`; see [§12.10](#1210-review-hardening) and [§12.11](#1211-full-codebase-re-audit) for changes and deployment prerequisites. Release 1.0.1 remains the latest deployed release.
+> **Document Version**: 1.19.0
+> **Status**: R2 API-only development is in progress; see §13 for implemented foundations, integration boundaries and remaining work. Deployment has not been changed or re-verified by this work; prior deployment prerequisites in §§12.10–12.11 still apply.
 > **Author**: Lead Developer / Antigravity IDE; §12 and corrections by Claude  
-> **Last Updated**: 2026-10-12
+> **Last Updated**: 2026-10-21
 
 > [!IMPORTANT]
 > Statements in this runbook that the 2026-10-07 code review found to be inaccurate have been corrected in place and marked **⚠ Correction**; §§12.10–12.11 record code changes that are not yet deployed. Real domains have been replaced with `example.home.arpa` placeholders, per AGENTS.md ("No real domain in any tracked file"); real values belong in gitignored env files.
@@ -16,6 +16,9 @@ meowGram is a cross-platform realtime cat-themed chat lounge organized as a mono
 
 ### Architectural Mandate Updates
 - **Backend OIDC Pivot (Epic 1.2)**: All custom local authentication, password storage, user registration, and local JWT issuance are completely eliminated in favor of **Authelia OpenID Connect (OIDC)**.
+  Release 2 has an approved exception for directory-validated bot Basic Auth on
+  message HTTP endpoints only. Identity, send and sync are implemented; live
+  activation remains owner-gated and disabled by default. See [§13](#13-release-2-planning).
 - **Client OIDC PKCE Integration (UST-1.2.3)**: The Flutter client implements the OAuth 2.0 Authorization Code Flow with Proof Key for Code Exchange (PKCE, RFC 7636). The client is purely public and stores **zero client secrets**.
 - **Real-Time WebSocket Core (Epic 1.3 - UST-1.3.1, UST-1.3.3, UST-1.3.4)**:
   - In-memory Go `Hub` manages active client registries via synchronized channels (`register`, `unregister`, `broadcast`).
@@ -418,7 +421,7 @@ Mobile software keyboards require dynamic layout insets to avoid obstructing the
 | `GOOGLE_APPLICATION_CREDENTIALS` | *(unset)* | `/run/secrets/fcm-service-account.json` | Path to FCM service-account JSON. Compose passes the path and mounts `deploy/secrets` read-only. |
 | `MIGRATIONS_PATH` | `/migrations` (image) | `/migrations` | Directory of `golang-migrate` SQL files; migrations run at every startup. |
 | `READ_TIMEOUT_SECONDS` / `WRITE_TIMEOUT_SECONDS` / `IDLE_TIMEOUT_SECONDS` | `15` / `15` / `60` | same | `http.Server` timeouts. |
-| `IMMICH_DOMAIN` / `IMMICH_API_URL` | *(unset)* | deployment-specific | Release 2. No default; the API key belongs on the server, never in a client define. |
+| `IMMICH_DOMAIN` / `IMMICH_API_URL` | *(unset)* | deployment-specific | R3 (deferred media). No default; the API key belongs on the server, never in a client define. |
 | `AUTHELIA_JWKS_URL` | *(Derived)* | `https://auth.example.home.arpa/jwks.json` | URL for Authelia public keys (JWKS). Derived from `AUTHELIA_ISSUER`. |
 | `POSTGRES_USER` | `meowgram` | `meowgram_prod` | PostgreSQL user account. |
 | `POSTGRES_PASSWORD` | `meowgram_secret_dev...` | *(Strong secret)* | PostgreSQL password. |
@@ -457,8 +460,8 @@ All endpoints are **compile-time only**, set via `--dart-define-from-file=<file>
 | `AUTHELIA_USERINFO_ENDPOINT` | *(Derived)* | OIDC userinfo endpoint. |
 | `AUTHELIA_REVOCATION_ENDPOINT` | *(Derived)* | OIDC token revocation endpoint. |
 | `AUTH_REDIRECT_URI` | *(Dynamic)* | OAuth redirect URI (default: RFC 8252 loopback on desktop, origin on web). |
-| `IMMICH_DOMAIN` | *(real domain hardcoded in `app_config.dart`; should be empty)* | Immich media service domain (Release 2). |
-| `IMMICH_API_URL` | *(Derived)* | Immich REST API base URL (Release 2). |
+| `IMMICH_DOMAIN` | *(real domain hardcoded in `app_config.dart`; should be empty)* | Immich media service domain (R3, deferred). |
+| `IMMICH_API_URL` | *(Derived)* | Immich REST API base URL (R3, deferred). |
 | `IMMICH_API_KEY` | *(empty)* | **Do not use.** A client-side dart-define ships the key to every user; proxy Immich through the Go server instead. |
 
 ---
@@ -973,7 +976,7 @@ Severity: **High** = security/privacy exposure, data loss, or a platform that do
 | **M15** | Real domains in tracked files (`client/config/production.json`, both `.env.example` files, `client/.env.example`, `build_all.*` defaults, test fixtures, `config.go:172` and `app_config.dart:282` Immich defaults). | various | Placeholders in tracked files; real values in gitignored env/define files. |
 | **M16** | Compose: Postgres and server published on all interfaces with a default DB password; `AUTHELIA_AUDIENCE`, `AUTHELIA_CLIENT_ID`, `AUTHELIA_DOMAIN` and `GOOGLE_APPLICATION_CREDENTIALS` not passed; the dev Traefik profile exposes an insecure dashboard plus the Docker socket. | `deploy/docker-compose.yml` | `127.0.0.1:` bindings, `${POSTGRES_PASSWORD:?}`, pass the auth vars, mount the FCM secret read-only. |
 | **M17** | Input limits: 512 KB WS frames with no app-level text cap (also breaks FCM's 4 KB limit); `preferred_username` longer than 100 characters overflows `VARCHAR(100)`, so login fails with 500; no rate limiting. | `server/internal/chat/client.go:27`, `server/migrations/000001_*.up.sql:9` | Cap text (e.g. 4,000 characters) with an error frame; truncate usernames; simple per-client rate limit. |
-| **M18** | `IMMICH_API_KEY` is designed as a client `--dart-define`, so the key would ship in every binary and in the web JavaScript. | `client/lib/src/config/app_config.dart:302-307` | Server-side Immich proxy for Release 2. |
+| **M18** | `IMMICH_API_KEY` is designed as a client `--dart-define`, so the key would ship in every binary and in the web JavaScript. | `client/lib/src/config/app_config.dart:302-307` | Server-side Immich proxy for R3 (deferred media). |
 
 #### Low
 
@@ -1284,3 +1287,363 @@ Existing build warnings remain for the optional Cupertino font, Android SDK XML
 metadata, and Firebase/workmanager plugins' future Kotlin migration. These did
 not prevent the verified builds. Release signing and Apple native builds were
 not exercised.
+
+## 13. Release 2 planning
+
+Original decision recorded 2026-10-15, updated through 2026-10-21. Identity and
+authentication foundations are integrated from epic 2.3; send and sync are
+implemented in epic 2.4, with Basic disabled until authorized rollout. No deployment is claimed. See the [release plan](docs/releases/release-2/README.md),
+[API design](docs/releases/release-2/api-design.md) and
+[delivery plan](docs/releases/release-2/delivery-plan.md).
+
+Owner-approved scope as of 2026-10-20: R2 contains API Epics 2.3–2.5 only; Immich media Epics 2.1–2.2 are deferred to R3 unchanged. R2.1 channels is planning only. People
+continue using Authelia OAuth. The owner approved dedicated bot Basic Auth over
+HTTPS, restricted to the message send/read HTTP endpoints and gated by a
+configured LLDAP group (suggested name: `meowgram-api-bots`). Every Basic request
+must validate the password and current group membership over encrypted LDAP,
+without positive authentication caching. Directory failure denies bot access.
+Group membership grants both reading and sending in the single lounge.
+
+This is a narrow implemented exception to the OIDC-only authentication mandate.
+It does not add local passwords, user registration or self-issued tokens.
+Basic Auth cannot obtain WebSocket tickets, register push devices or authorize
+media access. Human bearer authentication keeps its existing policy and does
+not depend on directory availability. Group removal blocks subsequent requests
+after the change is visible to the directory; already-authorized requests may
+finish. Revocation must preserve local profiles and message history.
+
+The configurable send path defaults to `POST /api/messages`;
+`GET /api/messages/sync` retains its existing pagination contract. Transactional
+per-principal idempotency and the shared HTTP/WS message service are implemented.
+Current settings and behavior are in §13.9 and the API design.
+
+Directory schema/transport compatibility and an additive stable identity mapping
+were verified in the tasks below. The existing Authelia subject foreign
+key must not be repurposed as an unchecked LDAP username. Bot OAuth, granular
+read/send roles, email and bot attachments are deferred from API v1.
+
+No live deployment, external identity configuration, directory group/account,
+credential or database was changed for this plan. Those operations retain the
+owner-approval boundaries in AGENTS.md. Application verification remains a
+release gate; this planning record makes no new claim of passing code tests.
+
+### 13.1 Directory compatibility investigation (2026-10-17)
+
+`feat/ust-2.3.1-directory-identity` adds a disposable, network-isolated LLDAP
+v0.6.3 probe; run `deploy/scripts/verify-directory.ps1` or its `.sh` counterpart.
+Verified LDAPS, strict-readonly queries, direct membership removal, password
+rotation, stable UUID after display-name changes, and distinct UUID after
+account recreation passed. StartTLS is unavailable in this fixture; login-ID
+rename is not supported by the tested update API. The owner confirmed deployed
+version 0.6.3; live transport and configuration have not been inspected.
+
+The [identity investigation](docs/releases/release-2/directory-identity.md)
+selects separate bot principal/directory mapping tables, a new bot sender FK,
+and preservation of all existing OIDC sender values. A sender-kind discriminator
+and corresponding client changes are required to prevent human/bot identity
+collisions. That investigation itself added no application migration or bot
+authentication; subsequent implementation is recorded in §§13.3–13.6.
+The original proposal's StartTLS option is deferred and a stable directory
+namespace becomes a proposed server-only setting. Final implemented settings
+will enter the configuration tables with the implementing branches.
+
+All fixture credentials and certificates are generated inside the disposable
+container and discarded. No live service, credential or data was accessed.
+
+Verification on 2026-10-17: the v0.6.3 directory probe passed; the repository
+scratch harness passed Go race tests and vet, PostgreSQL integration and
+dump/restore checks, Flutter analysis and tests, release web build and non-root
+web runtime smoke checks. The existing optional Cupertino font warning remains.
+PowerShell/POSIX wrapper syntax, release-document local links and whitespace
+checks passed. No Android or Apple native build was run for this investigation.
+
+### 13.2 Release branch hierarchy (2026-10-17)
+
+The owner requested release/epic/task integration for divided work. R2 now uses
+`release/r2` above five epic branches; the current directory investigation is
+a task under `feat/r2-epic-2.3-bot-identity`. PRs target the immediate parent,
+with the final R2 PR targeting `main`. Release-wide planning targets the release
+directly. AGENTS.md records this workflow for future similarly structured work;
+standalone changes continue to branch from updated main. The exact branch map
+and local/uncommitted status are in the
+[delivery plan](docs/releases/release-2/delivery-plan.md#branch-hierarchy).
+
+#### Shared message service historical record (UST-2.4.1, 2026-10-17)
+
+On 2026-10-17, the owner requested continuing independent R2 work while merges
+are deferred. `refactor/ust-2.4.1-shared-message-service` branches from and will
+target `feat/r2-epic-2.4-message-api`, which targets `release/r2`. See the
+[task delivery plan](docs/releases/release-2/message-service-delivery-plan.md)
+for scope and preservation of the uncommitted planning/investigation work.
+
+`chat.MessageService` centralizes principal message budgets, whitespace trimming,
+the 4,000-rune limit, bounded database writes and publication of committed rows.
+The WebSocket adapter retains raw-text/JSON decoding and existing error frames.
+Binary/empty attempts still consume budget. Services created through the Hub
+share its limiter across transports and reconnects. The Hub continues to own
+client fan-out, slow-client eviction and coalesced content-free notifications.
+
+The service returns a committed message alongside a distinct publication error
+if the Hub has stopped. Persistence failures never publish. This is a foundation
+for HTTP sending, not an HTTP endpoint or idempotency implementation. No new
+configuration, authentication behavior or database migration is introduced.
+
+Verification on 2026-10-17: the scratch harness passed Go race tests and vet,
+PostgreSQL integration and dump/restore checks, Flutter analysis, all 81 Flutter
+tests, the release web build and production web runtime smoke checks. New
+service tests cover commit-before-publication, failed/cancelled writes, Unicode
+limits, concurrent shared budgets, principal isolation and durable results on
+publication failure. Native platform builds were not rerun for this server
+refactor. No live deployment was changed.
+
+### 13.3 Bot principals (UST-2.3.3, 2026-10-17)
+
+`feat/ust-2.3.3-bot-principals` targets the bot-identity epic; merged as #29 into epic 2.3; release integration remains pending. The [task delivery plan](docs/releases/release-2/bot-principals-delivery-plan.md)
+records the branch hierarchy, migration/rollback constraints and integration needs.
+
+Migration 000005 adds separate bot principal and directory identity tables.
+Mapping keys are provider (`lldap`), stable directory namespace and directory
+UUID. Concurrent first provisioning creates one principal; display names are
+labels only. New bot messages reference that local UUID and existing human
+messages retain their OIDC sender FK. A constraint requires exactly one sender.
+Down migration retains schema/data and does not make old binaries compatible.
+
+REST and WebSocket messages now carry `sender_kind`; Flutter caches it, labels
+bots and compares kind plus ID for self-message and notification behavior.
+Missing kind means legacy human data. Clients must be upgraded before enabling
+bots. This task adds no endpoint, settings, credentials or authentication grants.
+LDAP authorization and HTTP sends remain separate tasks; profile existence must
+never substitute for current group membership. No live deployment was changed.
+
+Verification on 2026-10-17: Go race tests and vet passed, including a dedicated
+disposable database upgraded from populated schema v4 to v5; concurrent mapping,
+rename/recreation, directory separation, exact human/bot sender-ID collisions,
+sender constraints and retained history passed. Backup/restore, Flutter analysis,
+all 83 Flutter tests, release web build and production web smoke checks passed.
+Native builds and live LDAP authorization were not exercised. Migration 000005
+was executed only against disposable verification databases.
+
+### 13.4 Bot authentication gate (UST-2.3.2)
+
+`feat/ust-2.3.2-bot-auth` targets `feat/r2-epic-2.3-bot-identity`.
+See the [delivery plan](docs/releases/release-2/bot-auth-delivery-plan.md) for
+branch ancestry, integration steps, security boundaries and verification.
+Merged as #30 into epic 2.3 and integrated into release/r2 via #38. Historically, this task supplied a reusable LDAP/message gate;
+it did not enable a public bot route. Setting the feature flag true rejected
+startup until message API integration replaced that guard in #40. Current behavior is in §13.9.
+
+| Server setting | Default / meaning |
+|---|---|
+| `BOT_BASIC_AUTH_ENABLED` | `false`; implemented, enable only for the authorized rollout |
+| `BOT_LDAP_URL` | Required when constructing the gate; `ldaps://` origin only |
+| `BOT_LDAP_BASE_DN` | Required people search base, e.g. `ou=people,dc=example,dc=com` |
+| `BOT_LDAP_READER_DN` | Required least-privilege reader DN |
+| `BOT_LDAP_READER_PASSWORD_FILE` | Required host-local file, mounted under `/run/secrets` |
+| `BOT_LDAP_ALLOWED_GROUP` | Required full group DN, e.g. `cn=bots,ou=groups,dc=example,dc=com` |
+| `BOT_LDAP_DIRECTORY_NAMESPACE` | Required stable directory instance identifier; max 255 characters |
+| `BOT_LDAP_CA_FILE` | Empty uses system roots; optional PEM extends trust |
+| `BOT_LDAP_TIMEOUT` | `5s`; total auth deadline, greater than zero and at most `30s` |
+| `BOT_LDAP_MAX_CONCURRENT` | `8`; process-local operations, range 1..128 |
+| `BOT_TRUSTED_PROXY_CIDRS` | Empty trusts no forwarded HTTPS claims; explicit peer CIDRs only |
+
+All settings are server-only and wired into Compose; no credentials are tracked.
+Reader-secret files contain 1..4096 bytes; a final CRLF/LF is removed, spaces
+preserved. Restart after reader-secret rotation. Bot passwords are never cached.
+Use a reader in LLDAP's `lldap_strict_readonly` group with visibility of the
+configured people base, `entryUUID`, `uid` and `memberOf`.
+
+Each authentication performs a reader lookup, isolated password bind and fresh
+UUID/group lookup over verified LDAPS, under bounded concurrency and a shared
+deadline. Bad credentials return 401, valid nonmembers 403, dependency failures
+503. Group removal affects subsequent requests. Only GET sync and POST message
+paths can admit Basic; human OIDC, WebSocket tickets, push and media stay separate.
+No local token is issued. HTTPS proxy trust requires explicit peer CIDRs and a
+proxy that overwrites X-Forwarded-Proto and rejects plaintext before forwarding.
+Do not change live ingress or provision reader credentials without owner approval.
+
+### 13.5 Migration and integration hardening (2026-10-18–21)
+
+PRs #28–#30 are owner-merged into epic 2.3. Migration 000005's up file now
+uses repeatable table/column/index creation and a relation-scoped pg_constraint
+guard for messages_exactly_one_sender. Its non-destructive down file and comment
+are unchanged. A one-step rollback followed by Up preserves human and bot rows
+and returns version 5, clean. Real golang-migrate file-source tests cover that
+cycle, repeated up SQL and partially applied DDL prefixes. This does not silently
+clear an already-dirty migration: inspect its actual state before any explicitly
+reviewed recovery; do not blindly force the version or remove retained data.
+
+DB timestamp comparisons now normalize to UTC; both UTC and Asia/Kolkata run
+in verification. The /verification safety guard remains; tests skip explicitly
+for other database names. Scratch harness runs supply the guarded database.
+Parent merges preserved both directory and bot-auth CI jobs before verify,
+chronological runbook entries and tidy-clean Go modules. Published history was
+not rebased or force-pushed. Detailed evidence is in the UST-2.3.3 and UST-2.3.2
+story logs under docs/releases/release-2/log/.
+
+### 13.6 Stable bot login usernames (UST-2.3.4, 2026-10-21)
+
+The gate requests uid, entryUUID and memberOf and checks identity stability
+across the password bind. Username comes from the verified uid, not cn or the
+case/spelling supplied in Basic Auth. Missing, ambiguous or invalid uid fails
+closed. The existing 100-character bound is enforced without truncation.
+RepositoryResolver passes this identity to BotRepository; only first provisioning
+writes the username. Display-name changes do not rewrite the stored value.
+Deleting/recreating an LLDAP account changes its directory UUID and therefore
+creates a new principal, retaining old messages under the old principal.
+
+There is no migration, display_name column or backfill. Existing experimental
+profiles retain their stored names, even if older code supplied cn. Inspect such
+profiles under owner authorization before a pilot; do not infer uid from a label
+or rewrite history. Human and bot usernames are not cross-checked for uniqueness.
+Consumers, including pourOver, identify a sender by sender_kind plus sender_id.
+Human OAuth and profile behavior remain unchanged. See the
+[stable username contract](docs/releases/release-2/stable-bot-usernames.md).
+
+At the identity-only stage the gate was an unactivated foundation. BOT_BASIC_AUTH_ENABLED defaults to
+false; #40/#41 now wire the message routes when explicitly enabled. It
+returns 429 with integer Retry-After at least 1 for exhausted budgets, and 503
+with Retry-After for directory/resolution unavailability. The integrated API supplies these budgets; it must
+supply budgets allowing at least 30 requests/minute per bot and a shared ingress
+budget that permits a bot polling every 3 seconds plus replies. These are
+acceptance requirements; Basic remains disabled by default for rollout.
+
+Fresh verification: 133 Go test/subtest passes in each of UTC and Asia/Kolkata,
+with race detection and vet clean; one TestLLDAP skip per generic suite, run
+separately against pinned LLDAP 0.6.3 (PASS, 2.78s). Restore passed, Flutter
+analysis clean, 83 Flutter tests passed, release web build and non-root runtime
+smoke passed. New tests: TestDirectoryUsesVerifiedUIDNotDisplayName,
+TestDirectoryRejectsInvalidOrChangingUID (seven subtests), and
+TestGateStableUsernameAndRecreatedPrincipal (httptest plus real PostgreSQL).
+Native builds and live deployment checks were not run. Evidence:
+[completion log](docs/releases/release-2/log/2026-10-21-UST-2.3.4.md).
+
+### 13.7 Other completed work and approved release scope (2026-10-21)
+
+#31's shared message service and #39's identity synchronization are merged into
+epic 2.4. MessageService.Send and SendHistory preserve SenderKind; bot/human
+publication regressions cover both. #40 adds HTTP send and durable idempotency,
+and #41 adds bot sync and the example. See §13.9 for the integrated contract.
+
+#32's Immich contract is merged into epic 2.1 and stands unchanged for R3. It
+pins the investigated v3.3.3 contract, server-held credentials, streaming proxy,
+asset authorization and owner checks; it is not a deployed media feature. Keep
+published epic names. Never merge epic 2.1/2.2 into release/r2; their future PRs
+target release/r3, created only when R3 begins. Combine identity/ingress owner
+checks with media M1–M4 and preserve endpoint/placeholder-host roadmap fixes at
+that future integration. No media runtime is claimed verified here.
+
+#33 is merged into release/r2 and supersedes older media-inclusive plans:
+R2 = authenticated lounge message API (2.3, 2.4, API-only 2.5), goal pourOver live;
+R2.1 = channels proposal only; R3 = Immich (2.1, 2.2). Channels planning specifies
+nullable UUID channel_id for the existing lounge, membership authorization with
+403 for non-members, filtered sync, send channel_id, bot membership management,
+channel-scoped WebSocket/push delivery and Flutter/cache migration. No channel
+implementation is authorized. The owner approved the AGENTS.md bot exception
+status correction in the epic 2.4 fold; AGENT_PLAYBOOK.md remains unchanged.
+
+The release-parent delivery-plan, api-design, merge-queue and channels proposal
+are authoritative. At epic integration retain those scope-approved copies when
+older epic documents conflict. The scope estimate was 6.5–12 engineering days
+(52–96 hours), or 8.5–15 days (68–120 hours) with contingency, before finishing
+UST-2.3.4. Subtracting its 0.5–1 day allocation leaves 6–11 base days; the pending
+epic integration and documentation still belong to that remainder.
+
+### 13.8 pourOver acceptance and next integration steps
+
+The implementation merged in #40/#41 satisfies the following tested contract:
+- Basic GET /api/messages/sync?after=<RFC3339>&after_id=<uuid>: 200 JSON array,
+  oldest timestamp/UUID first, at most 500 per page, X-Has-More when more remain;
+  fields id, sender_id, username, sender_kind, text_content, created_at. Equal
+  timestamps across pages return each message once. Accept an unencoded +00:00
+  decoded as a space; exactly 500 may signal more followed by 200 [].
+- Basic POST /api/messages with Idempotency-Key: pourover-reply-<original id>
+  and text_content body: any 2xx succeeds, same key/body replays the identical
+  response with one message, changed body returns 409. Concurrent duplicates,
+  restart durability, retention boundaries and failed writes require tests.
+- Bots may post in the lounge, replies use plain @username text, and Basic stays
+  restricted to GET sync and POST send. The example polls every 3 seconds,
+  persists its cursor, ignores its own sender_kind/sender_id and honors 429/503
+  Retry-After. These endpoints are implemented, with Basic disabled until authorized rollout.
+
+#34–#41 are owner-merged through epic 2.4. Next: owner merge the epic 2.4 doc-fold,
+then epic 2.4 into release/r2. Only afterwards sync release/r2 into epic 2.5 via
+an owner PR. UST-2.5.1 will run the server binary, PostgreSQL and real pinned LLDAP
+together; UST-2.5.2 prepares rollout/rollback and pilot instructions. After owner
+integration of 2.5, open release/r2 → main as a DRAFT for owner review. No deployment,
+live service, credential or DNS change is included in these development steps.
+Before the authorized pilot, owner checks include reader visibility of uid and
+the bot group, and the cellar reverse proxy passing Authorization to /api/*
+unchanged without Basic-to-SSO interception. Basic remains off until integration
+and explicit pilot authorization. Preserve schema/history on disable or rollback.
+
+### 13.9 Integrated message API (epic 2.4, 2026-10-21)
+
+Owner-merged epic commit 6f98957 includes #31, #39, #40 and #41. Human OIDC
+and optional group-gated bot Basic use the shared message service. Every Basic
+request rechecks verified LDAPS credentials and group membership; Basic grants
+only exact GET sync and POST send, never WebSocket tickets, push or media.
+Both routes share bot ingress/API budgets. The default sync alias is registered
+once; a distinct configured alias retains human access and the same bot gate.
+
+| Server setting | Default | Integrated behavior |
+|---|---|---|
+| `MESSAGE_SEND_ENDPOINT` | `/api/messages` | Exact POST path; reserved/invalid paths rejected |
+| `IDEMPOTENCY_RETENTION` | `168h` | Range 168h–8760h; replay guarantee ends at expiry |
+| `SYNC_ENDPOINT` | `/api/messages/sync` | Configured sync alias; default alias retained; `MESSAGES_SYNC_ENDPOINT` is the fallback env name |
+| `BOT_BASIC_AUTH_ENABLED` | `false` | Bot message routes implemented; enable only in authorized rollout (or synthetic scratch verification) |
+| `API_RATE_PER_MINUTE` | `120` | Must be at least 30 when bots are enabled; bot key includes principal kind/ID |
+| `API_RATE_BURST` | `30` | Per-principal API burst shared across send/sync |
+| `GLOBAL_RATE_PER_MINUTE` | `6000` | Must be at least 60 when bots are enabled; shared ingress must allow 3-second polling |
+| `GLOBAL_RATE_BURST` | `200` | Process ingress burst; bot authentication also has a shared pre-auth budget |
+
+The LDAP, CA, reader password file, namespace, timeout, concurrency and trusted
+proxy settings in §13.4 remain required as documented. No client secret or local
+auth token is introduced. `.env.example` and Compose wire the new server settings.
+
+**Send and durability.** POST accepts only `{"text_content":"…"}` with a required
+`Idempotency-Key` (1–255 printable ASCII characters). Unknown fields, including
+`channel_id`, return 400; pourOver must keep `MEOWGRAM_CHANNEL` empty until R2.1.
+Sender identity comes from verified auth. The shared service trims text, enforces
+the 4,000-rune limit and shares kind-qualified HTTP/WebSocket write budgets.
+CORS allows Idempotency-Key for configured human web origins.
+
+A transaction locks by sender kind/ID/key and commits the message with its exact
+201 JSON response. Fingerprinting uses decoded text before trimming. Same key
+and same text replay identical response bytes; changed text returns 409. Replays
+reauthenticate and consume API budget but not a second write budget, message,
+broadcast or push trigger. Persistence failure publishes nothing. A durable send
+still returns 201 if the hub stops after commit; sync recovers missed live delivery.
+This is not an exactly-once network-delivery guarantee.
+
+Migration 000006 adds message_idempotency with a message FK ON DELETE CASCADE
+(corrected before merge/deployment), so user deletion can cascade through messages
+and their keys. Its down migration preserves data. Up/down/up, direct repeated up,
+partial application and legacy-row preservation have regression coverage. Each
+successful new send or replay deletes at most 100 expired keys in that same
+transaction, using FOR UPDATE SKIP LOCKED. Cleanup preserves messages and active
+keys. Expired keys may create a new message if reused; do not assume indefinite
+retry deduplication. Migration 000005 also retains its non-destructive down.
+
+**Sync and backoff.** GET returns a JSON array oldest-first by timestamp/UUID,
+maximum 500 rows, including id, sender_id, username, sender_kind, text_content and
+created_at. Every page rechecks bot authorization. Equal timestamps across pages
+are preserved without duplicates; unencoded +00:00 offsets parse; a full 500-row
+page may advertise X-Has-More followed by 200 []. Responses are no-store.
+429 carries integer Retry-After >=1; unavailable directory/storage returns 503
+with Retry-After. Stored SenderKind reaches live broadcasts and history.
+
+**Example.** `server/examples/lounge-bot` uses Go's standard library, HTTPS and
+system roots; redirects are rejected. Its README lists example-only MEOWGRAM_*
+variables for URLs, login uid, private password file, principal ID and durable
+state file. One instance per account/state polls every three seconds, persists
+cursor and pending exact reply body/key before send, drains pending sends on
+restart, honors 429/503 Retry-After and backs off on transport failures. It ignores
+own messages by sender_kind plus sender_id, not username. Missing state starts
+at the Unix epoch and processes existing history. Replies are plain @username
+text. Pending sends older than 168h stop for manual reconciliation.
+
+Evidence and boundaries: see the [epic fold log](docs/releases/release-2/log/2026-10-21-epic-2.4-fold.md)
+and [verification matrix](docs/releases/release-2/verification-matrix.md). Handler,
+repository, example, Flutter and separate LLDAP tests establish component behavior.
+A single real-server/real-LDAP end-to-end acceptance run is still UST-2.5.1 work;
+no live rollout or release-candidate readiness is claimed by this fold.

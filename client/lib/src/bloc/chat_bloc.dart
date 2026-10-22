@@ -344,7 +344,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final mySub = _currentSub?.call();
     if (incoming.type == 'chat' &&
         incoming.id != null &&
-        (mySub == null || incoming.senderId != mySub)) {
+        !incoming.isFromSelf(mySub)) {
       unawaited(_notify(incoming).catchError((Object _) {}));
     }
 

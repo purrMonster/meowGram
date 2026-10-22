@@ -21,6 +21,7 @@ func WebSocketHandler(
 	cfg *config.Config,
 	logger *slog.Logger,
 ) http.HandlerFunc {
+	messages := hub.MessageService(msgRepo)
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -64,7 +65,7 @@ func WebSocketHandler(
 		)
 
 		// 3. Instantiate Client and register with the Broadcast Hub
-		client := chat.NewClient(hub, conn, user, msgRepo, logger)
+		client := chat.NewClient(hub, conn, user, msgRepo, messages, logger)
 		if !hub.RegisterClient(client) {
 			// Hub has stopped: the server is shutting down.
 			_ = conn.Close()

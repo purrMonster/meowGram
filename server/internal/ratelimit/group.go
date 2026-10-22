@@ -22,11 +22,20 @@ type Group struct {
 }
 
 func New(perMinute, burst int) *Group {
+	return NewWithClock(perMinute, burst, time.Now)
+}
+
+// NewWithClock allows deterministic verification of sustained polling budgets.
+// The clock must be safe for concurrent calls and must not move backwards.
+func NewWithClock(perMinute, burst int, now func() time.Time) *Group {
+	if now == nil {
+		panic("rate limit clock is required")
+	}
 	if perMinute <= 0 || burst <= 0 {
 		panic("rate limits must be positive")
 	}
 	refill := time.Duration(float64(burst) / float64(perMinute) * float64(time.Minute))
-	return &Group{buckets: make(map[string]bucket), perSecond: float64(perMinute) / 60, burst: float64(burst), capacity: 10000, idle: max(10*time.Minute, refill), now: time.Now}
+	return &Group{buckets: make(map[string]bucket), perSecond: float64(perMinute) / 60, burst: float64(burst), capacity: 10000, idle: max(10*time.Minute, refill), now: now}
 }
 
 // Allow returns a retry delay without reserving future capacity on rejection.
