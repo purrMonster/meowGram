@@ -24,8 +24,8 @@ Identity epic integration is owner-merged as #38 (release/r2 at 3cfbfe8). Messag
 | Message API sync — DONE (#39) | Owner-reviewed release/r2 → epic 2.4 sync; preserve SenderKind in MessageService.Send publication and SendHistory, with explicit bot/human publication regression |
 | UST-2.4.2 — DONE (#40) | POST send for human bearer and bot Basic; transactional durable idempotency; identical replay response; 409 on changed body; ≥20 concurrent duplicates produce one row/broadcast and at most one push; restart/expiry/DB-failure tests; CORS Idempotency-Key support |
 | UST-2.4.3 — DONE (#41) | Basic GET sync, fresh authorization per page, cursor compatibility and example with persistent cursor, deduplication, own-message filtering and 429/503 backoff; example runs in scratch infrastructure |
-| Epic 2.4 closure — awaiting owner merges | docs/r2-epic-2.4-runbook → epic 2.4, then epic 2.4 → release/r2; fresh UTC/IST, Flutter, restore and web evidence |
-| Epic 2.5 parent sync — after 2.4 release merge | Owner PR merges release/r2 into the existing test/r2-epic-2.5-verification (currently 0e41333); no task starts from old main |
+| Epic 2.4 closure — DONE (#42/#43) | docs/r2-epic-2.4-runbook → epic 2.4, then epic 2.4 → release/r2; fresh UTC/IST, Flutter, restore and web evidence |
+| Epic 2.5 parent sync — review pending | Owner PR merges release/r2 into the existing test/r2-epic-2.5-verification (currently 0e41333); no task starts from old main |
 | UST-2.5.1 — pending | One end-to-end scratch run of the release/r2 server binary, PostgreSQL and pinned LLDAP 0.6.3 over LDAPS, Basic enabled only in scratch: 401 wrong password, 403 nonmember/revoked member, 201 send, identical one-row replay, 409 conflict, bot sync discriminator, 429 integer Retry-After, directory-down 503, channel_id 400; human OIDC send/sync/WS and Flutter Bot-label/self-identity regressions. CI job if practical, otherwise scripted recorded harness. Matrix row per check with command/result/date |
 | UST-2.5.2 — pending | API config/runbook/examples folded, statuses/queue updated, rollout/rollback/pourOver pilot prepared, previous-image tag/schema compatibility explicitly established or declared incompatible; final timed owner checks and pourOver placeholders/stop procedure; verified epic PRs, then release/r2 → main DRAFT for owner/Claude review; owner-only deployment/pilot |
 
@@ -37,6 +37,7 @@ branch pushed and a story log ending in "Where we stopped / next step".
 | Branch | Immediate PR target |
 |---|---|
 | docs/r2-scope-split | release/r2 |
+| chore/r2-verification-parent-sync (from remote epic 2.5 at 0e41333; merges release/r2 e74a1de) | test/r2-epic-2.5-verification |
 | docs/r2-epic-2.4-runbook (from remote epic 2.4 at 6f98957) | feat/r2-epic-2.4-message-api |
 | feat/ust-2.4.2-http-send-idempotency (merged #40) | feat/r2-epic-2.4-message-api |
 | feat/ust-2.4.3-bot-sync-example (merged #41) | feat/r2-epic-2.4-message-api |
@@ -78,6 +79,8 @@ and tests, web build/smoke, and the provider harness. Report skips separately.
 No media implementation or media fixture is an R2 acceptance requirement.
 
 ## Rollout and rollback
+
+Owner-approved 2026-10-22: cellar will pull pinned GHCR images. UST-2.5.2 must implement the [GHCR rollout decision](ghcr-rollout-decision.md), including build override, version 2.0.0+4, off-node dump verification, image inspection before any public-package recommendation, digest recording and pre-bot-only rollback.
 
 Basic stays disabled until the integrated API is reviewed. After explicit owner
 authorization, validate reader/group visibility, TLS and cellar's proxy header
