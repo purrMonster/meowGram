@@ -9,7 +9,7 @@ branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 Completed: #34–#43 are owner-merged. Identity and epic 2.4 API are integrated
 in release/r2 at e74a1de. Epic 2.5 still needs its owner-reviewed parent sync.
 
-1. chore/r2-verification-parent-sync → test/r2-epic-2.5-verification | merge first | brings release/r2 into old-main epic; STOP for owner merge.
+1. #44 chore/r2-verification-parent-sync → test/r2-epic-2.5-verification | merge first | brings release/r2 into old-main epic; STOP for owner merge.
 2. UST-2.5.1 task → epic 2.5 | after sync | combined real-server/PostgreSQL/LDAPS acceptance and matrix with command/result/date.
 3. UST-2.5.2 task → epic 2.5 | after acceptance | GHCR images/build override, release version, image inspection, rollout/rollback and pilot; see ghcr-rollout-decision.md.
 4. Epic 2.5 doc-fold → epic 2.5, then epic 2.5 → release/r2 | after task merges | STOP for owner merges.

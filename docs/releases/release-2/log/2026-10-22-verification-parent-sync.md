@@ -32,3 +32,10 @@ AGENTS and playbook unchanged from the release parent. Image layers/env have NOT
 been inspected; no public-package recommendation or image-clearance claim made.
 Where we stopped / next step: parent sync green; publish PR, then STOP for owner
 merge before UST-2.5.1. GHCR runtime/version changes remain UST-2.5.2 work.
+
+Publication note: GitHub rejected the initial PR because the epic base was absent
+remotely (ls-remote returned no branch; API 404), despite a stale tracking ref.
+Restored the missing base at owner-specified 0e41333 with a normal non-forced push;
+no existing remote branch was overwritten. Sync PR #44 now targets that base.
+Where we stopped / next step: STOP at owner-merge gate §8.5; merge #44, then start
+UST-2.5.1 from the updated remote epic. GHCR decision is committed for UST-2.5.2.
