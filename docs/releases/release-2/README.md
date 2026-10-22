@@ -7,20 +7,25 @@ the scope-split PR body for owner approval; AGENTS.md is unchanged.
 
 | Release | Scope | State |
 |---|---|---|
-| R2 | Epics 2.3 bot identity, 2.4 message API, 2.5 API verification/release | Implementation and integration remaining |
+| R2 | Epics 2.3 bot identity, 2.4 message API, 2.5 API verification/release | Implementation complete; epic 2.5 fold/integration and draft RC review remain |
 | R2.1 | Channels | Planning only; [proposal](../release-2.1/channels-proposal.md) |
 | R3 | Epics 2.1 Immich backend and 2.2 Flutter media, unchanged | Deferred to R3; #32 contract stands |
 
-#27–#32 are owner-merged into their respective parents. Bot identity and the
-shared message service are implemented on their epic branches, not yet combined
-on release/r2. Bot activation remains blocked until API integration. The media
-spike is design evidence, not an implemented media feature.
+#34–#46 are owner-merged into their declared parents. Identity and message API
+are combined on release/r2 at e74a1de. Epic 2.5 at b9bfc99 includes the release
+parent sync, real-server/PostgreSQL/LDAPS acceptance, rollback proofs, GHCR
+configuration, image inspection and owner rollout procedures. Basic remains
+**disabled by default** until a separately authorized rollout/pilot.
 
 Read the [delivery plan](delivery-plan.md), [API contract](api-design.md),
-[merge queue](merge-queue.md), and [owner checks](owner-checks.md).
-Next implementation: **UST-2.3.4 stable bot usernames**, before the identity epic
-PR. Then integrate identity, sync the API epic, implement send/idempotency and
-bot sync/examples, and complete API-only verification and rollout preparation.
+[merge queue](merge-queue.md), [verification matrix](verification-matrix.md),
+[rollout and recovery](rollout.md), and [owner checks](owner-checks.md).
+Next: owner merge the epic 2.5 documentation fold, then epic 2.5 → release/r2.
+Only then open release/r2 → main as a **DRAFT** for owner/Claude review.
+The candidate version is 2.0.0+4; eventual owner tag v2.0.0. No deployment,
+publication or live pilot has occurred. Old-image rollback requires the guarded
+human-only schema-version reset; after bot messages it requires full restore,
+losing post-backup changes. Disabling Basic on the current image needs neither.
 
 R2 preserves human OIDC and adds bot Basic Auth only to GET sync and POST send,
 with fresh directory credentials/group validation on every request. Bots may
