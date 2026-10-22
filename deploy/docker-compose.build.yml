@@ -1,0 +1,25 @@
+services:
+  server:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    image: meowgram-server:dev
+    pull_policy: build
+  web:
+    build:
+      context: ../client
+      dockerfile: Dockerfile.web
+      args:
+        APP_ENV: ${ENVIRONMENT:-production}
+        APP_DOMAIN: ${APP_DOMAIN:-localhost}
+        HTTP_PORT: ${HTTP_PORT:-8080}
+        USE_SECURE_SCHEMES: ${USE_SECURE_SCHEMES:-false}
+        AUTHELIA_ISSUER_URL: ${AUTHELIA_ISSUER:-http://localhost:9091}
+        AUTHELIA_JWKS_URL: ${AUTHELIA_JWKS_URL:-}
+        AUTHELIA_CLIENT_ID: ${AUTHELIA_CLIENT_ID:-meowgram}
+        API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
+        WS_BASE_URL: ${WS_BASE_URL:-ws://localhost:8080/ws}
+        WS_TICKET_ENDPOINT: ${WS_TICKET_ENDPOINT:-/api/ws-ticket}
+        PUSH_DEVICE_ENDPOINT: ${PUSH_DEVICE_ENDPOINT:-/api/push/devices}
+    image: meowgram-web:dev
+    pull_policy: build

@@ -91,7 +91,6 @@ jobs:
           push: ${{ needs.version.outputs.publish == 'true' }}
           tags: |
             ${{ steps.names.outputs.image }}:${{ needs.version.outputs.version }}
-            ${{ steps.names.outputs.image }}:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ needs.version.outputs.version }}
