@@ -1694,3 +1694,7 @@ with a database ahead of their migration files and what compatibility guarantees
 that requires. R2 does not implement a startup-version bypass. Image-inspection,
 rollback and release-workflow evidence belongs in the UST-2.5.2 story log; no
 live changes, package visibility change or release publication was performed.
+
+| Deployment setting | Default/example | Meaning |
+|---|---|---|
+| MEOWGRAM_VERSION | required; example 2.0.0 | Compose-only version for both GHCR images; must match a published image tag. Not a Go server setting. |

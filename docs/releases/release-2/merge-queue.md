@@ -9,8 +9,7 @@ branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 Completed: #34–#45 are owner-merged. Identity and epic 2.4 API are integrated
 in release/r2 at e74a1de. Epic 2.5 acceptance is merged at 0448fe5.
 
-1. #45 test/ust-2.5.1-api-acceptance → test/r2-epic-2.5-verification | merge first | combined real-server/PostgreSQL/LDAPS checks, CI and matrix; STOP for owner merge.
-1. chore/ust-2.5.2-release-readiness → epic 2.5 | after acceptance | GHCR images/build override, release version, image inspection, rollout/rollback and pilot; see ghcr-rollout-decision.md.
+1. #46 chore/ust-2.5.2-release-readiness → epic 2.5 | after acceptance | GHCR images/build override, release version, image inspection, rollout/rollback and pilot; see ghcr-rollout-decision.md.
 2. Epic 2.5 doc-fold → epic 2.5, then epic 2.5 → release/r2 | after task merges | STOP for owner merges.
 3. release/r2 → main as DRAFT | after API release gates | 2.0.0+4 release version; owner/Claude review; never mark ready automatically. No live changes.
 
