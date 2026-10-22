@@ -12,7 +12,7 @@ This decision supersedes older scope statements in the unchanged playbook.
 are merged into epic 2.3. #31 shared message service is merged into epic 2.4.
 #32 media contract is merged into epic 2.1, deferred to R3. #33 scope split and #36 queue are merged into release/r2; #34 stable usernames and #35 runbook fold are merged into epic 2.3. These task merges do not establish release readiness; evidence is recorded in story logs.
 
-Identity epic integration is owner-merged as #38 (release/r2 at 3cfbfe8). Message API sync #39 and tasks #40/#41 are owner-merged into epic 2.4 at 6f98957. Send, sync and the durable example are implemented; #42 doc-fold and #43 epic integration are owner-merged into release/r2 at e74a1de. Combined real-server/LLDAP acceptance is owner-merged in #45 (epic 2.5 at 0448fe5). UST-2.5.2 local checks are green; non-publishing release packaging and owner review remain.
+Identity epic integration is owner-merged as #38 (release/r2 at 3cfbfe8). Message API sync #39 and tasks #40/#41 are owner-merged into epic 2.4 at 6f98957. Send, sync and the durable example are implemented; #42 doc-fold and #43 epic integration are owner-merged into release/r2 at e74a1de. Combined real-server/LLDAP acceptance is owner-merged in #45 (epic 2.5 at 0448fe5). UST-2.5.2 local checks and non-publishing release packaging are green; #46 awaits owner review.
 
 ## Delivery status and remaining gates
 
@@ -27,7 +27,7 @@ Identity epic integration is owner-merged as #38 (release/r2 at 3cfbfe8). Messag
 | Epic 2.4 closure — DONE (#42/#43) | docs/r2-epic-2.4-runbook → epic 2.4, then epic 2.4 → release/r2; fresh UTC/IST, Flutter, restore and web evidence |
 | Epic 2.5 parent sync — review pending | Owner PR merges release/r2 into the existing test/r2-epic-2.5-verification (currently 0e41333); no task starts from old main |
 | UST-2.5.1 — merged #45 | One end-to-end scratch run of the release/r2 server binary, PostgreSQL and pinned LLDAP 0.6.3 over LDAPS, Basic enabled only in scratch: 401 wrong password, 403 nonmember/revoked member, 201 send, identical one-row replay, 409 conflict, bot sync discriminator, 429 integer Retry-After, directory-down 503, channel_id 400; human OIDC send/sync/WS and Flutter Bot-label/self-identity regressions. CI job if practical, otherwise scripted recorded harness. Matrix row per check with command/result/date |
-| UST-2.5.2 — in review preparation | API config/runbook/examples folded, statuses/queue updated, rollout/rollback/pourOver pilot prepared, previous-image tag/schema compatibility explicitly established or declared incompatible; final timed owner checks and pourOver placeholders/stop procedure; verified epic PRs, then release/r2 → main DRAFT for owner/Claude review; owner-only deployment/pilot |
+| UST-2.5.2 — DONE, PR #46 awaits merge | API config/runbook/examples folded, statuses/queue updated, rollout/rollback/pourOver pilot prepared, previous-image tag/schema compatibility explicitly established or declared incompatible; final timed owner checks and pourOver placeholders/stop procedure; verified epic PRs, then release/r2 → main DRAFT for owner/Claude review; owner-only deployment/pilot |
 
 Do not start a task unless it can finish or park this session with tests green,
 branch pushed and a story log ending in "Where we stopped / next step".

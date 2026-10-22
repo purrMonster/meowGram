@@ -102,6 +102,6 @@ and isolated PostgreSQL; generic suite skips TestReleaseRollback deliberately.
 | Flutter analysis/test, restore, web build/smoke | C and verify Compose restore/web-smoke | 83 tests; analysis, restore and runtime PASS | 2026-10-22 |
 | Real LLDAP and combined acceptance rerun | verify-bot-auth.ps1; verify-api-acceptance.ps1 | PASS; 15 API subchecks + parent | 2026-10-22 |
 | Production image history/config/all layers | image-inspection.md commands | PASS within documented candidate scope | 2026-10-22 |
-| Non-publishing release packaging | release.yml workflow_dispatch, run 39785349125 | PENDING; see UST-2.5.2 log for final result | 2026-10-22 |
+| Non-publishing release packaging | release.yml workflow_dispatch, run 39785349125 | PASS: 7 build/verify jobs; publication intentionally skipped | 2026-10-22 |
 
 No live check or production-dump verification is counted as a scratch pass.
