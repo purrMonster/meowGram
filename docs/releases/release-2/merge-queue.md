@@ -9,7 +9,7 @@ branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 Completed: #34–#46 are owner-merged. Identity and epic 2.4 API are integrated
 in release/r2 at e74a1de. Epic 2.5 readiness is merged at b9bfc99.
 
-1. docs/r2-epic-2.5-runbook → test/r2-epic-2.5-verification | after merged #46 | folds acceptance/readiness logs and refreshes release status; STOP for owner merge.
+1. #47 docs/r2-epic-2.5-runbook → test/r2-epic-2.5-verification | after merged #46 | folds acceptance/readiness logs and refreshes release status; STOP for owner merge.
 2. test/r2-epic-2.5-verification → release/r2 | after doc-fold merge | integrates API verification, GHCR and recovery; STOP for owner merge.
 3. release/r2 → main as DRAFT | after API release gates | 2.0.0+4 release version; owner/Claude review; never mark ready automatically. No live changes.
 
