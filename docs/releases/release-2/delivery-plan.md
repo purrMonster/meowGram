@@ -12,7 +12,7 @@ This decision supersedes older scope statements in the unchanged playbook.
 are merged into epic 2.3. #31 shared message service is merged into epic 2.4.
 #32 media contract is merged into epic 2.1, deferred to R3. #33 scope split and #36 queue are merged into release/r2; #34 stable usernames and #35 runbook fold are merged into epic 2.3. These task merges do not establish release readiness; evidence is recorded in story logs.
 
-Identity epic integration is owner-merged as #38 (release/r2 at 3cfbfe8). Message API sync #39 and tasks #40/#41 are owner-merged into epic 2.4 at 6f98957. Send, sync and the durable example are implemented; doc-fold and epic-to-release owner merges are next. Combined real-server/LLDAP acceptance remains UST-2.5.1.
+Identity epic integration is owner-merged as #38 (release/r2 at 3cfbfe8). Message API sync #39 and tasks #40/#41 are owner-merged into epic 2.4 at 6f98957. Send, sync and the durable example are implemented; #42 doc-fold and #43 epic integration are owner-merged into release/r2 at e74a1de. Combined real-server/LLDAP acceptance remains UST-2.5.1.
 
 ## Delivery status and remaining gates
 

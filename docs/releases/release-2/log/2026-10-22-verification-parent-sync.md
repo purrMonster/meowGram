@@ -20,3 +20,15 @@ UST-2.5.2 must not label that a production-dump restore verification. db_backup.
 runs continuously, so document completed-dump selection. These are implementation
 requirements for 2.5.2, not extra live actions.
 Where we stopped / next step: parent-sync full scratch harness running; publish owner PR after green, then STOP before 2.5 implementation.
+
+Fresh verification of parent-sync application tree (identical to release/r2 e74a1de):
+UTC 166 test/subtest passes; Asia/Kolkata 166; full -race and go vet clean.
+One generic TestLLDAP skip each (provider env absent); separate pinned LLDAP
+0.6.3 TestLLDAP PASS (2.97s). Restore drill passed. Flutter analysis clean
+(10.5s), all 83 tests passed; release web build and non-root runtime smoke passed.
+Logs: local Temp/meowgram-verification-parent-sync-{UTC,Asia-Kolkata,restore,client,web-smoke,provider}.log.
+Queue sequence 1–5 and diff whitespace checked. Application, Compose, workflows,
+AGENTS and playbook unchanged from the release parent. Image layers/env have NOT
+been inspected; no public-package recommendation or image-clearance claim made.
+Where we stopped / next step: parent sync green; publish PR, then STOP for owner
+merge before UST-2.5.1. GHCR runtime/version changes remain UST-2.5.2 work.
