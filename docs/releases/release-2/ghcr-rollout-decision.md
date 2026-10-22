@@ -39,16 +39,18 @@ No live changes, package visibility changes, credentials, DNS or tags are author
 
 ## Rollback restriction
 
-Owner decision: point Compose at the local pre-r2 tags (or the previous published
-version), then up -d. Document an explicit image override so local tags are not
-mistakenly expanded under the GHCR repository prefix. Keep Basic disabled.
-This rollback is valid only while NO bot message exists. Verify that precondition;
-a false flag alone does not prove it. After any bot message, do not recommend the
-pre-R2 image path. Preserve migrations 000005/000006; their downs are non-destructive.
-UST-2.5.2 must state the previous image release and its schema compatibility or
-clearly state that compatibility has not been established. Do not delete bot data
-or clear migration state to make an old image work.
-
+Owner correction (2026-10-22): v1.1.0 refuses schema version 6 because its
+migration files end at 4. Disabling Basic and reverting images alone is invalid.
+Test and document two paths: (A) stop writers, verify no bot messages and clean
+version 6, set schema_migrations to version=4, dirty=false, then start the actual
+pre-R2 image; retain all tables/columns and rows. Re-apply 000005/000006 by starting
+2.0.0 again and prove preservation. A bot row makes old history fail on NULL
+sender_id even after the version reset; forbid path A in that case. (B) restore
+the verified pre-upgrade backup and previous image, losing all post-backup data.
+The owner explicitly approved the scratch version reset and documentation;
+no live reset is authorized. The previous no-clear-migration-state instruction
+is superseded only for this guarded, tested path. Record the R2.1 startup-version
+policy question without implementing a bypass. See rollout.md for exact steps.
 ## GHCR access owner check
 
 Add a timed owner-checks.md item: make GHCR packages meowgram-server and

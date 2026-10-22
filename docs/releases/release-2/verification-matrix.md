@@ -84,3 +84,24 @@ project only. These commands never use deploy/docker-compose.yml or live env fil
 | Bot shows as a peer with the · Bot label, never You | bot_sender_test.dart: bot with colliding subject is labeled as a peer | C | PASS | 2026-10-22 |
 | Cache preserves kind; matching human/bot IDs are distinct | bot_sender_test.dart: sender kind survives cache and separates identical human/bot IDs | C | PASS | 2026-10-22 |
 | Human login/refresh, catch-up/cache/ordering and notifications | release_regression_test.dart; chat_ui_test.dart | C | PASS (83 total Flutter tests) | 2026-10-22 |
+
+## UST-2.5.2 recovery and release evidence (2026-10-22)
+
+Dedicated command D: `deploy/scripts/verify-rollback.ps1` locally, or
+`sh deploy/scripts/verify-rollback.sh` in CI. Uses actual v1.1.0/current binaries
+and isolated PostgreSQL; generic suite skips TestReleaseRollback deliberately.
+
+| Check / TestReleaseRollback subtest | Command | Result | Date |
+|---|---|---|---|
+| previous_binary_rejects_version_six | D | PASS: expected migration startup failure | 2026-10-22 |
+| keep_data_force_four_previous_history_and_send | D | PASS: human history + WS send; idempotency retained | 2026-10-22 |
+| roll_forward_reapplies_five_six_and_preserves_rows | D | PASS: clean version 6; 3 messages + 1 key retained | 2026-10-22 |
+| bot_row_breaks_previous_history_after_force_four | D | PASS: old history 500, current history 200 | 2026-10-22 |
+| full_restore_previous_backup_loses_post_upgrade_messages | D | PASS: old history restored; post-backup data absent; new send works | 2026-10-22 |
+| Full Go -race and vet | B, UTC and Asia/Kolkata | 166 passes each; 3 fixture skips each | 2026-10-22 |
+| Flutter analysis/test, restore, web build/smoke | C and verify Compose restore/web-smoke | 83 tests; analysis, restore and runtime PASS | 2026-10-22 |
+| Real LLDAP and combined acceptance rerun | verify-bot-auth.ps1; verify-api-acceptance.ps1 | PASS; 15 API subchecks + parent | 2026-10-22 |
+| Production image history/config/all layers | image-inspection.md commands | PASS within documented candidate scope | 2026-10-22 |
+| Non-publishing release packaging | release.yml workflow_dispatch, run 39785349125 | PASS: 7 build/verify jobs; publication intentionally skipped | 2026-10-22 |
+
+No live check or production-dump verification is counted as a scratch pass.
