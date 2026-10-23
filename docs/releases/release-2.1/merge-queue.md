@@ -3,7 +3,7 @@
 Only the owner merges. #51 is merged into main. P0.4 containerised baseline passed
 on main 1f39e07; see log/2026-10-23-P0-kickoff.md. Host SDKs are not required.
 
-1. Pending PR: docs/r2.1-kickoff → release/r2.1 | merge after nothing |
+1. #52 docs/r2.1-kickoff → release/r2.1 | merge after nothing |
    records baseline, archive restriction and branch hierarchy.
 
 ## Published integration branch map
