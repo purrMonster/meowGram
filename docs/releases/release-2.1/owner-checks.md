@@ -1,73 +1,32 @@
-# R2.1 owner checks — draft, all NOT RUN
+# R2.1 owner checks — revised draft
 
-Separate from scratch verification. No live service, credential, Firebase console,
-ntfy, LLDAP, Authelia or deployment change is authorized by this planning session.
-Perform checks after implementation and a separately authorized rollout window.
-Each step is <=15 minutes hands-on; large restores/CI may need unattended time.
-Keep actual identities, hostnames, keys, topics and screenshots with sensitive
-values in private records, never in the public repository.
+All checks **PLANNED**, not performed. Product/process decisions in README/ADRs
+are already APPROVED and must not be asked again. No live changes this session.
+Each check <=15 minutes hands-on; restore/CI may need unattended time. Keep actual
+domains/subjects/topics/tokens and sensitive screenshots private.
 
-1. **Plan decisions (10 min).** Review README and both ADRs. Record accepted
-   membership/startup options, replay exception, cache attribution and playbook
-   translation. Expected: explicit authorization before 000007 or release branches.
-2. **ntfy inventory (5 min).** Record installed server version/image digest, iOS
-   app version and enabled upstream privately; provide sanitized version information
-   for the contract spike. Expected: tested fixture version matches deployment;
-   no assumed latest version. External configuration remains owner-operated.
-3. **ntfy ACL/relay (15 min).** Provision publisher write-only and each user
-   read-only to their unique topic; deny anonymous access. With synthetic alerts,
-   verify another user cannot read/publish that topic and own user can fetch it.
-   Enable/review upstream configuration. Expected: only generic New message body,
-   no message text/sender/channel data; understand relay timing/routing metadata.
-4. **iPhone delivery (15 min).** Install/configure ntfy iOS app, subscribe with
-   private credentials, lock phone and send synthetic authorized-channel traffic.
-   Repeat with meowGram stopped, then with ntfy temporarily unreachable and recovery.
-   Expected: generic alert arrives via ntfy, no dependency on meowGram background
-   polling/APNs; app sync catches up after recovery. Record latency, not a universal SLA.
-5. **Revocation/notification control (10 min).** Remove channel membership, send
-   again after successful removal; check HTTP 403 and no new channel alert. Remove
-   user's private ntfy mapping and verify dispatch stops. Expected: prior authorized
-   in-flight alerts may arrive, future dispatch denied. meowGram logout alone does
-   not sign out the separate ntfy subscription; confirm this is understood.
-6. **Firebase restrictions inventory (10 min, owner only).** In Google Cloud
-   Console, APIs & Services → Credentials, identify client keys by platform without
-   copying values into evidence. Review API allowlists and application restrictions
-   supported by each client (web referrers, Android package/certificate, Apple bundle
-   identifiers as applicable). Expected: only required APIs allowed; no unrelated
-   billable API access. Do not remove an API merely because its name seems unfamiliar.
-7. **Firebase safe validation (15 min).** Test proposed restrictions with a test
-   key/app first; retain necessary Firebase Installations/other actually used APIs.
-   Apply reviewed restrictions and smoke existing Android/macOS notification/token
-   registration and relevant web startup. Expected: no API_KEY_SERVICE_BLOCKED/403;
-   revert only the failing restriction if needed, record without key values. No
-   source edit, key rotation or secret-handling task is part of R2.1 scope D.
-8. **Backup identity (15 min).** Before upgrade, quiesce writers, save exact previous
-   server/web image identities and a completed real dump; copy off-node and compare
-   checksum. Expected: known pre-R2.1 recovery inputs, not assumed tag identity.
-9. **Actual restore drill (15 min plus unattended restore).** Restore that dump
-   into an isolated database and compare counts. Expected: readable matching data;
-   synthetic CI restore alone is not proof of the owner's dump.
-10. **Mixed clients (15 min).** With v2.0.0 and new app signed in, send lounge/A/B
-    messages as separate test principals. Expected: old app sees lounge only; new
-    members see their channels; nonmember gets 403; old background notification/cache
-    never contains private test text. Check new phone offline/reconnect and account switch.
-11. **pourOver (15 min).** Add its existing typed bot ID to one channel, set its
-    private channel parameter/state, test polling and idempotent reply/restart.
-    Expected: correct channel_id each time, inaccessible channel 403, lounge still
-    works, revoked LDAP eligibility blocks next request, no silent lounge retry.
-12. **Recovery boundary and release record (10 min).** Read tested final rollback
-    procedure and record whether any private messages exist. Expected: no bare image
-    downgrade after private traffic; prefer roll-forward, or explicitly approve
-    restore with loss of all post-backup changes. Record pulled image digests and
-    separate approval for enabling ntfy/bots/new channel writes.
+| Check | Procedure / expected result | Time | Status |
+|---|---|---|---|
+| O1 Environment | Before implementation, confirm working Docker, Go 1.27.1 and Flutter in owner's R2 environment; run required suites in both timezones. If unavailable, stop before implementation DONE. | 10 min | PLANNED |
+| O2 ntfy inventory | Supply exact server/image digest and iOS app version for first contract spike; review upstream version/config. Fixture pinned, no assumption of latest. | 5 min | PLANNED |
+| O3 ntfy protection | Owner sets publisher write-only and each user's topic read-only; deny anonymous. Synthetic own-topic read succeeds, other-user read/write fails. Inspect generic alert and relay metadata exposure; credentials stay host-local. | 15 min | PLANNED |
+| O4 iPhone | Configure separate ntfy iOS app, lock phone, send authorized lounge/group messages with meowGram stopped. Generic alert arrives; ntfy mode registers no FCM or duplicate local alert. Test network outage/recovery, record latency without SLA claim. | 15 min | PLANNED |
+| O5 Notification control | Mute/unmute each conversation, remove member, then remove private ntfy mapping. No new dispatch to muted/removed user; sender excluded; other group unaffected; already handed-off alerts may finish. meowGram logout does not log out ntfy. | 10 min | PLANNED |
+| O6 Firebase inventory | Google Cloud Console → APIs & Services → Credentials: inventory inherited client keys privately; review required API and platform application restrictions. No code/key rotation; no key values in evidence. | 10 min | PLANNED |
+| O7 Firebase validation | Test restrictions with test app/key; retain actually needed APIs. Apply reviewed settings and smoke Android/macOS registration/notifications and relevant web startup; no API_KEY_SERVICE_BLOCKED/403. Revert failing restriction only. | 15 min | PLANNED |
+| O8 LLDAP reader | Before bot pilot, verify reader sees uid/entryUUID and allowed bot group/memberOf; current direct group removal denies next request. Owner handles live directory/credential changes. | 10 min | PLANNED |
+| O9 Ingress | Verify Traefik/Authelia forward Authorization to /api/* unchanged for bearer/Basic, no SSO redirect/interception, overwrite X-Forwarded-Proto; backend inaccessible to untrusted peers. | 15 min | PLANNED |
+| O10 Trust/budgets | Trusted CIDRs include actual proxy peers only; spoofed forwarding denied. Bot budgets sustain 20 scope=member polls plus >=10 replies/min. Verified LDAPS CA/SAN and private readable mounts retained. | 10 min | PLANNED |
+| O11 Backup | Quiesce writers, pin actual prior server/web images, complete real pre-R2.1 dump, copy off-node/check checksum. Record exact identity privately. | 15 min | PLANNED |
+| O12 Restore drill | Restore that exact dump into isolated database, compare counts/history; scratch synthetic CI alone is insufficient. | 15 min + unattended | PLANNED |
+| O13 Lounge-first upgrade | Upgrade only after backup/restore proof; smoke old/new clients on lounge before any group message. Capture clean schema and image digests; zero-group rollback window remains open. | 15 min | PLANNED |
+| O14 Groups/mixed clients | Then start using groups: unnamed reuse/named separate, human member rename/add/remove/leave/mute; A/B canaries absent on v2.0.0 paths, present for authorized new clients. Last-human leave denies remaining bots. | 15 min | PLANNED |
+| O15 pourOver pilot | Human adds existing typed bot ID first; poll scope=member; replies copy triggering channel_id; prefix-free only two-member group with bot; larger groups/lounge use prefix. Retry/restart once, no fallback on 403, LDAP revoke denies. Use deliberate history baseline. | 15 min | PLANNED |
+| O16 Recovery | Before any image revert assert zero non-null messages AND zero channel-specific replay rows under tested guarded procedure. After first group message fix forward or explicitly authorize verified restore losing ALL post-backup changes. | 10 min | PLANNED |
 
-Sources checked 2026-10-23: [Firebase API-key guidance](https://firebase.google.com/docs/projects/api-keys)
-explains that client keys identify the project rather than authorize backend access,
-and recommends restrictions with testing; [ntfy configuration](https://docs.ntfy.sh/config/#ios-instant-notifications)
-describes self-hosted iOS relay delivery. These are guidance, not inspection of the
-owner's console or ntfy installation.
-
-Local test-environment check: start an authorized disposable Docker environment or
-use PR CI to run the unchanged baseline suites; this session's Docker engine is
-unavailable. New R2.1 behavior remains unimplemented and unverified regardless of
-baseline CI outcome. See verification-matrix.md and the planning log.
+Source references reviewed during original planning: [Firebase API-key guidance](https://firebase.google.com/docs/projects/api-keys)
+and [ntfy iOS configuration](https://docs.ntfy.sh/config/#ios-instant-notifications).
+These are guidance, not inspection of the owner's systems. All live operations,
+credentials, external configuration and publication remain separately owner-gated.
+The docs-only evidence exception applies to #51 alone, not these checks or future
+implementation. No pending R2 ingress/directory prerequisite is waived by this plan.

@@ -1,62 +1,57 @@
-# R2.1 verification matrix — planning draft
+# R2.1 verification matrix — revised planning draft
 
-2026-10-23. Every R2.1 test below is **PLANNED / NOT RUN**, including proposed
-names. This is a test specification, not coverage evidence. Replace names with
-actual test locations/results at implementation; no PLANNED row at release gate.
-R2 historical evidence remains in ../release-2/verification-matrix.md.
+Owner-reviewed model, 2026-10-23. **All rows PLANNED**. Names are proposed tests,
+not existing pass claims. Replace with real names/results at implementation;
+no PLANNED automated row at release readiness. R2 historical results stay separate.
 
-| ID / story | Required result / proposed test | Command family | Status |
+| ID / story | Required binary result / proposed test | Command | Status |
 |---|---|---|---|
-| V01 / 1.2 | TestChannelMigration: legacy rows/keys unchanged; repeated up, partial object creation, actual down/up; typed FKs/indexes and non-destructive down | B | PLANNED |
-| V02 / 1.3 | TestChannelMembership: human creator/owner/member roles, Basic denied, unknown 403, last-owner concurrency, archive/read/send policy, audit and deletion constraints | B,A | PLANNED |
-| V03 / 1.4 | TestChannelSync: omitted/empty lounge, A/B isolation, 1,001 equal timestamps, <=500, empty [], full-page flag, offset parsing, invalid/repeated params and custom aliases | B,A | PLANNED |
-| V04 / 1.4 | TestChannelSendReplay: >=20 concurrent duplicates one row/broadcast/push; channel conflict, revoke-before-replay, stored-channel authorization, raw-text and UUID normalization, restart/expiry/failure | B,A | PLANNED |
-| V05 / 1.4 | TestLegacyReplayUpgrade: seed using actual v2.0.0; same bytes/key retained; new null responses include field; non-null cannot match old hash; configured retention boundaries | B,R | PLANNED |
-| V06 / 1.4 | TestChannelBotContract: global LDAP group on every request/page plus channel membership; lounge posting; bot sees 403 not []; Basic denied list/manage/ticket/push/media | B,A,D | PLANNED |
-| V07 / 1.4 | TestChannelExampleRestart: channel included in durable state identity and pending body, independent cursors, one reply, 429/503 backoff, no self-kind collision | B,A | PLANNED |
-| V08 / 2.1 | TestChannelSocketIsolation: bound ticket, recheck at consumption, scoped 50/history/live/presence/notices, forged scope denied, reconnect gap dedup, malformed JSON no lounge fallback | B,A | PLANNED |
-| V09 / 2.1 | TestChannelRevocationBarrier: >=20 concurrent operations, queued/batched history, stalled writer, canceled HTTP, timeout/DB-down/restart; no post-ack dispatch; Hub remains non-blocking | B,A | PLANNED |
-| V10 / 2.2 | TestChannelPush: active member devices only; legacy missing capability lounge-only; token reassignment/expiry/revocation; >500 recipient paging, channel fairness/trailing coalescing, generic payload | B,A | PLANNED |
-| V11 / 3.1 | channel_cache_test.dart: legacy lounge migration/quarantine, interruption/retry, new box separate from v1, account/server change, pruning and stable equal-time ordering | C | PLANNED |
-| V12 / 3.1 | channel_cursor_test.dart: page persistence before cursor, live/history cannot skip gap, independent channel sync, stale-account completion discarded, storage failure retry | C | PLANNED |
-| V13 / 3.2 | channel_ui_test.dart: list/create/member controls, switching/offline/revoked state, channel-bound failed draft, first-frame cache, 800px/keyboard and Bot label | C | PLANNED |
-| V14 / 3.2 | channel_unread_test.dart: non-self UUID count once, read watermark only foreground, sync/history/replay dedup, retention/restart and offline stale indicator | C | PLANNED |
-| V15 / 3.3 | channel_background_test.dart: membership enumeration, scoped secure cursors, no Hive use, logout/server isolation, iOS FCM disabled in ntfy mode, Android/macOS unchanged | C | PLANNED |
-| V16 / 4.1–4.2 | TestNtfyPublisher: fixed HTTPS origin, no redirects, ACL fixture, generic body, no sensitive metadata, wrong cert/topic denied, timeout/429/5xx bounded retry, revoked mapping/member canceled | N,B | PLANNED |
-| V17 / 4.2 | TestNotificationProvidersIndependent: FCM/ntfy outage cannot block Hub or undo commit, no duplicate replay push; disabled ntfy needs no token; limits/default/config wiring | B,A,N | PLANNED |
-| V18 / 5.1 | TestV200ClientPrivacy: unchanged legacy requests/decoder/cache/background fixtures; lounge/A/B canaries, allowed positive controls; no unauthorized HTTP/WS/provider/cache data | A,C | PLANNED |
-| V19 / 5.2 | TestR21Rollback: actual v2.0.0 startup rejects ahead; clean no-channel recovery and forward preservation; refusal with private human/bot row or channel replay; forced old-read leak demonstrated only in scratch | R | PLANNED |
-| V20 / 5.2 | TestR21Restore: restore pre-upgrade dump, post-backup changes absent, old read/send works; dirty/unknown/partial schema refuses unsafe startup | R,B | PLANNED |
-| V21 / 5.3 | Existing suites plus new regressions; module tidy no diff, pinned artifacts, config completeness, source/layer inspection, release packaging/web smoke | B,C,D,A,R,N,F | PLANNED |
-| V22 / owner | Locked iPhone ntfy, denied-topic user, actual relay, current membership, no duplicate alerts; real backup/device/provider checks | owner-checks.md | NOT RUN |
-| V23 / owner | Firebase API/application restrictions appropriate to each used platform, retained required APIs, before/after smoke | owner-checks.md | NOT RUN |
+| V01 / 1.2 | TestConversationMigration: legacy rows/keys unchanged; partial/repeated up and migrate down/up; typed FKs, per-kind uniqueness, null personal-state uniqueness, no silent message/member cascades | B | PLANNED |
+| V02 / 1.3 | TestHumanGroupManagement: any member rename/add/remove/leave; Basic denied; no-human group denies every path; surviving-human shrink; no roles/audit/archive routes | B,A | PLANNED |
+| V03 / 1.3 | TestStartChatReuse: >=20 identical starts one group; typed exact current set; named always fresh; clear/rename/member edits race safely; duplicate unnamed matches deterministic; no set unique constraint | B,A | PLANNED |
+| V04 / 1.3 | TestConversationListPicker: lounge first, last-activity order/ties, accurate bounded member summary, 403 nonmember, paging/minimal picker, Basic isolation, invalid/duplicate input and path encoding | B,A | PLANNED |
+| V05 / 1.3 | TestPersonalMuteRead: per-user isolation; lounge/group state; monotonic valid read position, non-self counts, retained history baseline; mute never changes unread/read rights | B,A | PLANNED |
+| V06 / 1.4 | TestMemberSync: omitted selectors lounge; UUID group; scope=member merged 1001 equal-time rows, 500 cap/[]/X-Has-More; no duplicate rows; aliases/offsets; conflicting/repeated/empty/null selectors 400 | B,A | PLANNED |
+| V07 / 1.4 | TestMembershipSyncRevision: every page including empty authorized; removal/no-human filtering; addition exposes older history via revision/epoch replay; mid-page changes and stable checkpoint; count/mute metadata only authorized | B,A,C | PLANNED |
+| V08 / 1.4 | TestConversationSendReplay: >=20 duplicates one row/publication/push; principal-wide channel/text conflict; requested/stored access before replay; revoked member 403; unknown body fields still rejected | B,A | PLANNED |
+| V09 / 1.4 | TestLegacyReplayUpgrade: actual old stored bytes unchanged, missing channel interpreted lounge; null hash R2-compatible, versioned non-null; restart/expiry/failed-write/stopped-Hub durability | B,R | PLANNED |
+| V10 / 1.4 | TestMemberBotBudgets: LDAP checked every page/retry, member/no-human 403, 20 polls+10 replies/min no steady 429; transient 429/503 Retry-After; bots denied every non-send/sync surface | B,A,D | PLANNED |
+| V11 / 1.4 | TestBotConversationRouting: source channel copied, own-kind filter, two-member count versus >=3 prefix contract fixture, membership backfill/dedup, no unauthorized lounge fallback | B,A | PLANNED |
+| V12 / 2.1 | TestConversationSocket: scope-bound ticket/recheck, no URL override, old null default, history/live/presence/notices scoped; malformed structured send no fallback; reconnect/slow eviction | B,A | PLANNED |
+| V13 / 2.1 | TestMemberSocketRemoval: outstanding tickets invalidated, consume/register race, Hub closes all affected sockets including last-human case; queued writers terminate; in-flight allowance documented; no per-frame barrier | B,A | PLANNED |
+| V14 / 2.2 | TestConversationPush: current members minus sender/muted, no-human denied, legacy capability lounge-only, >500 devices, expiry/reassignment, mute/revoke before retry, mixed-sender burst and trailing fairness | B,A | PLANNED |
+| V15 / 3.1 | conversation_cache_test.dart: attributable lounge import/unattributed quarantine, restart-safe migration, private data never in v1, account/server switch, UTC/tie/dedup and retention | C | PLANNED |
+| V16 / 3.1 | conversation_cursor_test.dart: merged versus per-group checkpoints, save before advance, history/live cannot skip gap, revision backfill, storage failure and stale-account callbacks | C | PLANNED |
+| V17 / 3.2 | conversation_ui_test.dart: lounge pinned/activity order, named/start picker/reuse, rename-clear/add/remove/leave/mute, Bot labels, offline/403/drafts, no stale switch results, first-frame/800px/keyboard | C | PLANNED |
+| V18 / 3.2 | conversation_unread_test.dart: server non-self count/read-watermark reconciliation, initial retained history, no replay double count, mute indicator, foreground-only read updates, stale offline badges | C | PLANNED |
+| V19 / 3.3 | member_background_test.dart: scope=member paging, separate merged/per-group secure cursors, own/muted suppression, revision on empty page, logout/server cleanup, no Hive, iOS no-FCM ntfy mode | C | PLANNED |
+| V20 / 4.1–4.2 | TestNtfyContract/Publisher: pinned synthetic server/relay ACL, generic body/no private metadata, TLS/topic/redirect errors, bounded timeout/429/5xx retry, disabled default, mapping revoke/mute | N,B | PLANNED |
+| V21 / 2.2,4.2 | TestProviderIndependence: provider failures cannot block Hub/undo commit, retry reauthorization, no replay push, config completeness and no credential output | B,A,N | PLANNED |
+| V22 / 5.1 | TestV200Privacy: actual old decoder/cache/background fixtures against real binary; lounge/A/B typed matrix, equal-time pages, old/new devices; forbidden canaries ABSENT and allowed messages PRESENT on every path | A,C | PLANNED |
+| V23 / 5.2 | TestR21Rollback: actual v2.0.0 rejects ahead, zero-group safe recovery + forward reapply; refuse one group human/bot message or channel replay row; isolated forced-old-read leak proof | R | PLANNED |
+| V24 / 5.2 | TestR21Restore: verified pre-upgrade dump restore loses post-backup data; old history/send works; unknown/dirty/partial schemas fail closed | R,B | PLANNED |
+| V25 / 5.3 | Full regression, module tidy clean, config/runbook/versions/pinned artifacts; backup→upgrade→lounge→groups procedure and release packaging | B,C,D,A,R,N,F | PLANNED |
+| V26 / owner | Protected ntfy topic/relay, physical locked iPhone, no duplicate FCM/local alerts | owner-checks.md | PLANNED |
+| V27 / owner | Firebase restrictions; LLDAP reader/group, proxy Authorization/X-Forwarded-Proto, trusted CIDRs before pilot | owner-checks.md | PLANNED |
 
-## Reproduction command families
+## Commands and evidence standard
 
-Use a new disposable project per run, never deploy/docker-compose.yml/live env.
-B: docker compose -p <scratch-project> -f deploy/verify.compose.yml run --rm -e TZ=UTC server
-and repeat with TZ=Asia/Kolkata. This runs go test -race -count=1 ./... and go vet
-against real PostgreSQL /verification. Generic fixture skips are reported separately.
-C: same project/compose, run --build --rm client (analyze/test/release web), then
-restore and web-smoke services. F: deploy/scripts/verify.ps1 or sh deploy/scripts/verify.sh.
-D: verify-bot-auth.ps1/.sh; A: verify-api-acceptance.ps1/.sh; R: verify-rollback.ps1/.sh.
-N: proposed verify-notifications.ps1/.sh to be added in story 4.2, with pinned
-synthetic ntfy and fake upstream; never point automated tests at the owner's service.
-Run dedicated A/D/R/N under both TZ values as well; scripts must propagate TZ to
-fixture/test containers explicitly (a host variable alone is insufficient).
+B: docker compose -p <scratch-project> -f deploy/verify.compose.yml run --rm -e TZ=UTC server;
+repeat with TZ=Asia/Kolkata. Runs go test -race -count=1 ./... and go vet with real
+PostgreSQL /verification. C: same scratch compose run --build --rm client for
+analyze/tests/web build, then restore/web-smoke. F: deploy/scripts/verify.ps1 or
+sh deploy/scripts/verify.sh. D: verify-bot-auth.ps1/.sh; A: verify-api-acceptance.ps1/.sh;
+R: verify-rollback.ps1/.sh. N: proposed verify-notifications.ps1/.sh in story 4.2.
+Scripts must explicitly pass TZ to test/fixture containers for A/D/R/N in both
+timezones; setting only host TZ is insufficient. No live Compose/env/volumes.
 
-The legacy privacy fixture must use source from tag v2.0.0, not a rewritten model
-of what an old client might do. Check the pinned source commit in the harness.
-Use actual server routing/OIDC and real PostgreSQL for persistence claims. Keep
-synthetic credentials in disposable fixtures; no external provider credentials.
-Owner real-device checks cannot be replaced with fake provider tests.
+Use actual tag v2.0.0 code for legacy client/rollback fixtures. Real PostgreSQL for
+persistence/reuse races; >=20 goroutines and -race. Real pinned LDAP for identity.
+Pinned synthetic ntfy/upstream for provider contract; physical delivery owner-only.
+Generic fixture skips are reported separately and dedicated harnesses must run.
 
-## This planning session
-
-Static checks and exact results are in log/2026-10-23-P0-plan.md. Full verify.ps1
-was attempted and failed before tests: Docker Desktop Linux engine pipe absent.
-Go and Flutter are not on PATH. **No Go/Flutter/timezone pass count claimed.**
-Dedicated integration/provider/rollback checks were not run for the same missing
-container engine; R2.1 fixtures do not exist yet. Planning PR CI can verify unchanged
-runtime baseline; it cannot prove any proposed R2.1 behavior. Request the scoped
-docs-only evidence exception in README; keep this PR draft until review resolves it.
+Docs-only planning evidence is APPROVED. No runtime suites are claimed this session;
+all R2.1 functionality remains unimplemented. Implementation must use working Docker,
+Go 1.27.1 and Flutter and stop before DONE when suites unavailable. This exception
+never carries from the planning PR into implementation. See the review log for
+current static validation and the initial log for the earlier failed Docker attempt.

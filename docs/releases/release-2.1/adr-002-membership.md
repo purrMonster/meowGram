@@ -1,59 +1,63 @@
-# ADR 002 — explicit memberships managed by human channel owners
+# ADR 002 — lounge + groups, human-managed, Teams-style reuse
 
-Status: PROPOSED, not an authorization to implement or provision accounts.
+Status: APPROVED by owner review of PR #51, 2026-10-23. Replaces the previous
+channel-owner proposal entirely. Implementation remains a later authorized step.
 
-| Option | Benefits | Trade-offs |
-|---|---|---|
-| A. Any authenticated human creates; channel owners manage (recommended) | Small household workflow; no new household-admin identity; matches existing proposal | Every human can create private channels; owner transfer and audit needed |
-| B. Household-admin-only API or CLI | Central control and minimal end-user management UI | Need configured immutable OIDC admin subjects, bootstrap/recovery policy and operator work for every change |
-| C. Channel membership from LLDAP groups | Reuses existing directory administration | Human OIDC subjects need trustworthy directory mapping; per-request directory dependencies, sync/revocation rules and external configuration expand scope |
+## Rights and lifecycle
 
-Choose A unless the owner wants centralized control. Basic bots can neither
-create/list/manage channels nor discover the household principal directory.
-Bot send/sync remains the only Basic surface, with the existing global LDAP group
-checked on every request and channel membership checked separately. A channel
-owner cannot grant LDAP eligibility or create credentials.
+Lounge is implicit/null, with no memberships/rename/delete. Groups use UUID IDs
+and human users.authelia_sub (text) or bot bot_principals.id (UUID) memberships.
+No grants by matching usernames/display labels. Current members read all retained
+history, including pre-join, and send. Bots additionally need fresh global LDAP
+eligibility. Creator provenance grants no special role.
 
-## Proposed rules
+Any human member may rename, add/remove humans or bots, and leave. Bots participate
+only; no group creation/management/principal lookup/initiation. No owner/admin
+roles, last-owner protection, audit rows, archive, hard deletion, invitations or
+block lists. Future bot initiation requires a separate AGENTS Basic-scope decision;
+future roles/archive must be additive, not built now.
 
-- Creator becomes a human owner atomically with channel creation. Members can
-  read all retained channel history, including before joining, and send. Removing
-  then re-adding restores history access; no time-limited membership semantics.
-- Owners add/remove existing typed principals, promote/demote human owners,
-  rename and archive their channel. Bots are members only. No implicit username
-  grants: human FK targets `users.authelia_sub` (text); bot FK targets
-  `bot_principals.id` (UUID). Equal strings/names across kinds stay distinct.
-- Protect the last human owner transactionally, including concurrent demotions,
-  leave and principal deletion. A deleted directory identity is not automatically
-  transferable to a recreated account. Lost-owner recovery is an explicit
-  operator procedure, never a public self-escalation endpoint.
-- Archive preserves rows and member reads, disables sends/invites, and permits
-  existing owners to remove members. Hard delete and unarchive UI are out of scope.
-- Lounge is implicit null: no membership row, no archive/delete/ownership, and
-  authenticated humans/eligible bots retain access. Removing a private-channel
-  membership does not remove lounge access.
-- Unknown well-formed IDs and nonmembership both return 403; malformed IDs 400.
-  Missing authentication remains 401. No empty-list substitute for a forbidden
-  specific channel. Owners are members too; every page/replay/send is authorized.
-- Membership audit is append-only application behavior: actor, typed target,
-  channel, operation and UTC time, without message bodies or credentials.
-  Preserve audit/membership data through down/up; last-owner constraints must not
-  be silently bypassed through FK cascades.
+Creation requires caller plus at least one distinct selected principal. To reconcile
+free leave with minimum creation size, validate >=2 at creation; subsequent removal
+may shrink a retained group. A surviving human keeps ordinary read/manage/send
+rights and can add others. If the last human leaves/is removed, keep all conversation,
+message and remaining bot rows but deny all group access, including bot sync/send/
+push. Invalidate every group ticket/socket then. No recovery UI. Concurrent last-human
+removals produce this inaccessible state, never a protected-last-owner error.
 
-## Minimal management surface
+## Exact-set reuse
 
-Proposed configurable route family: channel list/create; per-channel rename/archive;
-membership list/add/remove/role update; bounded human-only principal lookup for
-channel owners to select already provisioned IDs. List only the caller's channels;
-lookup returns only minimal typed identity/label and is rate-limited/audited.
-The owner-only lookup is a product choice in A, not a new anonymous directory.
-Reject Basic everywhere in this family, including alternate methods/aliases.
-Reuse OIDC and API budgets; never add local passwords/tokens.
+Start-chat has no name; normalize omitted/null/trimmed-empty name to unnamed where
+names are accepted. Caller is automatically included. Validate existing typed IDs,
+reject duplicate selections and require >=2 distinct final members.
 
-Bots can be resolved by a successful authenticated lounge sync without posting
-or by their existing principal record, then a human owner adds that ID. No bot
-provisioning UI or new live LLDAP operation is needed in the application.
+One transaction takes an advisory transaction lock over a canonical hash of the
+sorted typed set (length-delimited kind/id; preserve human sub, canonicalize bot
+UUID). Re-check current memberships and name IS NULL inside the lock; return exact
+match or atomically insert conversation and memberships. At least 20 simultaneous
+identical starts return one UUID and insert one group. Hash collisions only serialize
+unrelated operations; exact set comparison is authoritative.
 
-The minimal Flutter controls are create, member picker, add/remove/transfer and
-archive confirmation, visible only to eligible humans. Full administrative
-dashboards, invitations to unprovisioned identities and group mapping are deferred.
+Name/member mutations share that coordination: acquire old/new set-hash locks in
+deterministic order, then conversation-row lock, re-read and retry if the observed
+set changed. Start-chat rechecks candidate rows after locking. Test bounded retries,
+deadlocks and start/create racing rename/remove/add. No schema uniqueness on sets.
+
+Named creation always creates fresh, including identical sets. Naming an unnamed
+group removes it from matching; clearing the name makes it matchable again.
+Membership changes change its next match. If history of edits produces several
+unnamed matches, choose earliest (created_at,id) deterministically; do not merge,
+delete or rewrite them. Concurrent future starts choose that same match.
+
+## Personal state and schema
+
+Human user-state keyed by account and conversation stores muted=false and read
+watermark (UTC timestamp/UUID). Handle null-lounge uniqueness with partial indexes
+or equivalent, not ordinary NULL uniqueness. Mute suppresses provider/local alerts,
+not unread counting or read/send rights. Read markers advance monotonically; reject
+future/cross-conversation IDs. Bots never use these management/state endpoints.
+
+No cascade silently deletes messages or memberships. Explicit removal deletes only
+the requested membership. Restrict deletion of referenced principals/conversations;
+review inherited user-deletion assertions to document the intentional new restriction.
+Migrations are additive, partial/repeated-up/down-up safe and non-destructive down.

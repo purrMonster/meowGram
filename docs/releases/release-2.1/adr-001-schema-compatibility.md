@@ -1,6 +1,6 @@
 # ADR 001 — fail closed on unknown database versions
 
-Status: PROPOSED; owner decision required before migration 000007.
+Status: APPROVED by owner review of PR #51, 2026-10-23. No bypass/force switch.
 
 ## Evidence and options
 
@@ -12,11 +12,11 @@ its own bundled migrations. Dirty state must always fail closed.
 
 | Option | Benefit | Cost / risk |
 |---|---|---|
-| A. Reject ahead/dirty/unknown schemas (recommended) | No claim of compatibility without evidence; retains current safety | Recovery needs a tested version-specific procedure or restore |
+| A. Reject ahead/dirty/unknown schemas (APPROVED) | No claim of compatibility without evidence; retains current safety | Recovery needs a tested version-specific procedure or restore |
 | B. Allow only an explicit tested schema range/compatibility manifest | Can support selected adjacent versions | Every read/write/auth path needs compatibility proof; old v2.0.0 cannot acquire this policy retroactively |
 | C. Environment switch to skip migrations when ahead | Fast operator escape hatch | Unknown constraints and unfiltered old readers can expose data; reject |
 
-Recommendation A: retain rejection, improve sanitized version diagnostics if needed.
+Approved option A: retain rejection, improve sanitized version diagnostics if needed.
 No generic force/reset/ignore-version setting. New migrations stay additive,
 partial/repeated-up safe and non-destructive down; those properties alone do not
 prove semantic compatibility. Pin the actual candidate and v2.0.0 source/image
@@ -26,7 +26,7 @@ identities in the future harness, not a mock of migration failure.
 
 The old `GetRecent` and `GetMessagesAfter` select all messages, without channel
 authorization. Old push selects all active device tokens. Even one non-null
-channel message makes old reads unsafe, regardless of archived channels, disabled
+channel message makes old reads unsafe, regardless of group names, disabled
 bots, absent memberships or whether a client currently displays that channel.
 Bot rows themselves are compatible with v2.0.0; R2's zero-bot rule was for v1.1.0.
 
@@ -37,7 +37,7 @@ This is not authorized SQL or a proven recovery procedure today. It requires:
 
 1. Owner-approved procedure and a verified pre-upgrade backup/off-node restore.
 2. Actual-binary tests of old human/bot sends, replay and all read paths against
-   the new constraints/defaults, including retained memberships/audits/ntfy config.
+   the new constraints/defaults, including retained memberships, mute/read state and ntfy config.
 3. Quiesced atomic preconditions; no mixed old/new servers or background workers.
 4. Preserve R2-compatible lounge fingerprints for new null-channel sends;
    retain existing response bytes. No deletion or rewriting to meet the guard.
@@ -61,3 +61,5 @@ message, and isolated demonstration that forced old reads would leak that fixtur
 Prove restore removes post-backup changes, then old login/history/send still work.
 Test dirty, partially applied, unknown and missing migration states in both timezones.
 Write exact guarded owner steps only after these tests pass; no recovery claim now.
+
+Rollout: verified backup → upgrade → verify lounge on old/new clients → only then use groups. Keep the zero-group-message rollback window explicit. No live rollout or migration files in this revision.
