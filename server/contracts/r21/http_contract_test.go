@@ -26,6 +26,7 @@ func TestHTTPContract(t *testing.T) {
 	base := loopbackURL(t, "R21_CONTRACT_URL")
 	control := loopbackURL(t, "R21_CONTRACT_CONTROL_URL")
 	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	var denialBody []byte
 	for _, f := range load(t) {
 		t.Run(f.ID, func(t *testing.T) {
 			// Seed controller resets all state AND issues synthetic auth for each case.
@@ -64,6 +65,13 @@ func TestHTTPContract(t *testing.T) {
 			}
 			if resp.StatusCode != f.Status {
 				t.Fatalf("status=%d want=%d (response omitted)", resp.StatusCode, f.Status)
+			}
+			if f.Status == http.StatusForbidden {
+				if denialBody == nil {
+					denialBody = append([]byte(nil), body...)
+				} else if !bytes.Equal(denialBody, body) {
+					t.Error("403 response bytes differ across denied/unknown groups or routes")
+				}
 			}
 			for k, v := range f.Headers {
 				if resp.Header.Get(k) != v {
