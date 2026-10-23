@@ -4,8 +4,12 @@ These are owner-run commands for an authorized maintenance window on cellar,
 not evidence of deployment. Run from the checked-out release repository in a
 POSIX shell. No live step has been run by the agent. Keep the same Compose project,
 database volume and gitignored env files as the existing installation. Resolve
-the owner checks before starting. The candidate is 2.0.0+4, tag **v2.0.0**;
-the image version is **2.0.0**, and must actually have been published first.
+the owner checks before starting. The release is 2.0.0+4, tag **v2.0.0**;
+image version **2.0.0** was published and verified on 2026-10-23 IST. See
+[runbook §14.2](../../../runbook.md#142-r2-publication-verified-2026-10-23-ist)
+for registry digests and release evidence. Verify access from cellar before
+stopping writers. The GitHub installer release remains draft; deployment and
+the bot pilot have not been performed.
 
 ## 1. Backup, off-node copy, and verify the actual dump
 

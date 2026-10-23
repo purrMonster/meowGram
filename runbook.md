@@ -1739,9 +1739,41 @@ The [image inspection](docs/releases/release-2/image-inspection.md) records the
 local amd64 candidates, complete layer/history/config inspection and its limits;
 these are not deployed GHCR digests. No image or tag was published by that run.
 
-Remaining gates: merge this fold into epic 2.5; merge epic 2.5 into release/r2;
-verify the integrated release and open release/r2 → main as DRAFT. Do not mark
-it ready automatically. Owner/Claude review precedes release merge and the
-owner's v2.0.0 tag. Package access, real-dump verification, deployment and the
-pourOver pilot are separate owner steps, all still NOT RUN. Basic stays false.
+Completed gates: the owner merged #47 (doc-fold), #48 (epic → release) and
+#49 (release → main). The annotated v2.0.0 tag was published with owner approval
+at main commit be15cec6ceed2cb4a21b69cfe5e4548d2bfd818c. Publication evidence is
+recorded below. Cellar package access, real-dump verification, deployment and the
+pourOver pilot remain separate owner steps, all still NOT RUN. Basic stays false.
 R2.1 channels/startup compatibility policy remain planning; R3 media stays deferred.
+
+### 14.2 R2 publication verified (2026-10-23 IST)
+
+[Release workflow 39834547253](https://github.com/purrMonster/meowGram/actions/runs/39834547253)
+completed all eight jobs successfully: version, verify, server image, web image,
+Android, Windows, Apple and release. The tag matches pubspec 2.0.0+4. The verify
+job ran Go, PostgreSQL, restore, Flutter and web checks; this is CI evidence,
+not a new local UTC/IST run. The earlier two-timezone evidence remains in the
+verification matrix and release PR #49.
+
+Both GHCR images were published for linux/amd64 and linux/arm64. Registry
+inspection matched the image job logs. These are multi-platform index digests,
+not local image IDs or proof of which image cellar runs:
+
+| Image | Published index digest |
+|---|---|
+| ghcr.io/purrmonster/meowgram-server:2.0.0 | `sha256:cca1dab2a7e54f8274cbf28d14a2632aab8cfa9aaa59ac1287b591373eae9010` |
+| ghcr.io/purrmonster/meowgram-web:2.0.0 | `sha256:fef3726e421410225266539f0242ab777ecdd4374f2f697776571bf3d1125251` |
+
+The GitHub Release for v2.0.0 is still **draft**, with four uploaded installers
+(APK, Windows EXE, unsigned macOS DMG and unsigned iOS IPA) and SHA256SUMS.txt.
+All four downloaded files matched the checksum file. This verifies download
+integrity, not installation on physical devices. The successful tag-triggered
+Android job used the release-signing path; Apple packages retain their documented
+unsigned/re-signing requirements. Publishing the draft is a separate owner action.
+
+Next: follow [rollout.md](docs/releases/release-2/rollout.md) in order: verify
+cellar's package access; back up/copy off-node/restore-check the real dump;
+preserve pre-r2 image IDs; pull version 2.0.0; smoke-test human messaging; record
+the pulled digests. Keep BOT_BASIC_AUTH_ENABLED=false until the separate bot
+checks and pilot are authorized. The schema-version rollback restrictions in
+§14 still apply; an old-image redeploy alone is not recovery.
