@@ -45,15 +45,15 @@ No implementation branch below exists by authorization from this session.
 |---|---|
 | docs/r2.1-plan (existing #51) | original origin/main e094dfa / main |
 | release/r2.1 (after authorization) | updated origin/main / main |
-| feat/r2.1-epic-1-conversations | release/r2.1 |
+| feat/r2.1-epic-1-channels | release/r2.1 |
 | feat/r2.1-epic-2-delivery | release/r2.1 |
 | feat/r2.1-epic-3-client | release/r2.1 |
 | feat/r2.1-epic-4-ntfy | release/r2.1 |
 | test/r2.1-epic-5-verification | release/r2.1 |
-| docs/ust-2.1.1.1-contracts | feat/r2.1-epic-1-conversations |
-| feat/ust-2.1.1.2-schema | feat/r2.1-epic-1-conversations |
-| feat/ust-2.1.1.3-conversations | feat/r2.1-epic-1-conversations |
-| feat/ust-2.1.1.4-message-api | feat/r2.1-epic-1-conversations |
+| docs/ust-2.1.1.1-contracts | feat/r2.1-epic-1-channels |
+| feat/ust-2.1.1.2-schema | feat/r2.1-epic-1-channels |
+| feat/ust-2.1.1.3-conversations | feat/r2.1-epic-1-channels |
+| feat/ust-2.1.1.4-message-api | feat/r2.1-epic-1-channels |
 | feat/ust-2.1.2.1-sockets | feat/r2.1-epic-2-delivery |
 | feat/ust-2.1.2.2-push | feat/r2.1-epic-2-delivery |
 | feat/ust-2.1.3.1-cache | feat/r2.1-epic-3-client |
