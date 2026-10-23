@@ -1,13 +1,13 @@
 # R2.1 owner checks — revised draft
 
-All checks **PLANNED**, not performed. Product/process decisions in README/ADRs
+O1 container baseline **PASS** on 2026-10-23; all live checks remain **PLANNED**. Product/process decisions in README/ADRs
 are already APPROVED and must not be asked again. No live changes this session.
 Each check <=15 minutes hands-on; restore/CI may need unattended time. Keep actual
 domains/subjects/topics/tokens and sensitive screenshots private.
 
 | Check | Procedure / expected result | Time | Status |
 |---|---|---|---|
-| O1 Environment | Before implementation, confirm working Docker, Go 1.27.1 and Flutter in owner's R2 environment; run required suites in both timezones. If unavailable, stop before implementation DONE. | 10 min | PLANNED |
+| O1 Environment | Approved Docker toolchain: Go 1.27.1 and Flutter 3.44.4 containers; host SDKs not required. Both timezones and all required suites passed; commands/digests in [kickoff log](log/2026-10-23-P0-kickoff.md). | 10 min | PASS 2026-10-23 |
 | O2 ntfy inventory | Supply exact server/image digest and iOS app version for first contract spike; review upstream version/config. Fixture pinned, no assumption of latest. | 5 min | PLANNED |
 | O3 ntfy protection | Owner sets publisher write-only and each user's topic read-only; deny anonymous. Synthetic own-topic read succeeds, other-user read/write fails. Inspect generic alert and relay metadata exposure; credentials stay host-local. | 15 min | PLANNED |
 | O4 iPhone | Configure separate ntfy iOS app, lock phone, send authorized lounge/group messages with meowGram stopped. Generic alert arrives; ntfy mode registers no FCM or duplicate local alert. Test network outage/recovery, record latency without SLA claim. | 15 min | PLANNED |

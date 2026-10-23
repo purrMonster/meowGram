@@ -1,8 +1,8 @@
 # R2.1 delivery plan — approved product, implementation not started
 
 Revised after owner review of #51, 2026-10-23. All implementation stories PLANNED.
-P0 revision remains docs/r2.1-plan → main; STOP after updating #51. No new branch
-layer or migration file this session.
+P0 plan #51 is merged. Owner-authorized kickoff created the six integration refs;
+see merge-queue.md and log/2026-10-23-P0-kickoff.md. No integration commits.
 
 ## Stories and binary Done checks
 
@@ -39,12 +39,12 @@ implementation is included in these estimates. No live provisioning/console work
 
 All parents are also PR targets except the explicitly stated planning origin.
 Fetch first, use latest owner-merged remote parent; never rebase/force pushed history.
-No implementation branch below exists by authorization from this session.
+Integration refs below were published once at 1f39e07 during approved kickoff.
 
 | Branch | Parent / PR target |
 |---|---|
 | docs/r2.1-plan (existing #51) | original origin/main e094dfa / main |
-| release/r2.1 (after authorization) | updated origin/main / main |
+| release/r2.1 | updated origin/main / main |
 | feat/r2.1-epic-1-channels | release/r2.1 |
 | feat/r2.1-epic-2-delivery | release/r2.1 |
 | feat/r2.1-epic-3-client | release/r2.1 |

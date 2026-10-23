@@ -5,6 +5,8 @@ on main 1f39e07; see log/2026-10-23-P0-kickoff.md. Host SDKs are not required.
 
 1. #52 docs/r2.1-kickoff → release/r2.1 | merge after nothing |
    records baseline, archive restriction and branch hierarchy.
+2. #53 docs/ust-2.1.1.1-contracts → feat/r2.1-epic-1-channels | merge after nothing |
+   freezes executable HTTP fixtures; unblocks UST-2.1.1.2 after owner merge.
 
 ## Published integration branch map
 
@@ -20,7 +22,7 @@ No direct integration commits or subsequent agent pushes permitted.
 | feat/r2.1-epic-4-ntfy | release/r2.1 |
 | test/r2.1-epic-5-verification | release/r2.1 |
 | docs/r2.1-kickoff | release/r2.1 |
-| docs/ust-2.1.1.1-contracts (next) | feat/r2.1-epic-1-channels |
+| docs/ust-2.1.1.1-contracts | feat/r2.1-epic-1-channels |
 
 The owner's kickoff naming supersedes the earlier epic-1-conversations name.
 rescue/feat/tabbytally-review-integration is archive-only, NEVER a merge/PR source.
