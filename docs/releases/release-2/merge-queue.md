@@ -6,12 +6,12 @@ branch is renamed or deleted. Do not merge epic 2.1/2.2 into release/r2.
 
 ## R2 queue and dependencies
 
-Completed: #34–#46 are owner-merged. Identity and epic 2.4 API are integrated
-in release/r2 at e74a1de. Epic 2.5 readiness is merged at b9bfc99.
+Completed: #34–#49 are owner-merged. #47 folded epic 2.5 docs, #48 integrated
+release/r2 at 20f8af3, and #49 integrated main at be15cec. Owner-authorized
+v2.0.0 points to be15cec; the release workflow succeeded and published both GHCR
+images. The installer GitHub Release remains draft. No rollout performed.
 
-1. #47 docs/r2-epic-2.5-runbook → test/r2-epic-2.5-verification | after merged #46 | folds acceptance/readiness logs and refreshes release status; STOP for owner merge.
-2. test/r2-epic-2.5-verification → release/r2 | after doc-fold merge | integrates API verification, GHCR and recovery; STOP for owner merge.
-3. release/r2 → main as DRAFT | after API release gates | 2.0.0+4 release version; owner/Claude review; never mark ready automatically. No live changes.
+1. docs/r2-release-publication → main | after merged #49 | records publication verification and current rollout gates; owner merge required. This is a standalone post-release documentation update from current main.
 
 Merge updated remote parents INTO task branches, never rebase/force-push.
 Preserve directory AND bot-auth CI jobs ahead of verify, retain chronological
