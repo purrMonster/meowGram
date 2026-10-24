@@ -20,17 +20,29 @@ type fixture struct {
 	Headers        map[string]string `json:"headers"`
 	Expect         expectation       `json:"expect"`
 	Implementation string            `json:"implementation"`
+	IdempotencyKey string            `json:"idempotency_key"`
+	Setup          []requestStep     `json:"setup"`
+}
+
+type requestStep struct {
+	Method         string `json:"method"`
+	Path           string `json:"path"`
+	Body           string `json:"body"`
+	Actor          string `json:"actor"`
+	Status         int    `json:"status"`
+	IdempotencyKey string `json:"idempotency_key"`
 }
 type expectation struct {
-	JSON               map[string]any `json:"json"`
-	Fields             map[string]any `json:"fields"`
-	RequiredFields     []string       `json:"required_fields"`
-	ArrayScope         string         `json:"array_scope"`
-	RequiredRowFields  []string       `json:"required_row_fields"`
-	ForbiddenRowFields []string       `json:"forbidden_row_fields"`
-	Nonempty           bool           `json:"nonempty"`
-	Empty              bool           `json:"empty"`
-	MembershipVersion  bool           `json:"membership_version"`
+	JSON              map[string]any `json:"json"`
+	Fields            map[string]any `json:"fields"`
+	RequiredFields    []string       `json:"required_fields"`
+	AllowedFields     []string       `json:"allowed_fields"`
+	ArrayScope        string         `json:"array_scope"`
+	RequiredRowFields []string       `json:"required_row_fields"`
+	AllowedRowFields  []string       `json:"allowed_row_fields"`
+	Nonempty          bool           `json:"nonempty"`
+	Empty             bool           `json:"empty"`
+	MembershipVersion bool           `json:"membership_version"`
 }
 
 func load(t *testing.T) []fixture {
@@ -89,6 +101,20 @@ func TestFixtureIntegrity(t *testing.T) {
 			}
 			if f.Status == 403 && (len(f.Expect.JSON) != 2 || f.Expect.JSON["error"] != "forbidden" || f.Expect.JSON["message"] != "request not permitted") {
 				t.Fatal("403 existence oracle")
+			}
+			for _, step := range f.Setup {
+				if step.Actor != "human-member" && step.Actor != "human-peer" {
+					t.Fatal("unknown setup actor")
+				}
+				if step.Status != 201 && step.Status != 204 {
+					t.Fatal("setup must succeed before replay assertion")
+				}
+				if step.Method == http.MethodPost && (step.Path != "/api/messages" || step.IdempotencyKey == "" || step.IdempotencyKey != f.IdempotencyKey || !json.Valid([]byte(step.Body))) {
+					t.Fatal("setup must seed same replay key with valid send")
+				}
+				if step.Method != http.MethodPost && step.Method != http.MethodDelete {
+					t.Fatal("unsupported setup method")
+				}
 			}
 		})
 	}

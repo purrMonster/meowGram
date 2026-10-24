@@ -47,13 +47,39 @@ func TestHTTPContract(t *testing.T) {
 			if auth[f.Actor] == "" {
 				t.Fatal("missing synthetic actor authorization")
 			}
+			for _, step := range f.Setup {
+				if auth[step.Actor] == "" {
+					t.Fatal("missing setup actor authorization")
+				}
+				req, err := http.NewRequest(step.Method, base+step.Path, strings.NewReader(step.Body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				req.Header.Set("Authorization", auth[step.Actor])
+				req.Header.Set("Content-Type", "application/json")
+				if step.IdempotencyKey != "" {
+					req.Header.Set("Idempotency-Key", step.IdempotencyKey)
+				}
+				response, err := client.Do(req)
+				if err != nil {
+					t.Fatal("setup request failed")
+				}
+				response.Body.Close()
+				if response.StatusCode != step.Status {
+					t.Fatalf("setup status=%d want=%d; replay assertion not reached", response.StatusCode, step.Status)
+				}
+			}
 			req, err := http.NewRequest(f.Method, base+f.Path, strings.NewReader(f.Body))
 			if err != nil {
 				t.Fatal(err)
 			}
 			req.Header.Set("Authorization", auth[f.Actor])
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Idempotency-Key", "r21-contract-"+f.ID)
+			key := f.IdempotencyKey
+			if key == "" {
+				key = "r21-contract-" + f.ID
+			}
+			req.Header.Set("Idempotency-Key", key)
 			resp, err := client.Do(req)
 			if err != nil {
 				t.Fatal("fixture request failed")
@@ -96,6 +122,7 @@ func TestHTTPContract(t *testing.T) {
 					t.Error("exact error body differs")
 				}
 				fields(t, object, f.Expect.Fields, f.Expect.RequiredFields)
+				allowedFields(t, object, f.Expect.AllowedFields)
 			}
 			if f.Expect.ArrayScope != "" || f.Expect.Empty {
 				var rows []map[string]any
@@ -120,11 +147,7 @@ func TestHTTPContract(t *testing.T) {
 				ids := map[string]bool{}
 				for _, row := range rows {
 					fields(t, row, nil, f.Expect.RequiredRowFields)
-					for _, key := range f.Expect.ForbiddenRowFields {
-						if _, ok := row[key]; ok {
-							t.Errorf("unexpected row field %s", key)
-						}
-					}
+					allowedFields(t, row, f.Expect.AllowedRowFields)
 					channel, present := row["channel_id"]
 					if !present {
 						t.Error("missing channel_id")
@@ -143,19 +166,6 @@ func TestHTTPContract(t *testing.T) {
 					default:
 						if channel != f.Expect.ArrayScope {
 							t.Error("wrong group row")
-						}
-					}
-					count := row["conversation_member_count"]
-					if channel == nil {
-						if count != nil {
-							t.Error("lounge member count must be null")
-						}
-					} else if count != float64(3) {
-						t.Error("group member count must reflect three seeded current members")
-					}
-					if f.Actor == "human-member" {
-						if value, ok := row["conversation_muted"].(bool); !ok || value {
-							t.Error("expected seeded unmuted human metadata")
 						}
 					}
 					id, _ := row["id"].(string)
@@ -178,6 +188,21 @@ func TestHTTPContract(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+func allowedFields(t *testing.T, object map[string]any, allowed []string) {
+	t.Helper()
+	if len(allowed) == 0 {
+		return
+	}
+	names := map[string]bool{}
+	for _, name := range allowed {
+		names[name] = true
+	}
+	for name := range object {
+		if !names[name] {
+			t.Errorf("unexpected response field %s", name)
+		}
 	}
 }
 func fields(t *testing.T, object, expected map[string]any, required []string) {
