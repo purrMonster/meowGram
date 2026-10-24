@@ -1,10 +1,10 @@
 ---
 project: meowGram
 status: active
-status_reason: v2.0.0 (bot message API) is tagged and its images are published; R2.1 (lounge + groups) is planned and its kickoff/contract PRs are open
+status_reason: R2 is on main and v2.0.0 images are published; R2.1 kickoff and contract fixtures await owner merges
 resume_trigger: n/a
 last_activity: 2026-10-23
-last_reviewed: 2026-10-23
+last_reviewed: 2026-10-25
 repo: https://github.com/purrMonster/meowGram
 related: ["[[purrbrews]]", "[[pourover]]"]
 tags: [project]
@@ -13,49 +13,54 @@ tags: [project]
 # meowGram
 
 ## What it is
-A private cat-lounge chat for the purrBrews household: one shared lounge today,
-plus an authenticated HTTP message API so bots (first: pourOver) can read and post.
-Stack: Flutter client (web, Android, iOS, Windows, macOS) · Go WebSocket/API server ·
-PostgreSQL · Authelia OIDC (bots: LLDAP-checked Basic Auth) · Docker Compose behind Traefik.
+
+A private household chat with an offline-first lounge and authenticated bot messaging.
+Flutter on web, Android, iOS, Windows and macOS; Go API/WebSockets; PostgreSQL;
+Authelia OIDC for people, LLDAP-checked Basic Auth for bots; Docker deployment.
+See the [overview](README.md) and [current design](runbook.md).
 
 ## Current state
+
 | Area | State | Evidence |
 |---|---|---|
-| Code | Built: R1 chat + R2 bot message API on main; R2.1 not started (planning only) | [runbook §13.9](runbook.md#139-integrated-message-api-epic-24-2026-10-21), [R2.1 README](docs/releases/release-2.1/README.md) |
-| Release | v2.0.0: tag at `be15cec`; GHCR `meowgram-server:2.0.0` + `meowgram-web:2.0.0` published (amd64/arm64); GitHub Release v2.0.0 is still a **draft** (installers + checksums uploaded) | [runbook §14.2](runbook.md#142-r2-publication-verified-2026-10-23-ist), [release run 39834547253](https://github.com/purrMonster/meowGram/actions/runs/39834547253) |
-| Deployment | v2.0.0 **not deployed**: rollout record reads NOT DEPLOYED / NOT PULLED; `BOT_BASIC_AUTH_ENABLED=false`. What currently runs, and where, is unknown (see Questions) | [rollout.md deployment record](docs/releases/release-2/rollout.md), [runbook §14.2](runbook.md#142-r2-publication-verified-2026-10-23-ist) |
-| Tests / CI | Passing on main `1f39e07`: Scratch verification + CodeQL (2026-10-23) | [Scratch verification run](https://github.com/purrMonster/meowGram/actions/runs/39950662187), [CodeQL run](https://github.com/purrMonster/meowGram/actions/runs/39950662033) |
+| Code | Built: R2 chat/bot API on main. R2.1 lounge + groups approved; contract fixtures in review, runtime implementation pending | [runbook §13.9](runbook.md#139-integrated-message-api-epic-24-2026-10-21), [plan](docs/releases/release-2.1/README.md), [#53](https://github.com/purrMonster/meowGram/pull/53) |
+| Release | v2.0.0 tag at `be15cec`; server/web GHCR images published for amd64/arm64. GitHub Release remains draft (checked 2026-10-25) | [publication record and digests](runbook.md#142-r2-publication-verified-2026-10-23-ist), [release workflow](https://github.com/purrMonster/meowGram/actions/runs/39834547253) |
+| Deployment | Current deployment unknown; the dated runbook leaves R2 rollout and bot pilot unverified | [runbook §14.2](runbook.md#142-r2-publication-verified-2026-10-23-ist), [unfilled rollout record](docs/releases/release-2/rollout.md) |
+| Tests / CI | Passing main `f008947`: Scratch verification and CodeQL. Contract-branch local regression is recorded separately; fixture integrity is not runtime compliance | [Scratch CI](https://github.com/purrMonster/meowGram/actions/runs/39989607036), [CodeQL](https://github.com/purrMonster/meowGram/actions/runs/39989606862), [#53](https://github.com/purrMonster/meowGram/pull/53) |
 
 ## Open points
-1. **R2 rollout (owner):** cellar package access → real dump, off-node copy, isolated
-   restore check → keep pre-r2 image IDs → pull 2.0.0 → smoke human messaging → record
-   digests. [rollout.md](docs/releases/release-2/rollout.md)
-2. **Publish the draft GitHub Release v2.0.0** (owner action; v1.1.0 is also still draft). [runbook §14.2](runbook.md#142-r2-publication-verified-2026-10-23-ist)
-3. **Bot pilot:** R2 owner checks, then enable Basic Auth and run the pourOver pilot.
-   [owner-checks.md](docs/releases/release-2/owner-checks.md)
-4. **Review/merge open R2.1 PRs:** #52 `docs/r2.1-kickoff` → `release/r2.1`; #53
-   `docs/ust-2.1.1.1-contracts` → `feat/r2.1-epic-1-channels` (unblocks UST-2.1.1.2).
-   [R2.1 merge queue on #52's branch](https://github.com/purrMonster/meowGram/blob/docs/r2.1-kickoff/docs/releases/release-2.1/merge-queue.md)
-5. **R2.1 owner checks O1–O16** all PLANNED (O1 marked verified on #52's branch, not on main).
-   [owner-checks.md](docs/releases/release-2.1/owner-checks.md)
-6. **Stale docs:** AGENTS.md §3 says it runs on roastery and §4 "Known gaps" date from
-   1.0.1; runbook header says v1.21.0 / "await owner merges", now superseded by §14.2.
-   [AGENTS.md](AGENTS.md), [runbook header](runbook.md)
-7. **Recovery limit:** once any bot message exists, old-image rollback is forbidden;
-   only fix-forward or full restore. [runbook §14](runbook.md#14-r2-release-readiness-and-ghcr-rollout-2026-10-22)
+
+- Triage 5 open dependency alerts (2 critical, 2 high, 1 low; checked 2026-10-25). [Dependabot](https://github.com/purrMonster/meowGram/security/dependabot)
+- Owner merge [#52](https://github.com/purrMonster/meowGram/pull/52) (kickoff), then review amended [#53](https://github.com/purrMonster/meowGram/pull/53) (78 contract fixtures); schema story UST-2.1.1.2 follows. [Queue](https://github.com/purrMonster/meowGram/blob/62926eae11cb4099fd7d08da05918a1d4a6e38d9/docs/releases/release-2.1/merge-queue.md)
+- Implement the remaining [R2.1 stories](docs/releases/release-2.1/delivery-plan.md); tagged HTTP replay needs the disposable seed adapter and server implementation before it can prove compliance.
+- R2 rollout, real backup/restore, deployment digests and bot pilot need owner evidence; publishing the draft release is separate. [Rollout](docs/releases/release-2/rollout.md), [owner checks](docs/releases/release-2/owner-checks.md)
+- O1 container baseline is recorded in #52; remaining live/device checks stay pending. [Kickoff evidence](https://github.com/purrMonster/meowGram/blob/62926eae11cb4099fd7d08da05918a1d4a6e38d9/docs/releases/release-2.1/log/2026-10-23-P0-kickoff.md), [R2.1 checks](docs/releases/release-2.1/owner-checks.md)
+- Reconcile older deployment descriptions with a dated owner record; AGENTS §3 and the newer rollout name different hosts. [AGENTS](AGENTS.md), [rollout](docs/releases/release-2/rollout.md)
 
 ## Branches
-- `release/r2.1`, `feat/r2.1-epic-1-channels`, `feat/r2.1-epic-2-delivery`,
-  `feat/r2.1-epic-3-client`, `feat/r2.1-epic-4-ntfy`, `test/r2.1-epic-5-verification`:
-  R2.1 integration layers, all still at main `1f39e07`. Active, empty by design.
-- `docs/r2.1-kickoff`: PR #52, records baseline and branch map. Active.
-- `docs/ust-2.1.1.1-contracts`: PR #53, frozen HTTP fixtures. Active.
-- `rescue/docs/ust-2.1.0-immich-contract`: 2 docs commits (Immich media contract, 2026-10-18), no PR. Looks like a preserved copy for R3; stale until R3.
-- `rescue/feat/tabbytally-review-integration`: 6 commits (pourOver/tabbyTally integration notes plus code, 2026-10-21), no PR. Looks stale; its migrations appear superseded by main.
-- Fully merged into main, safe-looking to delete (owner decides): `chore/r2-verification-parent-sync`,
-  `docs/r2-release-publication`, `feat/ust-2.4.2-http-send-idempotency`, `feat/ust-2.4.3-bot-sync-example`.
+
+Remote inventory checked 2026-10-25; merged means ancestor of main, not deletion approval.
+
+- `release/r2.1`: active release integration at `1f39e07`; awaits #52, no direct commits.
+- `feat/r2.1-epic-1-channels`: active epic 1 integration at `1f39e07`; #53 targets it.
+- `feat/r2.1-epic-2-delivery`: active, empty integration at `1f39e07`; depends on epic 1.
+- `feat/r2.1-epic-3-client`: active, empty integration at `1f39e07`; dependencies in plan.
+- `feat/r2.1-epic-4-ntfy`: active, empty integration at `1f39e07`; version inventory needed.
+- `test/r2.1-epic-5-verification`: active, empty integration at `1f39e07`; final verification.
+- `docs/r2.1-kickoff`: active #52; baseline, branch map and rescue decisions.
+- `docs/ust-2.1.1.1-contracts`: active #53; amended contract fixtures, no runtime changes.
+- `docs/project-card`: active card update; earlier card merged as #54, this revision targets main.
+- `chore/r2-verification-parent-sync`: merged into main; stale R2 integration work.
+- `docs/r2-release-publication`: merged into main; stale publication-evidence branch.
+- `feat/ust-2.4.2-http-send-idempotency`: merged into main; stale completed R2 story.
+- `feat/ust-2.4.3-bot-sync-example`: merged into main; stale completed R2 story.
+- `rescue/docs/ust-2.1.0-immich-contract`: retained duplicate of merged #32; owner says leave it, no action.
+- `rescue/feat/tabbytally-review-integration`: ARCHIVE ONLY; never merge/PR into meowGram (000006 migration collision).
+
+Rescue restrictions: [owner decision log](https://github.com/purrMonster/meowGram/blob/62926eae11cb4099fd7d08da05918a1d4a6e38d9/docs/releases/release-2.1/log/2026-10-23-P0-kickoff.md). `origin/docs/r2.1-plan` is only a stale local tracking ref; absent remotely.
 
 ## Key decisions
+
 - 2026-10-07 · Claude review → 1.0.1 hardening (mandatory `aud`/`exp`, no real domains, loopback ports) · [runbook §12.9](runbook.md#129-release-101-resolution)
 - 2026-10-17 · Release → epic → task branch layers, owner merges every layer · [runbook §13.2](runbook.md#132-release-branch-hierarchy-2026-10-17), [AGENTS.md §1](AGENTS.md)
 - 2026-10-18 · Bot accounts may use Basic Auth on send/sync only, validated against LLDAP · [runbook §13.4](runbook.md#134-bot-authentication-gate-ust-232)
@@ -66,26 +71,23 @@ PostgreSQL · Authelia OIDC (bots: LLDAP-checked Basic Auth) · Docker Compose b
 - 2026-10-23 · Fail-closed startup when DB schema is ahead of the binary · [ADR 001](docs/releases/release-2.1/adr-001-schema-compatibility.md)
 
 ## How to resume
-1. Orient: AGENTS.md → [R2 AGENT_PLAYBOOK](docs/releases/release-2/AGENT_PLAYBOOK.md) → runbook §14 → `git log -20` → open PRs.
-2. Owner: run the R2 rollout on cellar per [rollout.md](docs/releases/release-2/rollout.md) and fill its deployment record.
-3. Owner: review and merge #52, then #53.
-4. Agent: start UST-2.1.1.2 (`feat/ust-2.1.1.2-schema` from `feat/r2.1-epic-1-channels`) per the [R2.1 delivery plan](docs/releases/release-2.1/delivery-plan.md); needs Docker, Go 1.27.1 and Flutter (O1).
+
+1. Read [AGENTS](AGENTS.md), [playbook §1](docs/releases/release-2/AGENT_PLAYBOOK.md), [R2.1 translations](docs/releases/release-2.1/README.md) and newest logs; fetch, inspect status/branches and open PRs.
+2. Owner merges #52 and corrected #53. Fetch again, then branch `feat/ust-2.1.1.2-schema` from `origin/feat/r2.1-epic-1-channels`; PR back to that epic. Follow the [delivery plan](docs/releases/release-2.1/delivery-plan.md) and actual [queue](https://github.com/purrMonster/meowGram/blob/62926eae11cb4099fd7d08da05918a1d4a6e38d9/docs/releases/release-2.1/merge-queue.md).
+3. Use Docker: Go `golang:1.27.1`, pinned Flutter `3.44.4`; host SDKs unnecessary. Run verify scripts, both Go timezones and dedicated harnesses; record counts/skips/digests. [Approved environment](https://github.com/purrMonster/meowGram/blob/62926eae11cb4099fd7d08da05918a1d4a6e38d9/docs/releases/release-2.1/log/2026-10-23-P0-kickoff.md)
 
 ## Decisions to remake
-- **Deploy R2 before building R2.1?** R2.1 is estimated at 26.5–40 days, while v2.0.0
-  and the pourOver pilot are not live yet. Shipping R2 first gives real feedback and
-  a clean backup baseline (R2.1 O11–O13 assume it). [R2.1 README](docs/releases/release-2.1/README.md)
-- **Where meowGram runs:** AGENTS.md §3 (roastery, local builds) and the R2 rollout
-  (cellar, GHCR pulls) disagree; settle it and update AGENTS.md §3 before the next rollout.
-- **Rescue branches:** keep, PR or delete; they predate the current scope split.
+
+- Revisit the earlier pourOver prefix assumption before its handoff: message rows no longer carry member count, and bots still cannot list conversations. [Owner-corrected contract in #53](https://github.com/purrMonster/meowGram/blob/docs/ust-2.1.1.1-contracts/docs/releases/release-2.1/api-contract.md)
 
 ## Questions for Roastmaster
-- What runs in production right now (v1.1.0? something else?) and on which host, roastery or cellar? No dated runbook entry confirms either.
-- Should the draft GitHub Releases (v1.1.0, v2.0.0) be published, or are they intentionally kept as drafts?
-- Are the two `rescue/*` branches still needed? Was the Immich contract merged anywhere that still exists?
-- Can the four fully merged branches be deleted?
-- Is O1 (environment) verified on main, or only on #52's branch?
-- Is the R2 bot pilot (pourOver) still planned before R2.1 work starts?
+
+- Which version and host currently run production? The dated rollout record is unfilled.
+- Should the draft v2.0.0 GitHub Release be published now or remain draft?
+- Which ntfy server/iOS versions should the contract spike pin? [O2](docs/releases/release-2.1/owner-checks.md)
+- How should pourOver decide its two-member prefix behavior without message-row counts or bot conversation-list access?
 
 ## Card history
+
 - 2026-10-23 · created by Claude (Opus 5.5)
+- 2026-10-25 · updated by Codex
