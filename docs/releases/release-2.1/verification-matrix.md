@@ -1,12 +1,12 @@
 # R2.1 verification matrix — revised planning draft
 
-Owner-reviewed model, 2026-10-23. **All rows PLANNED**. Names are proposed tests,
-not existing pass claims. Replace with real names/results at implementation;
+Owner-reviewed model, 2026-10-23. V01 verified 2026-10-25; other rows remain
+PLANNED and their names are proposed tests, not existing pass claims. Replace with real names/results at implementation;
 no PLANNED automated row at release readiness. R2 historical results stay separate.
 
 | ID / story | Required binary result / proposed test | Command | Status |
 |---|---|---|---|
-| V01 / 1.2 | TestConversationMigration: legacy rows/keys unchanged; partial/repeated up and migrate down/up; typed FKs, per-kind uniqueness, null personal-state uniqueness, no silent message/member cascades | B | PLANNED |
+| V01 / 1.2 | TestConversationMigrationFresh/LegacyAndDownUp/RepeatedUp/PartialPrefixes/Constraints/DeleteSemantics: legacy binary column bytes and reads unchanged; 24 DDL prefixes; typed/unique FKs; null lounge-state uniqueness; owner-approved human cascades and bot/conversation RESTRICT | B | PASS 2026-10-25: 56 cases in each timezone; [evidence](log/2026-10-25-UST-2.1.1.2.md) |
 | V02 / 1.3 | TestHumanGroupManagement: any member rename/add/remove/leave; Basic denied; no-human group denies every path; surviving-human shrink; no roles/audit/archive routes | B,A | PLANNED |
 | V03 / 1.3 | TestStartChatReuse: >=20 identical starts one group; typed exact current set; named always fresh; clear/rename/member edits race safely; duplicate unnamed matches deterministic; no set unique constraint | B,A | PLANNED |
 | V04 / 1.3 | TestConversationListPicker: lounge first, last-activity order/ties, accurate bounded member summary, 403 nonmember, paging/minimal picker, Basic isolation, invalid/duplicate input and path encoding | B,A | PLANNED |
