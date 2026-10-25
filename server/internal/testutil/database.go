@@ -11,10 +11,18 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 )
 
 func Database(t *testing.T) (*sql.DB, *migrate.Migrate, string) {
+	t.Helper()
+	return DatabaseThrough(t, 0)
+}
+
+// DatabaseThrough bounds historical migration tests; zero uses every migration.
+func DatabaseThrough(t *testing.T, last int) (*sql.DB, *migrate.Migrate, string) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -54,6 +62,28 @@ func Database(t *testing.T) (*sql.DB, *migrate.Migrate, string) {
 	root, err = filepath.Abs(root)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if last > 0 {
+		bounded := t.TempDir()
+		files, err := os.ReadDir(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			prefix, _, ok := strings.Cut(file.Name(), "_")
+			version, err := strconv.Atoi(prefix)
+			if file.IsDir() || !ok || err != nil || version > last {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(root, file.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(filepath.Join(bounded, file.Name()), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		root = bounded
 	}
 	m, err := migrate.New((&url.URL{Scheme: "file", Path: filepath.ToSlash(root)}).String(), u.String())
 	if err != nil {

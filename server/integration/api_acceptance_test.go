@@ -393,9 +393,25 @@ func TestAPIEndToEnd(t *testing.T) {
 		expect(201, "POST", "/api/messages", "human", "", "human-after-outage", `{"text_content":"human after outage"}`)
 	})
 	t.Run("startup_migrations_clean", func(t *testing.T) {
+		// Inspect the same directory shipped to the real binary in this image.
+		files, err := filepath.Glob("/migrations/*.up.sql")
+		if err != nil || len(files) == 0 {
+			t.Fatal("missing shipped migrations")
+		}
+		var expected int
+		for _, file := range files {
+			prefix, _, ok := strings.Cut(filepath.Base(file), "_")
+			v, err := strconv.Atoi(prefix)
+			if !ok || err != nil {
+				t.Fatal("invalid shipped migration name")
+			}
+			if v > expected {
+				expected = v
+			}
+		}
 		var version int
 		var dirty bool
-		if db.QueryRow(`SELECT version,dirty FROM schema_migrations`).Scan(&version, &dirty) != nil || version != 6 || dirty {
+		if db.QueryRow(`SELECT version,dirty FROM schema_migrations`).Scan(&version, &dirty) != nil || version != expected || dirty {
 			t.Fatal("startup migration state wrong")
 		}
 	})
