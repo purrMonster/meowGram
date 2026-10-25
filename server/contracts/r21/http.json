@@ -1,0 +1,1403 @@
+{
+  "version": 1,
+  "source": "docs/releases/release-2.1/api-contract.md (owner review of PR #53 supersedes message metadata in earlier plan)",
+  "seed": "lounge-and-groups-v1",
+  "cases": [
+    {
+      "id": "sync-legacy-lounge",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z",
+      "body": "",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "array_scope": "lounge",
+        "required_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "nonempty": true,
+        "allowed_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-group",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=11111111-1111-4111-8111-111111111111",
+      "body": "",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "array_scope": "11111111-1111-4111-8111-111111111111",
+        "required_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "nonempty": true,
+        "allowed_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-member",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&scope=member",
+      "body": "",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "array_scope": "member",
+        "membership_version": true,
+        "required_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "nonempty": true,
+        "allowed_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-bot-member",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&scope=member",
+      "body": "",
+      "actor": "bot-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "array_scope": "member",
+        "required_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "membership_version": true,
+        "nonempty": true,
+        "allowed_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-member-empty",
+      "method": "GET",
+      "path": "/api/messages/sync?after=2099-01-01T00%3A00%3A00Z&scope=member",
+      "body": "",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "empty": true,
+        "membership_version": true
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-selector-conflict",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=11111111-1111-4111-8111-111111111111&scope=member",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-repeat-channel",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=11111111-1111-4111-8111-111111111111&channel_id=11111111-1111-4111-8111-111111111111",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-repeat-scope",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&scope=member&scope=member",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-null-channel",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=null",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-malformed-channel",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=bad",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-empty-channel",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-empty-scope",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&scope=",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-unknown-scope",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&scope=all",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-repeat-after",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&after=1970-01-01T00%3A00%3A00Z",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-repeat-after-id",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&after_id=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&after_id=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "body": "",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-denied",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=22222222-2222-4222-8222-222222222222",
+      "body": "",
+      "actor": "human-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "message": "request not permitted",
+          "error": "forbidden"
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "send-denied",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"22222222-2222-4222-8222-222222222222\"}",
+      "actor": "human-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "message": "request not permitted",
+          "error": "forbidden"
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-unknown",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=33333333-3333-4333-8333-333333333333",
+      "body": "",
+      "actor": "human-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "message": "request not permitted",
+          "error": "forbidden"
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "send-unknown",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"33333333-3333-4333-8333-333333333333\"}",
+      "actor": "human-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "message": "request not permitted",
+          "error": "forbidden"
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "sync-no-human",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=44444444-4444-4444-8444-444444444444",
+      "body": "",
+      "actor": "human-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "message": "request not permitted",
+          "error": "forbidden"
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "send-no-human",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"44444444-4444-4444-8444-444444444444\"}",
+      "actor": "human-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "message": "request not permitted",
+          "error": "forbidden"
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "send-legacy-lounge",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\"}",
+      "actor": "human-member",
+      "status": 201,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "channel_id": null,
+          "sender_kind": "human"
+        },
+        "required_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "allowed_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "send-null-lounge",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":null}",
+      "actor": "human-member",
+      "status": 201,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "channel_id": null
+        },
+        "required_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "allowed_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "send-group",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"11111111-1111-4111-8111-111111111111\"}",
+      "actor": "human-member",
+      "status": 201,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "channel_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "required_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "allowed_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "send-bot-group",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"11111111-1111-4111-8111-111111111111\"}",
+      "actor": "bot-member",
+      "status": 201,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "channel_id": "11111111-1111-4111-8111-111111111111",
+          "sender_kind": "bot"
+        },
+        "required_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "allowed_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "send-literal-null",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"null\"}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "send-malformed",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"bad\"}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "send-empty",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"\"}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "send-number",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":42}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "send-duplicate-field",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":null,\"channel_id\":null}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "send-unknown-field",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"scope\":\"member\"}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "send-spoofed-sender",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"sender_id\":\"someone-else\"}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "list",
+      "method": "GET",
+      "path": "/api/conversations",
+      "body": "",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "required_fields": [
+          "conversations",
+          "next_cursor"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "create-named",
+      "method": "POST",
+      "path": "/api/conversations",
+      "body": "{\"name\":\"Fixture group\",\"members\":[{\"kind\":\"human\",\"id\":\"fixture-peer\"}]}",
+      "actor": "human-member",
+      "status": 201,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "kind": "group",
+          "name": "Fixture group"
+        },
+        "required_fields": [
+          "channel_id",
+          "member_summary",
+          "last_activity_at",
+          "unread_count",
+          "muted"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "start-chat",
+      "method": "POST",
+      "path": "/api/conversations/start-chat",
+      "body": "{\"members\":[{\"kind\":\"human\",\"id\":\"fixture-peer\"}]}",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "required_fields": [
+          "conversation",
+          "created"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "start-name-rejected",
+      "method": "POST",
+      "path": "/api/conversations/start-chat",
+      "body": "{\"name\":\"x\",\"members\":[{\"kind\":\"human\",\"id\":\"fixture-peer\"}]}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "create-alone",
+      "method": "POST",
+      "path": "/api/conversations",
+      "body": "{\"name\":\"alone\",\"members\":[]}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "create-duplicate-members",
+      "method": "POST",
+      "path": "/api/conversations",
+      "body": "{\"name\":\"x\",\"members\":[{\"kind\":\"human\",\"id\":\"fixture-peer\"},{\"kind\":\"human\",\"id\":\"fixture-peer\"}]}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "rename",
+      "method": "PATCH",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111",
+      "body": "{\"name\":\"Renamed\"}",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "name": "Renamed"
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "clear-name",
+      "method": "PATCH",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111",
+      "body": "{\"name\":null}",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "name": null
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "trim-name",
+      "method": "PATCH",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111",
+      "body": "{\"name\":\"  \"}",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "name": null
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "members",
+      "method": "GET",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/members",
+      "body": "",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "required_fields": [
+          "members",
+          "next_cursor"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "add-member",
+      "method": "POST",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/members",
+      "body": "{\"kind\":\"human\",\"id\":\"fixture-peer\"}",
+      "actor": "human-member",
+      "status": 204,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "remove-member",
+      "method": "DELETE",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/members/human/fixture-peer",
+      "body": "",
+      "actor": "human-member",
+      "status": 204,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "leave",
+      "method": "POST",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/leave",
+      "body": "",
+      "actor": "human-member",
+      "status": 204,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "mute-lounge",
+      "method": "PUT",
+      "path": "/api/conversations/lounge/mute",
+      "body": "{\"muted\":true}",
+      "actor": "human-member",
+      "status": 204,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "read-lounge",
+      "method": "PUT",
+      "path": "/api/conversations/lounge/read",
+      "body": "{\"message_id\":\"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\"}",
+      "actor": "human-member",
+      "status": 204,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "mute-11111111-1111-4111-8111-111111111111",
+      "method": "PUT",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/mute",
+      "body": "{\"muted\":true}",
+      "actor": "human-member",
+      "status": 204,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "read-11111111-1111-4111-8111-111111111111",
+      "method": "PUT",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/read",
+      "body": "{\"message_id\":\"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\"}",
+      "actor": "human-member",
+      "status": 204,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "picker",
+      "method": "GET",
+      "path": "/api/principals?q=fixture",
+      "body": "",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "required_fields": [
+          "principals",
+          "next_cursor"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "ticket-empty",
+      "method": "POST",
+      "path": "/api/ws-ticket",
+      "body": "",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "expires_in": 30
+        },
+        "required_fields": [
+          "ticket"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "ticket-group",
+      "method": "POST",
+      "path": "/api/ws-ticket",
+      "body": "{\"channel_id\":\"11111111-1111-4111-8111-111111111111\"}",
+      "actor": "human-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "fields": {
+          "expires_in": 30
+        },
+        "required_fields": [
+          "ticket"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "ticket-null-literal",
+      "method": "POST",
+      "path": "/api/ws-ticket",
+      "body": "{\"channel_id\":\"null\"}",
+      "actor": "human-member",
+      "status": 400,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-list",
+      "method": "GET",
+      "path": "/api/conversations",
+      "body": "",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-create-named",
+      "method": "POST",
+      "path": "/api/conversations",
+      "body": "{\"name\":\"Fixture group\",\"members\":[{\"kind\":\"human\",\"id\":\"fixture-peer\"}]}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-start-chat",
+      "method": "POST",
+      "path": "/api/conversations/start-chat",
+      "body": "{\"members\":[{\"kind\":\"human\",\"id\":\"fixture-peer\"}]}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-rename",
+      "method": "PATCH",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111",
+      "body": "{\"name\":\"Renamed\"}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-clear-name",
+      "method": "PATCH",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111",
+      "body": "{\"name\":null}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-trim-name",
+      "method": "PATCH",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111",
+      "body": "{\"name\":\"  \"}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-members",
+      "method": "GET",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/members",
+      "body": "",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-add-member",
+      "method": "POST",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/members",
+      "body": "{\"kind\":\"human\",\"id\":\"fixture-peer\"}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-remove-member",
+      "method": "DELETE",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/members/human/fixture-peer",
+      "body": "",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-leave",
+      "method": "POST",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/leave",
+      "body": "",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-mute-lounge",
+      "method": "PUT",
+      "path": "/api/conversations/lounge/mute",
+      "body": "{\"muted\":true}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-read-lounge",
+      "method": "PUT",
+      "path": "/api/conversations/lounge/read",
+      "body": "{\"message_id\":\"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\"}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-mute-11111111-1111-4111-8111-111111111111",
+      "method": "PUT",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/mute",
+      "body": "{\"muted\":true}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-read-11111111-1111-4111-8111-111111111111",
+      "method": "PUT",
+      "path": "/api/conversations/11111111-1111-4111-8111-111111111111/read",
+      "body": "{\"message_id\":\"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\"}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-picker",
+      "method": "GET",
+      "path": "/api/principals?q=fixture",
+      "body": "",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-ticket-empty",
+      "method": "POST",
+      "path": "/api/ws-ticket",
+      "body": "",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "basic-denied-ticket-group",
+      "method": "POST",
+      "path": "/api/ws-ticket",
+      "body": "{\"channel_id\":\"11111111-1111-4111-8111-111111111111\"}",
+      "actor": "bot-member",
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending"
+    },
+    {
+      "id": "replay-different-channel",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"55555555-5555-4555-8555-555555555555\"}",
+      "actor": "human-member",
+      "status": 409,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending",
+      "idempotency_key": "r21-replay-different-channel",
+      "setup": [
+        {
+          "path": "/api/messages",
+          "idempotency_key": "r21-replay-different-channel",
+          "status": 201,
+          "body": "{\"text_content\":\"fixture\",\"channel_id\":\"11111111-1111-4111-8111-111111111111\"}",
+          "method": "POST",
+          "actor": "human-member"
+        }
+      ]
+    },
+    {
+      "id": "replay-different-text",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"changed\",\"channel_id\":\"11111111-1111-4111-8111-111111111111\"}",
+      "actor": "human-member",
+      "status": 409,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {},
+      "implementation": "pending",
+      "idempotency_key": "r21-replay-different-text",
+      "setup": [
+        {
+          "path": "/api/messages",
+          "idempotency_key": "r21-replay-different-text",
+          "status": 201,
+          "body": "{\"text_content\":\"fixture\",\"channel_id\":\"11111111-1111-4111-8111-111111111111\"}",
+          "method": "POST",
+          "actor": "human-member"
+        }
+      ]
+    },
+    {
+      "id": "replay-unauthorized-requested-channel",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"changed\",\"channel_id\":\"22222222-2222-4222-8222-222222222222\"}",
+      "actor": "human-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "error": "forbidden",
+          "message": "request not permitted"
+        }
+      },
+      "implementation": "pending",
+      "idempotency_key": "r21-replay-unauthorized-requested-channel",
+      "setup": [
+        {
+          "path": "/api/messages",
+          "idempotency_key": "r21-replay-unauthorized-requested-channel",
+          "status": 201,
+          "body": "{\"text_content\":\"fixture\",\"channel_id\":\"11111111-1111-4111-8111-111111111111\"}",
+          "method": "POST",
+          "actor": "human-member"
+        }
+      ]
+    },
+    {
+      "id": "replay-unauthorized-stored-channel",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\"}",
+      "actor": "human-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "error": "forbidden",
+          "message": "request not permitted"
+        }
+      },
+      "implementation": "pending",
+      "idempotency_key": "r21-replay-unauthorized-stored-channel",
+      "setup": [
+        {
+          "path": "/api/messages",
+          "idempotency_key": "r21-replay-unauthorized-stored-channel",
+          "status": 201,
+          "body": "{\"text_content\":\"fixture\",\"channel_id\":\"11111111-1111-4111-8111-111111111111\"}",
+          "method": "POST",
+          "actor": "human-member"
+        },
+        {
+          "status": 204,
+          "method": "DELETE",
+          "body": "",
+          "path": "/api/conversations/11111111-1111-4111-8111-111111111111/members/human/fixture-member",
+          "actor": "human-peer"
+        }
+      ]
+    },
+    {
+      "id": "bot-nonmember-sync",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z&channel_id=22222222-2222-4222-8222-222222222222",
+      "body": "",
+      "actor": "bot-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "error": "forbidden",
+          "message": "request not permitted"
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "bot-nonmember-send",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\",\"channel_id\":\"22222222-2222-4222-8222-222222222222\"}",
+      "actor": "bot-member",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "json": {
+          "error": "forbidden",
+          "message": "request not permitted"
+        }
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "bot-send-legacy-lounge",
+      "method": "POST",
+      "path": "/api/messages",
+      "body": "{\"text_content\":\"fixture\"}",
+      "actor": "bot-member",
+      "status": 201,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "allowed_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "fields": {
+          "sender_kind": "bot",
+          "channel_id": null
+        },
+        "required_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ]
+      },
+      "implementation": "pending"
+    },
+    {
+      "id": "bot-sync-legacy-lounge",
+      "method": "GET",
+      "path": "/api/messages/sync?after=1970-01-01T00%3A00%3A00Z",
+      "body": "",
+      "actor": "bot-member",
+      "status": 200,
+      "headers": {
+        "Cache-Control": "no-store"
+      },
+      "expect": {
+        "allowed_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "array_scope": "lounge",
+        "required_row_fields": [
+          "id",
+          "sender_id",
+          "sender_kind",
+          "username",
+          "text_content",
+          "created_at",
+          "channel_id"
+        ],
+        "nonempty": true
+      },
+      "implementation": "pending"
+    }
+  ]
+}
