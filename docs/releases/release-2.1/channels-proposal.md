@@ -44,7 +44,9 @@ Add conversations(id UUID, name nullable, created_at UTC, created_by typed);
 typed memberships with exactly one human-sub/bot-ID FK, kind check and per-kind
 unique indexes; per-human mute/read state including implicit lounge; nullable
 messages.channel_id FK and (channel_id,created_at,id) indexes. No membership row for
-lounge. No cascade silently deletes messages or memberships. Preserve all existing
+lounge. Owner refinement (2026-10-25): human deletion cascades their memberships
+and state, with existing R2 sender-message deletion unchanged; bot/conversation
+references restrict deletion (ADR 002). Preserve all existing
 IDs/times/history/keys and response bytes. No roles/audit/archive fields now.
 Future roles/archive/bot initiation stay additive, not implemented.
 

@@ -51,7 +51,7 @@ No implementation branch below exists by authorization from this session.
 | feat/r2.1-epic-4-ntfy | release/r2.1 |
 | test/r2.1-epic-5-verification | release/r2.1 |
 | docs/ust-2.1.1.1-contracts | feat/r2.1-epic-1-conversations |
-| feat/ust-2.1.1.2-schema | feat/r2.1-epic-1-conversations |
+| feat/ust-2.1.1.2-schema | feat/r2.1-epic-1-channels (owner-authorized spelling; started from 3c03772) |
 | feat/ust-2.1.1.3-conversations | feat/r2.1-epic-1-conversations |
 | feat/ust-2.1.1.4-message-api | feat/r2.1-epic-1-conversations |
 | feat/ust-2.1.2.1-sockets | feat/r2.1-epic-2-delivery |
