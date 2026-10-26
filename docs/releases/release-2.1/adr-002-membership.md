@@ -57,7 +57,10 @@ or equivalent, not ordinary NULL uniqueness. Mute suppresses provider/local aler
 not unread counting or read/send rights. Read markers advance monotonically; reject
 future/cross-conversation IDs. Bots never use these management/state endpoints.
 
-No cascade silently deletes messages or memberships. Explicit removal deletes only
-the requested membership. Restrict deletion of referenced principals/conversations;
-review inherited user-deletion assertions to document the intentional new restriction.
+Owner refinement, 2026-10-25: deleting a human cascades only their memberships
+and personal state, preserving the existing R2 sender-message deletion behavior.
+Bot and conversation references use RESTRICT. Creator kind/id is retained
+provenance without a live-principal FK, so creator deletion cannot erase a group
+or block human deletion. Explicit member removal deletes only that membership.
+See the [schema story log](log/2026-10-25-UST-2.1.1.2.md) for the owner decision.
 Migrations are additive, partial/repeated-up/down-up safe and non-destructive down.

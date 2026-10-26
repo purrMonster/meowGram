@@ -14,7 +14,9 @@ FROM postgres:16-alpine
 COPY --from=previous-build /previous-server /previous-server
 COPY --from=previous-build /src/migrations /previous-migrations
 COPY --from=current-build /current-server /rollback.test /
-COPY server/migrations /current-migrations
+# R2 boundary only (v1.1.0 <-> v2.0.0): retain migrations 1-6 and all five
+# recovery assertions. The v2.0.0 <-> R2.1 boundary belongs to UST-2.1.5.2.
+COPY server/migrations/00000[1-6]_*.sql /current-migrations/
 USER postgres
 ENV MEOWGRAM_DISPOSABLE_ROLLBACK=1
 ENTRYPOINT ["/rollback.test", "-test.v", "-test.run=^TestReleaseRollback$", "-test.timeout=120s"]

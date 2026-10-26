@@ -11,7 +11,8 @@ import (
 )
 
 func TestIdempotencyMigrationRollbackAndPartialReapply(t *testing.T) {
-	db, m, root := testutil.Database(t)
+	// This regression proves the 5 -> 6 boundary, even after new schemas ship.
+	db, m, root := testutil.DatabaseThrough(t, 6)
 	if err := m.Migrate(5); err != nil {
 		t.Fatal(err)
 	}
