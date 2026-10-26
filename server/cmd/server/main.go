@@ -165,6 +165,8 @@ func main() {
 		logger.Error("Failed to configure message send route", "error", err)
 		os.Exit(1)
 	}
+	handler.RegisterConversationRoutes(mux, cfg.ConversationsEndpoint, cfg.PrincipalsEndpoint, repository.NewConversationRepository(db), authMiddleware)
+
 	// Global Middleware chain: RequestLogger -> CORS -> Mux
 	var rootHandler http.Handler = mux
 	rootHandler = middleware.GlobalRateLimit(ratelimit.New(cfg.RateLimits.GlobalPerMinute, cfg.RateLimits.GlobalBurst), cfg.HealthEndpoint)(rootHandler)
