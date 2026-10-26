@@ -3,7 +3,10 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"meowgram/server/internal/auth"
+	"meowgram/server/internal/config"
+	"meowgram/server/internal/middleware"
 	"meowgram/server/internal/model"
 	"meowgram/server/internal/repository"
 	"net/http"
@@ -122,5 +125,80 @@ func TestConversationAliasesRetainDefaults(t *testing.T) {
 		if w.Code != 200 || s.calls != 1 {
 			t.Fatalf("status=%d calls=%d", w.Code, s.calls)
 		}
+	}
+}
+
+func TestConversationBasicGuardBeforeCORS(t *testing.T) {
+	const origin = "https://client.example.home.arpa"
+	for _, path := range []string{"/api/conversations", "/api/conversations/start-chat", "/api/principals", "/custom/conversations", "/custom/conversations/group/members", "/custom/principals"} {
+		for _, basic := range []bool{true, false} {
+			t.Run(path+fmt.Sprint(basic), func(t *testing.T) {
+				called := false
+				next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true; w.WriteHeader(202) })
+				handler := ConversationBasicGuard(middleware.CORS(&config.Config{CORSOrigins: []string{origin}})(next), "/custom/conversations", "/custom/principals")
+				req := httptest.NewRequest("OPTIONS", path, nil)
+				req.Header.Set("Origin", origin)
+				req.Header.Set("Access-Control-Request-Method", "POST")
+				req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type")
+				if basic {
+					req.Header.Set("Authorization", "bAsIc invalid")
+				}
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, req)
+				want := 204
+				if basic {
+					want = 401
+				}
+				if w.Code != want || called {
+					t.Fatalf("status=%d next=%v", w.Code, called)
+				}
+				if w.Header().Get("Cache-Control") != "no-store" {
+					t.Fatal("missing no-store")
+				}
+				if !basic && w.Header().Get("Access-Control-Allow-Origin") != origin {
+					t.Fatal("genuine browser preflight changed")
+				}
+			})
+		}
+	}
+	for _, path := range []string{"/api/messages", "/api/conversations-other", "/custom/principals-extra"} {
+		for _, method := range []string{"OPTIONS", "GET"} {
+			t.Run(path+method, func(t *testing.T) {
+				next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(202) })
+				h := ConversationBasicGuard(middleware.CORS(&config.Config{})(next), "/custom/conversations", "/custom/principals")
+				req := httptest.NewRequest(method, path, nil)
+				req.SetBasicAuth("fixture", "fixture")
+				w := httptest.NewRecorder()
+				h.ServeHTTP(w, req)
+				want := 202
+				if method == "OPTIONS" {
+					want = 204
+				}
+				if w.Code != want || w.Header().Get("Cache-Control") != "" {
+					t.Fatalf("unrelated route changed: %d", w.Code)
+				}
+			})
+		}
+	}
+}
+
+func TestConversationUnicodeAliasEscapedPath(t *testing.T) {
+	store := &conversationStub{}
+	mux := http.NewServeMux()
+	RegisterConversationRoutes(mux, "/api/会話", "/api/人", store, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r = r.WithContext(context.WithValue(r.Context(), auth.UserContextKey, &model.User{AutheliaSub: "verified"}))
+			next.ServeHTTP(w, r)
+		})
+	})
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/%E4%BC%9A%E8%A9%B1", nil))
+	if w.Code != 200 || store.calls != 1 {
+		t.Fatalf("unicode list status=%d calls=%d", w.Code, store.calls)
+	}
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("DELETE", "/api/%E4%BC%9A%E8%A9%B1/11111111-1111-1111-1111-111111111111/members/human/issuer%2Fsubject%25value", nil))
+	if w.Code != 204 || store.target.ID != "issuer/subject%value" {
+		t.Fatalf("unicode member status=%d target=%+v", w.Code, store.target)
 	}
 }

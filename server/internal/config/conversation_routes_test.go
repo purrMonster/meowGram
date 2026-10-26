@@ -9,6 +9,8 @@ func TestConversationEndpointValidation(t *testing.T) {
 	}{
 		{"/api/conversations", "/api/principals", "/api/messages", false},
 		{"/custom/chats", "/custom/people", "/api/messages", false},
+		{"/api/conversations", "/api/principals", "/api/%63onversations", true},
+		{"/api/conversations", "/api/principals", "/api/{route}", true},
 		{"/api/conversations/alias", "/api/principals", "/api/messages", true},
 		{"/api", "/api/principals", "/api/messages", true},
 		{"/custom", "/custom/people", "/api/messages", true},

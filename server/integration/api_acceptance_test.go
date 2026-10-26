@@ -415,4 +415,5 @@ func TestAPIEndToEnd(t *testing.T) {
 			t.Fatal("startup migration state wrong")
 		}
 	})
+	managementAcceptance(t, issuer.URL, signingKey, httpClient, ingress.URL, db)
 }

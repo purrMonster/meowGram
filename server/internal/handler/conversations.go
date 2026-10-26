@@ -44,23 +44,38 @@ func RegisterConversationRoutes(mux *http.ServeMux, conversations, principals st
 			}
 			seen[root] = true
 			inner := human(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { serveConversation(w, r, root, group.picker, store) }))
-			guarded := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Cache-Control", "no-store")
-				for _, value := range r.Header.Values("Authorization") {
-					fields := strings.Fields(value)
-					if len(fields) > 0 && strings.EqualFold(fields[0], "Basic") {
-						writeSyncJSONError(w, 401, "unauthorized", "bearer authentication required")
-						return
-					}
-				}
-				inner.ServeHTTP(w, r)
-			})
+			guarded := ConversationBasicGuard(inner, conversations, principals)
 			mux.Handle(root, guarded)
 			mux.Handle(root+"/", guarded)
 		}
 	}
 }
 
+// ConversationBasicGuard must wrap CORS so a Basic-authenticated OPTIONS request
+// cannot bypass the human-only contract through preflight handling. Genuine
+// browser preflights carry no Authorization header and continue unchanged.
+func ConversationBasicGuard(next http.Handler, conversations, principals string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		protected := false
+		for _, root := range []string{"/api/conversations", "/api/principals", conversations, principals} {
+			if root != "" && (r.URL.Path == root || strings.HasPrefix(r.URL.Path, root+"/")) {
+				protected = true
+				break
+			}
+		}
+		if protected {
+			w.Header().Set("Cache-Control", "no-store")
+			for _, value := range r.Header.Values("Authorization") {
+				fields := strings.Fields(value)
+				if len(fields) > 0 && strings.EqualFold(fields[0], "Basic") {
+					writeSyncJSONError(w, 401, "unauthorized", "bearer authentication required")
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 func serveConversation(w http.ResponseWriter, r *http.Request, root string, picker bool, store ConversationStore) {
 	user, ok := auth.UserFromContext(r.Context())
 	if !ok || user == nil {
@@ -77,7 +92,7 @@ func serveConversation(w http.ResponseWriter, r *http.Request, root string, pick
 		writeSyncJSONError(w, 405, "method_not_allowed", "method not allowed")
 		return false
 	}
-	suffix := strings.TrimPrefix(r.URL.EscapedPath(), root)
+	suffix := strings.TrimPrefix(r.URL.EscapedPath(), (&url.URL{Path: root}).EscapedPath())
 	var parts []string
 	if suffix != "" {
 		if !strings.HasPrefix(suffix, "/") {

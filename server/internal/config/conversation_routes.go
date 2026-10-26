@@ -9,6 +9,13 @@ import (
 
 // ValidateConversationEndpoints protects the complete default and alias subtrees.
 func ValidateConversationEndpoints(conversations, principals string, reserved ...string) error {
+	// ServeMux interprets escapes and wildcard patterns at registration. Require
+	// literal canonical reserved paths too, so overlap checks cannot be bypassed.
+	for _, route := range reserved {
+		if strings.ContainsAny(route, "%?#{}*\\") || path.Clean(route) != route || strings.IndexFunc(route, unicode.IsSpace) >= 0 || strings.IndexFunc(route, unicode.IsControl) >= 0 {
+			return errors.New("reserved endpoints must be canonical literal paths")
+		}
+	}
 	roots := []string{"/api/conversations", "/api/principals", conversations, principals}
 	for i, a := range roots {
 		if a == "/" || !strings.HasPrefix(a, "/") || strings.HasSuffix(a, "/") || path.Clean(a) != a || strings.ContainsAny(a, "%?#{}*\\") || strings.IndexFunc(a, unicode.IsSpace) >= 0 || strings.IndexFunc(a, unicode.IsControl) >= 0 {
