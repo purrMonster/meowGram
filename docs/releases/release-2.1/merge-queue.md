@@ -5,7 +5,10 @@ Only the owner merges. Updated 2026-10-26 for approved fast-track sequencing.
 1. [#56](https://github.com/purrMonster/meowGram/pull/56)
    feat/ust-2.1.1.2-schema → feat/r2.1-epic-1-channels | merge after nothing |
    unblocks UST-2.1.1.3; additive schema and passing migration/regression evidence.
-2. [#57](https://github.com/purrMonster/meowGram/pull/57)
+2. [#58](https://github.com/purrMonster/meowGram/pull/58)
+   feat/ust-2.1.1.3-conversations → feat/r2.1-epic-1-channels | stacked on #56 |
+   merge after #56 and Claude review; unblocks UST-2.1.1.4 (may stack immediately).
+3. [#57](https://github.com/purrMonster/meowGram/pull/57)
    docs/ust-2.1.4.1-ntfy-contract → feat/r2.1-epic-4-ntfy | merge after nothing |
    independent pinned provider spike; publisher still waits for epic 2 via release.
 
