@@ -1,10 +1,13 @@
 # R2.1 merge queue
 
-Only the owner merges. Updated 2026-10-25 for epic 1's schema story.
+Only the owner merges. Updated 2026-10-26 for approved fast-track sequencing.
 
 1. [#56](https://github.com/purrMonster/meowGram/pull/56)
    feat/ust-2.1.1.2-schema → feat/r2.1-epic-1-channels | merge after nothing |
    unblocks UST-2.1.1.3; additive schema and passing migration/regression evidence.
+2. [#57](https://github.com/purrMonster/meowGram/pull/57)
+   docs/ust-2.1.4.1-ntfy-contract → feat/r2.1-epic-4-ntfy | merge after nothing |
+   independent pinned provider spike; publisher still waits for epic 2 via release.
 
 Completed prerequisites, verified before branching:
 - #51 approved plan → main.
@@ -12,6 +15,7 @@ Completed prerequisites, verified before branching:
 - #53 frozen contracts → feat/r2.1-epic-1-channels (3c03772).
 - #55 PROJECT.md → main (76f722a); no main/sibling commits imported into this task.
 
-Current task started from remote epic 1 at 3c03772. No implementation commits
-on integration branches; no history rewritten. STOP after publishing #56 for
-owner review; UST-2.1.1.3 has not started.
+UST-2.1.1.3 starts from #56 at 84493e4 under owner-approved same-epic stacking;
+its PR targets feat/r2.1-epic-1-channels and requires Claude review before merge.
+After #56 merges, merge the updated epic into the task (no rebase/force), verify,
+then push. No implementation commits on integration branches.

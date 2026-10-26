@@ -1,16 +1,17 @@
 # R2.1 verification matrix — revised planning draft
 
-Owner-reviewed model, 2026-10-23. V01 verified 2026-10-25; other rows remain
+Owner-reviewed model, 2026-10-23. V01 verified 2026-10-25; V02–V05 verified
+2026-10-26 for management surfaces. Other rows remain
 PLANNED and their names are proposed tests, not existing pass claims. Replace with real names/results at implementation;
 no PLANNED automated row at release readiness. R2 historical results stay separate.
 
 | ID / story | Required binary result / proposed test | Command | Status |
 |---|---|---|---|
 | V01 / 1.2 | TestConversationMigrationFresh/LegacyAndDownUp/RepeatedUp/PartialPrefixes/Constraints/DeleteSemantics: legacy binary column bytes and reads unchanged; 24 DDL prefixes; typed/unique FKs; null lounge-state uniqueness; owner-approved human cascades and bot/conversation RESTRICT | B | PASS 2026-10-25: 56 cases in each timezone; [evidence](log/2026-10-25-UST-2.1.1.2.md) |
-| V02 / 1.3 | TestHumanGroupManagement: any member rename/add/remove/leave; Basic denied; no-human group denies every path; surviving-human shrink; no roles/audit/archive routes | B,A | PLANNED |
-| V03 / 1.3 | TestStartChatReuse: >=20 identical starts one group; typed exact current set; named always fresh; clear/rename/member edits race safely; duplicate unnamed matches deterministic; no set unique constraint | B,A | PLANNED |
-| V04 / 1.3 | TestConversationListPicker: lounge first, last-activity order/ties, accurate bounded member summary, 403 nonmember, paging/minimal picker, Basic isolation, invalid/duplicate input and path encoding | B,A | PLANNED |
-| V05 / 1.3 | TestPersonalMuteRead: per-user isolation; lounge/group state; monotonic valid read position, non-self counts, retained history baseline; mute never changes unread/read rights | B,A | PLANNED |
+| V02 / 1.3 | TestConversationRepositoryRenameCurrentSetAndMembershipRevision / LastHumanAndDeletionRevisions; TestConversationBasicRejectedBeforeParsing / BasicGuardBeforeCORS; real-binary management_members_picker_persistence / management_basic_401_during_directory_outage / management_read_mute_leave | B,A | PASS UTC/IST 2026-10-26; management access and revision/cascade coverage; message/socket access remains V07/V13 |
+| V03 / 1.3 | TestConversationRepositoryConcurrentReuseAndNamedFresh / ConcurrentMutationAndStart / RenameCurrentSetAndMembershipRevision; TestConversationTypedReuseAndEqualTimeRead; real-binary management_create_reuse_rename | B,A | PASS UTC/IST 2026-10-26; 24 simultaneous starts and 24-way rename/member races |
+| V04 / 1.3 | TestConversationListTiesBoundedSummaryAndCursorBindings; TestConversationRepositoryPaginationAndPicker; TestConversationStrictInputs / UnicodeAliasEscapedPath; real-binary list/picker/uniform403 assertions | B,A | PASS UTC/IST 2026-10-26; [evidence](log/2026-10-26-UST-2.1.1.3.md) |
+| V05 / 1.3 | TestConversationRepositoryUnreadWatermarkAndMute; TestConversationTypedReuseAndEqualTimeRead; real-binary management_read_mute_leave | B,A | PASS UTC/IST 2026-10-26; exact persisted read/mute and viewer isolation |
 | V06 / 1.4 | TestMemberSync: omitted selectors lounge; UUID group; scope=member merged 1001 equal-time rows, 500 cap/[]/X-Has-More; no duplicate rows; aliases/offsets; conflicting/repeated/empty/null selectors 400 | B,A | PLANNED |
 | V07 / 1.4 | TestMembershipSyncRevision: every page including empty authorized; removal/no-human filtering; addition exposes older history via revision/epoch replay; mid-page changes and stable checkpoint; count/mute metadata only authorized | B,A,C | PLANNED |
 | V08 / 1.4 | TestConversationSendReplay: >=20 duplicates one row/publication/push; principal-wide channel/text conflict; requested/stored access before replay; revoked member 403; unknown body fields still rejected | B,A | PLANNED |
