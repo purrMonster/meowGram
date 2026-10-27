@@ -62,6 +62,7 @@ No implementation branch below exists by authorization from this session.
 | docs/ust-2.1.4.1-ntfy-contract | feat/r2.1-epic-4-ntfy |
 | feat/ust-2.1.4.2-ntfy | feat/r2.1-epic-4-ntfy |
 | test/ust-2.1.5.1-acceptance | test/r2.1-epic-5-verification |
+| test/r2.1-verification-scaffold | test/r2.1-epic-5-verification (independent actual-v2.0.0 decoder probe; owner-authorized fast-track scaffolding only) |
 | test/ust-2.1.5.2-rollback | test/r2.1-epic-5-verification |
 | chore/ust-2.1.5.3-readiness | test/r2.1-epic-5-verification |
 
