@@ -23,11 +23,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// The dedicated image contains both actual server binaries, their migration files,
-// and PostgreSQL tools. Never point this destructive drill at an existing DB.
+// The dedicated image contains actual v1.1.0/v2.0.0 binaries and their tagged
+// migrations, plus assertions from this checkout and PostgreSQL tools. This is
+// the historical R2 boundary, not R2.1 recovery. Never use an existing DB.
 func TestReleaseRollback(t *testing.T) {
 	if os.Getenv("MEOWGRAM_DISPOSABLE_ROLLBACK") != "1" {
-		t.Skip("use verify-rollback script with disposable PostgreSQL and v1.1.0/current binaries")
+		t.Skip("use verify-rollback script with disposable PostgreSQL and v1.1.0/v2.0.0 binaries")
 	}
 	dbURL := os.Getenv("TEST_DATABASE_URL")
 	parsed, err := url.Parse(dbURL)
