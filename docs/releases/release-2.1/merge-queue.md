@@ -8,6 +8,9 @@ Only the owner merges. Updated 2026-10-28 under approved fast-track sequencing.
 2. [#59](https://github.com/purrMonster/meowGram/pull/59)
    feat/ust-2.1.1.4-message-api → feat/r2.1-epic-1-channels |
    stacked on #58 | merge after #58 and Claude review | closes epic 1 tasks.
+3. [#60](https://github.com/purrMonster/meowGram/pull/60)
+   test/r2.1-verification-scaffold → test/r2.1-epic-5-verification |
+   stacked on none | merge after nothing | independent actual-tag decoder probe.
 
 Independent verification scaffolding: test/r2.1-verification-scaffold targets
 test/r2.1-epic-5-verification, starts from its remote 1f39e07, and imports no

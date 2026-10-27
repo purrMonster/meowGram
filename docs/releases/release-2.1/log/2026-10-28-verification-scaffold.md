@@ -73,6 +73,7 @@ Image identities:
 Raw logs retained locally in ../verification-scaffold-evidence/.
 Local image identities are not published release or deployment claims.
 
-Where we stopped / next step: scaffold verified; publish task PR into epic 5.
-Full privacy work remains blocked on owner-integrated epics 1–4.
+Published #60 into test/r2.1-epic-5-verification; no integration branch push/merge.
+Where we stopped / next step: scaffold verified, pushed and queued; full privacy
+work remains blocked on owner-integrated epics 1–4.
 
