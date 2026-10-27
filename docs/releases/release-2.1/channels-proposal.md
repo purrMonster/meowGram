@@ -278,8 +278,10 @@ state on logout/switch. Legacy installs remain lounge-only. No iOS background po
 Preserve SafeArea/viewInsets and 800px behavior.
 
 [pourOver note](pourover-note.md): another repository, docs only. Poll scope=member,
-reply with triggering message channel_id, omit trigger prefix in two-member groups
-with the bot, and require a human to add it first. No bot initiation in R2.1.
+reply with triggering message channel_id, require the trigger prefix in every
+conversation (including two-member groups), and require a human to add it first.
+Owner resolution 2026-10-27: prefix-free behavior needs a future approved bot
+discovery mechanism; no bot initiation or wider Basic Auth scope in R2.1.
 
 ### Device and socket envelope details
 

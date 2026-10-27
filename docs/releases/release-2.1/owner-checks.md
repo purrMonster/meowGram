@@ -21,7 +21,7 @@ domains/subjects/topics/tokens and sensitive screenshots private.
 | O12 Restore drill | Restore that exact dump into isolated database, compare counts/history; scratch synthetic CI alone is insufficient. | 15 min + unattended | PLANNED |
 | O13 Lounge-first upgrade | Upgrade only after backup/restore proof; smoke old/new clients on lounge before any group message. Capture clean schema and image digests; zero-group rollback window remains open. | 15 min | PLANNED |
 | O14 Groups/mixed clients | Then start using groups: unnamed reuse/named separate, human member rename/add/remove/leave/mute; A/B canaries absent on v2.0.0 paths, present for authorized new clients. Last-human leave denies remaining bots. | 15 min | PLANNED |
-| O15 pourOver pilot | Human adds existing typed bot ID first; poll scope=member; replies copy triggering channel_id; prefix-free only two-member group with bot; larger groups/lounge use prefix. Retry/restart once, no fallback on 403, LDAP revoke denies. Use deliberate history baseline. | 15 min | PLANNED |
+| O15 pourOver pilot | Human adds existing typed bot ID first; poll scope=member; replies copy triggering channel_id; prefix required in lounge and every group, including two-member groups. Retry/restart once, no fallback on 403, LDAP revoke denies. Use deliberate history baseline. | 15 min | PLANNED |
 | O16 Recovery | Before any image revert assert zero non-null messages AND zero channel-specific replay rows under tested guarded procedure. After first group message fix forward or explicitly authorize verified restore losing ALL post-backup changes. | 10 min | PLANNED |
 
 Source references reviewed during original planning: [Firebase API-key guidance](https://firebase.google.com/docs/projects/api-keys)
