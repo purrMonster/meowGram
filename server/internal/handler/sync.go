@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,16 +49,52 @@ func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) htt
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		var senderID, username string
+		kind := "human"
 		if bot, ok := botauth.PrincipalFromContext(r.Context()); ok {
 			senderID, username = bot.ID, bot.Username
+			kind = "bot"
 		} else if user, ok := auth.UserFromContext(r.Context()); ok && user != nil {
 			senderID, username = user.AutheliaSub, user.Username
 		} else {
 			writeSyncJSONError(w, 401, "unauthorized", "authenticated sender required")
 			return
 		}
-		// 2. Validate mandatory 'after' query parameter
-		rawAfter := r.URL.Query().Get("after")
+		query, queryErr := url.ParseQuery(r.URL.RawQuery)
+		if queryErr != nil {
+			conversationError(w, repository.ErrConversationInput)
+			return
+		}
+		for key, values := range query {
+			if len(values) != 1 || (key != "after" && key != "after_id" && key != "channel_id" && key != "scope") {
+				conversationError(w, repository.ErrConversationInput)
+				return
+			}
+		}
+		var channel *string
+		rawChannel, hasChannel := query["channel_id"]
+		rawScope, hasScope := query["scope"]
+		if hasChannel && hasScope {
+			conversationError(w, repository.ErrConversationInput)
+			return
+		}
+		if hasChannel {
+			id, e := repository.ParseChannel(rawChannel[0])
+			if e != nil {
+				conversationError(w, e)
+				return
+			}
+			channel = &id
+		}
+		memberScope := false
+		if hasScope {
+			if rawScope[0] != "member" {
+				conversationError(w, repository.ErrConversationInput)
+				return
+			}
+			memberScope = true
+		}
+		// Validate mandatory cursor.
+		rawAfter := query.Get("after")
 		if strings.TrimSpace(rawAfter) == "" {
 			logger.Warn("Sync request missing 'after' parameter",
 				"remote_addr", r.RemoteAddr,
@@ -81,13 +118,17 @@ func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) htt
 		}
 
 		// 4. Query persistent storage for chronological gap fill (max SyncPageSize records)
-		afterID := strings.TrimSpace(r.URL.Query().Get("after_id"))
+		afterID := query.Get("after_id")
 		if afterID != "" && !uuidPattern.MatchString(afterID) {
 			writeSyncJSONError(w, http.StatusBadRequest, "bad_request", "invalid 'after_id' (expected UUID)")
 			return
 		}
-		messages, err := msgRepo.GetMessagesAfter(r.Context(), afterTime, afterID, SyncPageSize)
+		messages, version, err := msgRepo.GetScopedMessagesAfter(r.Context(), repository.SendPrincipal{Kind: kind, ID: senderID, Username: username}, channel, memberScope, afterTime, afterID, SyncPageSize)
 		if err != nil {
+			if errors.Is(err, repository.ErrConversationForbidden) || errors.Is(err, repository.ErrConversationInput) {
+				conversationError(w, err)
+				return
+			}
 			logger.Error("Failed to query messages for sync",
 				"sub", senderID,
 				"after", afterTime,
@@ -96,6 +137,10 @@ func SyncHandler(msgRepo *repository.MessageRepository, logger *slog.Logger) htt
 			w.Header().Set("Retry-After", "1")
 			writeSyncJSONError(w, http.StatusServiceUnavailable, "unavailable", "message storage unavailable")
 			return
+		}
+
+		if memberScope {
+			w.Header().Set("X-Membership-Version", strconv.FormatInt(version, 10))
 		}
 
 		// Ensure we always serialize an empty JSON array `[]` rather than `null`

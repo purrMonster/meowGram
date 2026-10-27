@@ -133,9 +133,9 @@ func main() {
 	}
 
 	// Browser clients exchange their bearer token for a one-use WebSocket ticket.
-	mux.Handle("POST /api/ws-ticket", authMiddleware(handler.WSTicketHandler(ticketStore, logger)))
+	mux.Handle("POST /api/ws-ticket", handler.NoStore(authMiddleware(handler.WSTicketHandler(ticketStore, logger, repository.NewConversationRepository(db)))))
 	if cfg.WSTicketEndpoint != "/api/ws-ticket" {
-		mux.Handle("POST "+cfg.WSTicketEndpoint, authMiddleware(handler.WSTicketHandler(ticketStore, logger)))
+		mux.Handle("POST "+cfg.WSTicketEndpoint, handler.NoStore(authMiddleware(handler.WSTicketHandler(ticketStore, logger, repository.NewConversationRepository(db)))))
 	}
 
 	// Both message routes share bot authentication and API budgets; no other route admits Basic.

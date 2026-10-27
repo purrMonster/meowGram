@@ -4,6 +4,7 @@ import "time"
 
 // Message represents a chat message persisted in PostgreSQL.
 type Message struct {
+	ChannelID   *string   `json:"channel_id"`
 	ID          string    `json:"id"`
 	SenderID    string    `json:"sender_id"`
 	SenderKind  string    `json:"sender_kind"`
@@ -21,6 +22,7 @@ type UserPresence struct {
 
 // WSMessage represents the structured JSON payload transmitted over WebSocket.
 type WSMessage struct {
+	ChannelID   *string        `json:"channel_id"`
 	Type        string         `json:"type"` // "chat", "system", "welcome", "history", "presence"
 	ID          string         `json:"id,omitempty"`
 	SenderID    string         `json:"sender_id,omitempty"`

@@ -1,9 +1,8 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
+
 	"math"
 	"meowgram/server/internal/auth"
 	"meowgram/server/internal/botauth"
@@ -48,34 +47,40 @@ func SendHandler(service *chat.MessageService, retention time.Duration) http.Han
 			writeSyncJSONError(w, 415, "unsupported_media_type", "application/json required")
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 32768)
-		decoder := json.NewDecoder(r.Body)
-		decoder.DisallowUnknownFields()
 		var input struct {
-			Text *string `json:"text_content"`
+			Text    *string `json:"text_content"`
+			Channel *string `json:"channel_id"`
 		}
-		if err := decoder.Decode(&input); err != nil {
+		_, err = conversationBody(w, r, &input)
+		if err != nil {
 			var large *http.MaxBytesError
 			status := 400
 			if errors.As(err, &large) {
 				status = 413
 			}
-			writeSyncJSONError(w, status, "invalid_body", "one text_content string required")
+			writeSyncJSONError(w, status, "invalid_body", "one message object required")
 			return
 		}
 		if input.Text == nil {
 			writeSyncJSONError(w, 400, "invalid_body", "text_content required")
 			return
 		}
-		if decoder.Decode(&struct{}{}) != io.EOF {
-			writeSyncJSONError(w, 400, "invalid_body", "one JSON object required")
-			return
+		if input.Channel != nil {
+			id, e := repository.ParseChannel(*input.Channel)
+			if e != nil {
+				conversationError(w, repository.ErrConversationInput)
+				return
+			}
+			input.Channel = &id
 		}
-		result, err := service.SendIdempotent(r.Context(), p, keys[0], *input.Text, retention)
+		result, err := service.SendIdempotentChannel(r.Context(), p, keys[0], *input.Text, input.Channel, retention)
 		if err != nil && !chat.IsDurableSend(err) {
 			status, code := 503, "unavailable"
 			var rate *chat.MessageRateError
 			switch {
+			case errors.Is(err, repository.ErrConversationForbidden), errors.Is(err, repository.ErrConversationInput):
+				conversationError(w, err)
+				return
 			case errors.Is(err, repository.ErrIdempotencyConflict):
 				status, code = 409, "idempotency_conflict"
 			case errors.Is(err, chat.ErrEmptyMessage), errors.Is(err, chat.ErrMessageTooLong):

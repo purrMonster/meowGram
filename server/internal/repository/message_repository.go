@@ -89,6 +89,7 @@ func (r *MessageRepository) GetRecent(ctx context.Context, limit int) ([]*model.
 		FROM (
 			SELECT id, sender_id, bot_principal_id, text_content, created_at
 			FROM messages
+			WHERE channel_id IS NULL
 			ORDER BY created_at DESC, id DESC
 			LIMIT $1
 		) m
@@ -133,8 +134,8 @@ func (r *MessageRepository) GetMessagesAfter(ctx context.Context, after time.Tim
 		FROM messages m
 		LEFT JOIN users u ON m.sender_id = u.authelia_sub
 		LEFT JOIN bot_principals b ON m.bot_principal_id = b.id
-		WHERE m.created_at > $1
-		   OR (m.created_at = $1 AND ($2::text = '' OR m.id > NULLIF($2::text, '')::uuid))
+		WHERE m.channel_id IS NULL AND (m.created_at > $1
+		   OR (m.created_at = $1 AND ($2::text = '' OR m.id > NULLIF($2::text, '')::uuid)))
 		ORDER BY m.created_at ASC, m.id ASC
 		LIMIT $3;
 	`
