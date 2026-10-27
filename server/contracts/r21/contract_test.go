@@ -90,7 +90,7 @@ func TestFixtureIntegrity(t *testing.T) {
 			if f.Actor != "human-member" && f.Actor != "bot-member" {
 				t.Fatal("unknown seeded actor")
 			}
-			if f.Status < 200 || f.Status > 599 || f.Implementation != "pending" {
+			if f.Status < 200 || f.Status > 599 || f.Implementation != "passing" {
 				t.Fatal("invalid status/implementation marker")
 			}
 			if f.Headers["Cache-Control"] != "no-store" {

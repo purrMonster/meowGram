@@ -7,19 +7,28 @@ Default sync with neither selector means lounge ONLY; literal `null`, empty,
 malformed, repeated or conflicting selectors are 400. Unknown and inaccessible
 UUIDs have the same 403 JSON object, without existence-specific fields.
 
-Two intentionally separate execution modes:
+UST-2.1.1.4: all 78 frozen fixtures passed against the real binary in UTC and
+Asia/Kolkata on 2026-10-27; markers now say `passing`. Status/body/header
+expectations are unchanged.
 
-- `go test ./contracts/r21` validates fixture integrity. This is green now and is
-  included in existing `go test ./...`; it does NOT establish server compliance.
-- `go test -tags=r21_contracts ./contracts/r21 -run '^TestHTTPContract$' -count=1`
-  replays every fixture against an explicitly seeded disposable HTTP server.
-  **PENDING IMPLEMENTATION / EXPECTED TO FAIL on R2.0**. The build tag is never
-  enabled in default CI. Missing fixture setup fails loudly, never skips. No
-  runtime R2.1 pass is claimed by this contract-only story.
+Two execution modes remain deliberately separate:
 
-The tagged runner compiles now. Future implementation stories supply the seed
-adapter and make these assertions pass; they must not weaken expected statuses.
-No production routes, migrations, authentication or configuration are changed.
+- `go test ./contracts/r21` validates fixture integrity and participates in the
+  default suite. It does not establish HTTP compliance.
+- `./deploy/scripts/verify-r21-contracts.ps1` (or
+  `sh deploy/scripts/verify-r21-contracts.sh`) builds the real server and tagged
+  runner, starts scratch PostgreSQL plus pinned LLDAP 0.6.3 with verified LDAPS,
+  and replays all 78 cases in UTC and Asia/Kolkata. The dedicated adapter provides
+  a synthetic JWKS issuer and restarts the server and reseeds its database before
+  every case, clearing replay keys, budgets and tickets. No production service,
+  host port, persistent database or real credential is used. Setup failures fail
+  loudly; this dedicated run never skips.
+
+The `r21_contracts` build tag excludes the adapter from ordinary suites, avoiding
+new generic-suite skips. The low-level runner is still independently executable:
+`go test -tags=r21_contracts ./contracts/r21 -run '^TestHTTPContract$' -count=1`
+with the explicit disposable adapter environment described below. Successful
+fixture compilation alone does not establish runtime compliance.
 
 ## Seed adapter interface (test infrastructure, not an application API)
 
@@ -33,7 +42,7 @@ Before EACH case the runner POSTs the controller's `/reset` with
 scratch DB, budgets, replay keys, ticket store and in-memory state. It returns
 `{"human-member":"Bearer <synthetic-token>","human-peer":"Bearer <synthetic-peer-token>","bot-member":"Basic <synthetic-value>"}`.
 These are synthetic credentials issued by the test fixture, never real accounts.
-The controller is not part of this story or the production route contract.
+The controller is implemented in `integration/r21_contract_test.go`; it is test infrastructure, never a production endpoint.
 
 Seed these records, all timestamps strictly between epoch and 2099:
 
