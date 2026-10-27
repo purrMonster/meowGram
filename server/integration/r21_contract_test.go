@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"database/sql"
@@ -219,9 +220,9 @@ func TestR21HTTPContract(t *testing.T) {
 		}
 	}
 	defer stop()
-	start := func() error {
-		process = exec.Command("/meowgram-server")
-		process.Env = append(os.Environ(), "ENVIRONMENT=development", "APP_DOMAIN=localhost", "LOG_LEVEL=error", fmt.Sprintf("PORT=%d", apiPort), "DATABASE_URL="+dbURL, "MIGRATIONS_PATH=/migrations",
+	startBinary := func(binary, migrations string) error {
+		process = exec.Command(binary)
+		process.Env = append(os.Environ(), "ENVIRONMENT=development", "APP_DOMAIN=localhost", "LOG_LEVEL=error", fmt.Sprintf("PORT=%d", apiPort), "DATABASE_URL="+dbURL, "MIGRATIONS_PATH="+migrations,
 			"AUTHELIA_ISSUER="+issuer.URL, "AUTHELIA_JWKS_URL="+issuer.URL+"/jwks", "AUTHELIA_AUDIENCE=scratch-api", "CORS_ORIGINS="+ingress.URL,
 			"BOT_BASIC_AUTH_ENABLED=true", fmt.Sprintf("BOT_LDAP_URL=ldaps://localhost:%d", tlsPort), "BOT_LDAP_BASE_DN=ou=people,"+base, "BOT_LDAP_READER_DN=uid=reader,ou=people,"+base,
 			"BOT_LDAP_READER_PASSWORD_FILE="+readerFile, "BOT_LDAP_ALLOWED_GROUP=cn=bots,ou=groups,"+base, "BOT_LDAP_DIRECTORY_NAMESPACE=scratch-r21-contract", "BOT_LDAP_CA_FILE="+ca, "BOT_LDAP_TIMEOUT=3s", "BOT_TRUSTED_PROXY_CIDRS=127.0.0.1/32")
@@ -240,10 +241,70 @@ func TestR21HTTPContract(t *testing.T) {
 		}
 		return fmt.Errorf("server readiness timed out (logs suppressed)")
 	}
-	if err := start(); err != nil {
-		t.Fatal(err)
+	start := func() error { return startBinary("/meowgram-server", "/migrations") }
+	if !t.Run("actual_v2_stored_response_survives_upgrade", func(t *testing.T) {
+		if err := startBinary("/r2-server", "/r2-migrations"); err != nil {
+			t.Fatal(err)
+		}
+		defer stop()
+		const rawText = " legacy exact bytes "
+		const operation = "actual-v2-replay"
+		send := func() []byte {
+			body, _ := json.Marshal(map[string]string{"text_content": rawText})
+			req, err := http.NewRequest("POST", ingress.URL+"/api/messages", bytes.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Authorization", auth["human-member"])
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Idempotency-Key", operation)
+			response, err := client.Do(req)
+			if err != nil {
+				t.Fatal("real binary send failed")
+			}
+			defer response.Body.Close()
+			data, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+			if err != nil || response.StatusCode != http.StatusCreated {
+				t.Fatalf("real binary send status=%d", response.StatusCode)
+			}
+			return data
+		}
+		before := send()
+		var decoded map[string]any
+		if err := json.Unmarshal(before, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := decoded["channel_id"]; exists {
+			t.Fatal("v2.0.0 response unexpectedly contains channel_id")
+		}
+		var storedBefore, hashBefore []byte
+		if err := db.QueryRow(`SELECT response_body,fingerprint FROM message_idempotency WHERE operation_key=$1`, operation).Scan(&storedBefore, &hashBefore); err != nil {
+			t.Fatal(err)
+		}
+		expectedHash := sha256.Sum256([]byte(rawText))
+		if !bytes.Equal(before, storedBefore) || !bytes.Equal(hashBefore, expectedHash[:]) {
+			t.Fatal("actual v2 response or raw-text fingerprint did not match storage")
+		}
+		stop()
+		if err := start(); err != nil {
+			t.Fatal(err)
+		}
+		after := send()
+		var storedAfter, hashAfter []byte
+		if err := db.QueryRow(`SELECT response_body,fingerprint FROM message_idempotency WHERE operation_key=$1`, operation).Scan(&storedAfter, &hashAfter); err != nil {
+			t.Fatal(err)
+		}
+		var messages, keys int
+		if err := db.QueryRow(`SELECT (SELECT count(*) FROM messages),(SELECT count(*) FROM message_idempotency)`).Scan(&messages, &keys); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(before, after) || !bytes.Equal(storedBefore, storedAfter) || !bytes.Equal(hashBefore, hashAfter) || messages != 1 || keys != 1 {
+			t.Fatal("upgrade changed exact replay bytes/hash or duplicated the operation")
+		}
+		t.Log("actual v2.0.0 -> current: identical HTTP/stored bytes and raw-text hash; one message and one key")
+	}) {
+		t.Fatal("actual pre-upgrade replay compatibility failed")
 	}
-	stop() // Real binary applies its shipped migrations.
 	seed := func() error {
 		tx, err := db.Begin()
 		if err != nil {

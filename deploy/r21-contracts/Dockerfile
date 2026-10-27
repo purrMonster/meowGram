@@ -1,3 +1,9 @@
+# syntax=docker/dockerfile:1
+FROM golang:1.27.1 AS r2-build
+WORKDIR /src
+COPY --from=r2 server/ ./
+RUN CGO_ENABLED=0 go build -trimpath -o /r2-server ./cmd/server
+
 FROM golang:1.27.1 AS tests
 WORKDIR /src
 COPY server/go.mod server/go.sum ./
@@ -8,6 +14,8 @@ FROM tests AS build
 RUN CGO_ENABLED=0 go build -o /meowgram-server ./cmd/server
 FROM lldap/lldap:v0.6.3@sha256:2a8454b668c1aba7157e832eab0e242e1e7eb5fb7591d7e7774ba05286511ca8
 COPY --from=build /meowgram-server /r21-fixture.test /r21-contracts.test /
+COPY --from=r2-build /r2-server /r2-server
+COPY --from=r2-build /src/migrations /r2-migrations
 COPY server/migrations /migrations
 COPY server/contracts/r21/http.json /contracts/http.json
 USER 1000:1000

@@ -34,6 +34,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: R2.1 executable contracts against real server in both timezones
         run: sh deploy/scripts/verify-r21-contracts.sh
   rollback:
