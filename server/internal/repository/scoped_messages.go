@@ -95,7 +95,9 @@ func (r *MessageRepository) GetScopedMessagesAfter(ctx context.Context, p SendPr
 	var version int64
 	if memberScope {
 		version, err = principalRevision(ctx, tx, p)
-		if err != nil { return nil, 0, err }
+		if err != nil {
+			return nil, 0, err
+		}
 	}
 	rows, err := tx.QueryContext(ctx, "SELECT "+scopedMessageColumns+" FROM messages m"+scopedMessageJoins+`
  WHERE (($4::boolean=false AND m.channel_id IS NOT DISTINCT FROM $5::uuid)
