@@ -153,11 +153,14 @@ func TestBotIdentityMigrationAndLifecycle(t *testing.T) {
 		t.Fatal("deleted principal with messages")
 	}
 	apply("000005_bot_principals.down.sql")
+	// This historical schema-5 boundary predates channel_id. Keep its read
+	// oracle frozen to v2.0.0; current runtime writes and lifecycle assertions remain above.
+	historicalReads := &frozenR20MessageRepository{db: db}
 	for _, recent := range []bool{false, true} {
 		var gotKind string
-		rows, err := messages.GetMessagesAfter(ctx, time.Time{}, "", 500)
+		rows, err := historicalReads.GetMessagesAfter(ctx, time.Time{}, "", 500)
 		if recent {
-			rows, err = messages.GetRecent(ctx, 50)
+			rows, err = historicalReads.GetRecent(ctx, 50)
 		}
 		if err != nil {
 			t.Fatal(err)
