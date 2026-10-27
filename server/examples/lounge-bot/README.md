@@ -1,4 +1,4 @@
-# Lounge bot example (R2)
+# Lounge and member-stream bot example (R2.1)
 
 A Go standard-library client for the authenticated lounge API. Run one instance
 per state file and bot account. It polls every three seconds, walks timestamp/UUID
@@ -17,6 +17,7 @@ From `server`, set these environment variables and run `go run ./examples/lounge
 | MEOWGRAM_BOT_ID | Stable bot principal UUID, not LDAP UUID or display name |
 | MEOWGRAM_STATE_FILE | Absolute path to a private, durable cursor JSON file outside tracked source |
 | MEOWGRAM_CHANNEL | Empty; R2 rejects channel_id with 400 |
+| MEOWGRAM_SCOPE | Empty for legacy lounge-only polling; `member` for R2.1 merged lounge and readable groups |
 
 Use the principal's sender_id from a successful authenticated send response.
 System roots verify HTTPS certificates; redirects are rejected. The example
@@ -44,3 +45,34 @@ TLS httptest production routing/auth gates and real scratch PostgreSQL. It prove
 429/503 delay handling, a committed send with a lost response, restart replay,
 one publication/row, persistent cursor, own-kind/ID filtering, and expiry refusal.
 The generic Go harness runs it with TEST_DATABASE_URL pointing to /verification.
+
+## R2.1 member mode
+
+Set `MEOWGRAM_SCOPE=member` and use a separate state file. Its account identity
+includes the scope, preventing an old lounge checkpoint from silently skipping
+older group history. A human must first add the existing bot principal to groups.
+The bot calls only send/sync; it never lists or manages conversations.
+
+Member polling sends `scope=member` and persists `X-Membership-Version` alongside
+the merged cursor. A changed revision durably resets that cursor to the epoch;
+the next poll backfills accessible history while retaining processed message IDs.
+An absent revision fails closed without advancing the cursor. Per-conversation
+processing positions are separate from the merged checkpoint. Keep the state
+file across restarts and deliberately choose a history baseline before a pilot.
+This small fixture retains processed IDs indefinitely; operators must account
+for state-file growth instead of deleting deduplication history.
+
+Replies copy the triggering message's `channel_id`, including null for lounge,
+into the durable pending body. Retry/restart preserves that body and key exactly.
+A private 403 stops with the pending operation retained; it never sends to lounge
+as a fallback. The 168-hour ambiguous-send limit still applies.
+
+This is an acknowledgement fixture: it replies to every non-self message, as
+the R2 example did. It does not implement pourOver's trigger policy or infer group
+size from historical senders. Message rows contain no member-count metadata.
+
+`TestBotConversationRoutingRevisionRestart` uses a synthetic HTTPS server to
+verify source-channel routing, lost-response replay, revision backfill across a
+restart, deduplication and missing-revision refusal. `TestBotPrivateDenialNeverFallsBack`
+checks a retained 403 operation across restart. The existing real-PostgreSQL test
+continues to verify production send/sync routing and durable idempotency.
