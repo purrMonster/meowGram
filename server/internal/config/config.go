@@ -13,32 +13,34 @@ import (
 
 // Config represents runtime configuration loaded strictly from environment variables and .env files.
 type Config struct {
-	BotAuth              BotAuth
-	SendEndpoint         string
-	IdempotencyRetention time.Duration
-	RateLimits           RateLimits
-	Port                 string
-	AppDomain            string
-	CORSOrigins          []string
-	Environment          string
-	LogLevel             string
-	DatabaseURL          string
-	AutheliaDomain       string
-	AutheliaIssuer       string
-	AutheliaJWKSURL      string
-	AutheliaClientID     string
-	AutheliaAudience     string
-	GoogleCredentials    string
-	SyncEndpoint         string
-	HealthEndpoint       string
-	WSEndpoint           string
-	WSTicketEndpoint     string
-	PushDeviceEndpoint   string
-	ImmichDomain         string
-	ImmichAPIURL         string
-	ReadTimeout          time.Duration
-	WriteTimeout         time.Duration
-	IdleTimeout          time.Duration
+	ConversationsEndpoint string
+	PrincipalsEndpoint    string
+	BotAuth               BotAuth
+	SendEndpoint          string
+	IdempotencyRetention  time.Duration
+	RateLimits            RateLimits
+	Port                  string
+	AppDomain             string
+	CORSOrigins           []string
+	Environment           string
+	LogLevel              string
+	DatabaseURL           string
+	AutheliaDomain        string
+	AutheliaIssuer        string
+	AutheliaJWKSURL       string
+	AutheliaClientID      string
+	AutheliaAudience      string
+	GoogleCredentials     string
+	SyncEndpoint          string
+	HealthEndpoint        string
+	WSEndpoint            string
+	WSTicketEndpoint      string
+	PushDeviceEndpoint    string
+	ImmichDomain          string
+	ImmichAPIURL          string
+	ReadTimeout           time.Duration
+	WriteTimeout          time.Duration
+	IdleTimeout           time.Duration
 }
 
 // Load populates and validates Config from process environment and candidate .env files.
@@ -258,7 +260,13 @@ func Load() (*Config, error) {
 			return nil, errors.New("MESSAGE_SEND_ENDPOINT conflicts with a reserved route")
 		}
 	}
+	conversationsEndpoint := normalizePath(os.Getenv("CONVERSATIONS_ENDPOINT"), "/api/conversations")
+	principalsEndpoint := normalizePath(os.Getenv("PRINCIPALS_ENDPOINT"), "/api/principals")
+	if err := ValidateConversationEndpoints(conversationsEndpoint, principalsEndpoint, "/api/messages", sendEndpoint, "/api/messages/sync", syncEndpoint, "/api/ws-ticket", wsTicketEndpoint, "/ws", wsEndpoint, "/api/push/devices", normalizePath(os.Getenv("PUSH_DEVICE_ENDPOINT"), "/api/push/devices"), "/healthz", healthEndpoint, "/api/client-config"); err != nil {
+		return nil, err
+	}
 	return &Config{
+		ConversationsEndpoint: conversationsEndpoint, PrincipalsEndpoint: principalsEndpoint,
 		BotAuth: botAuth, SendEndpoint: sendEndpoint, IdempotencyRetention: retention,
 		RateLimits:         limits,
 		Port:               port,
