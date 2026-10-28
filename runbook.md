@@ -1777,3 +1777,29 @@ preserve pre-r2 image IDs; pull version 2.0.0; smoke-test human messaging; recor
 the pulled digests. Keep BOT_BASIC_AUTH_ENABLED=false until the separate bot
 checks and pilot are authorized. The schema-version rollback restrictions in
 §14 still apply; an old-image redeploy alone is not recovery.
+
+## 15. R2.1 parked for the house move (2026-10-28 IST)
+
+Owner's instruction: freeze before the 1 November move; afterwards purrBrews work is
+weekly only. Recorded by Claude from the remote branches and open PRs; no code
+changed and nothing merged.
+
+R2.1 is **in progress, parked**, not abandoned. Every branch is pushed. State:
+
+| Branch | Ahead of `main` | PR | State |
+|---|---:|---|---|
+| `release/r2.1` | 4 | — | integration branch |
+| `feat/r2.1-epic-1-channels` | 11 | — | epic; collects #56 (schema) |
+| `feat/ust-2.1.1.3-conversations` | 17 | #58 → epic 1 | open, awaiting owner review |
+| `feat/ust-2.1.1.4-message-api` | 28 | #59 → epic 1 | open, awaiting owner review; stacked on #58 |
+| `feat/r2.1-epic-4-ntfy` | 4 | — | epic; collects #57 (ntfy contract) |
+| `test/r2.1-verification-scaffold` | 3 | #60 → `test/r2.1-epic-5-verification` | open, awaiting owner review |
+| `docs/archive-integration-notes` | 1 | #61 → `main` | open, awaiting owner review |
+| `feat/ust-2.1.1.2-schema`, `docs/ust-2.1.4.1-ntfy-contract` | — | merged into their epics | can be deleted by the owner |
+| `rescue/docs/ust-2.1.0-immich-contract`, `rescue/feat/tabbytally-review-integration` | 2, 6 | — | older rescue branches, kept |
+
+The R2 rollout to the fleet (§14.2 "Next") is unchanged and also waits for after the
+move. The v2.0.0 GitHub Release is still a draft.
+
+**Where we stopped / next step:** owner reviews #58, then #59 (stacked on it), in
+the first weekly slot after the move; #60 and #61 are independent.
