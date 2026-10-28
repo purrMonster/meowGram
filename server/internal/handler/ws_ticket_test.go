@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -43,5 +44,25 @@ func TestTicketEndpointRequiresIdentityAndDisablesCaching(t *testing.T) {
 	}
 	if _, ok = store.Consume(body.Ticket); ok {
 		t.Fatal("ticket replay accepted")
+	}
+}
+
+func TestTicketNoStoreIncludesAuthenticationRejection(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	for _, path := range []string{"/api/ws-ticket", "/custom/ticket"} {
+		t.Run(path, func(t *testing.T) {
+			called := false
+			next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true })
+			guarded := NoStore(auth.Middleware(nil, nil, logger)(next))
+			mux := http.NewServeMux()
+			mux.Handle("POST "+path, guarded)
+			request := httptest.NewRequest("POST", path, nil)
+			request.SetBasicAuth("fixture", "fixture")
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+			if response.Code != 401 || response.Header().Get("Cache-Control") != "no-store" || called {
+				t.Fatalf("status=%d cache=%q handler=%v", response.Code, response.Header().Get("Cache-Control"), called)
+			}
+		})
 	}
 }

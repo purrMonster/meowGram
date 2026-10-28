@@ -29,6 +29,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Real server, PostgreSQL and pinned LDAPS API acceptance
         run: sh deploy/scripts/verify-api-acceptance.sh
+  r21-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: R2.1 executable contracts against real server in both timezones
+        run: sh deploy/scripts/verify-r21-contracts.sh
   rollback:
     runs-on: ubuntu-latest
     timeout-minutes: 20

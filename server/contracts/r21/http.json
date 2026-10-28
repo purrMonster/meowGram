@@ -35,7 +35,7 @@
           "channel_id"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-group",
@@ -69,7 +69,7 @@
           "channel_id"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-member",
@@ -104,7 +104,7 @@
           "channel_id"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-bot-member",
@@ -139,7 +139,7 @@
           "channel_id"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-member-empty",
@@ -155,7 +155,7 @@
         "empty": true,
         "membership_version": true
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-selector-conflict",
@@ -168,7 +168,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-repeat-channel",
@@ -181,7 +181,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-repeat-scope",
@@ -194,7 +194,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-null-channel",
@@ -207,7 +207,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-malformed-channel",
@@ -220,7 +220,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-empty-channel",
@@ -233,7 +233,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-empty-scope",
@@ -246,7 +246,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-unknown-scope",
@@ -259,7 +259,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-repeat-after",
@@ -272,7 +272,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-repeat-after-id",
@@ -285,7 +285,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-denied",
@@ -303,7 +303,7 @@
           "error": "forbidden"
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-denied",
@@ -321,7 +321,7 @@
           "error": "forbidden"
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-unknown",
@@ -339,7 +339,7 @@
           "error": "forbidden"
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-unknown",
@@ -357,7 +357,7 @@
           "error": "forbidden"
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "sync-no-human",
@@ -375,7 +375,7 @@
           "error": "forbidden"
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-no-human",
@@ -393,7 +393,7 @@
           "error": "forbidden"
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-legacy-lounge",
@@ -429,7 +429,7 @@
           "channel_id"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-null-lounge",
@@ -464,7 +464,7 @@
           "channel_id"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-group",
@@ -499,7 +499,7 @@
           "channel_id"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-bot-group",
@@ -535,7 +535,7 @@
           "channel_id"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-literal-null",
@@ -548,7 +548,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-malformed",
@@ -561,7 +561,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-empty",
@@ -574,7 +574,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-number",
@@ -587,7 +587,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-duplicate-field",
@@ -600,7 +600,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-unknown-field",
@@ -613,7 +613,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "send-spoofed-sender",
@@ -626,7 +626,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "list",
@@ -644,7 +644,7 @@
           "next_cursor"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "create-named",
@@ -669,7 +669,7 @@
           "muted"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "start-chat",
@@ -687,7 +687,7 @@
           "created"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "start-name-rejected",
@@ -700,7 +700,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "create-alone",
@@ -713,7 +713,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "create-duplicate-members",
@@ -726,7 +726,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "rename",
@@ -743,7 +743,7 @@
           "name": "Renamed"
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "clear-name",
@@ -760,7 +760,7 @@
           "name": null
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "trim-name",
@@ -777,7 +777,7 @@
           "name": null
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "members",
@@ -795,7 +795,7 @@
           "next_cursor"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "add-member",
@@ -808,7 +808,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "remove-member",
@@ -821,7 +821,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "leave",
@@ -834,7 +834,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "mute-lounge",
@@ -847,7 +847,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "read-lounge",
@@ -860,7 +860,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "mute-11111111-1111-4111-8111-111111111111",
@@ -873,7 +873,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "read-11111111-1111-4111-8111-111111111111",
@@ -886,7 +886,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "picker",
@@ -904,7 +904,7 @@
           "next_cursor"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "ticket-empty",
@@ -924,7 +924,7 @@
           "ticket"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "ticket-group",
@@ -944,7 +944,7 @@
           "ticket"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "ticket-null-literal",
@@ -957,7 +957,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-list",
@@ -970,7 +970,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-create-named",
@@ -983,7 +983,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-start-chat",
@@ -996,7 +996,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-rename",
@@ -1009,7 +1009,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-clear-name",
@@ -1022,7 +1022,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-trim-name",
@@ -1035,7 +1035,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-members",
@@ -1048,7 +1048,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-add-member",
@@ -1061,7 +1061,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-remove-member",
@@ -1074,7 +1074,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-leave",
@@ -1087,7 +1087,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-mute-lounge",
@@ -1100,7 +1100,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-read-lounge",
@@ -1113,7 +1113,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-mute-11111111-1111-4111-8111-111111111111",
@@ -1126,7 +1126,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-read-11111111-1111-4111-8111-111111111111",
@@ -1139,7 +1139,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-picker",
@@ -1152,7 +1152,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-ticket-empty",
@@ -1165,7 +1165,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "basic-denied-ticket-group",
@@ -1178,7 +1178,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "replay-different-channel",
@@ -1191,7 +1191,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending",
+      "implementation": "passing",
       "idempotency_key": "r21-replay-different-channel",
       "setup": [
         {
@@ -1215,7 +1215,7 @@
         "Cache-Control": "no-store"
       },
       "expect": {},
-      "implementation": "pending",
+      "implementation": "passing",
       "idempotency_key": "r21-replay-different-text",
       "setup": [
         {
@@ -1244,7 +1244,7 @@
           "message": "request not permitted"
         }
       },
-      "implementation": "pending",
+      "implementation": "passing",
       "idempotency_key": "r21-replay-unauthorized-requested-channel",
       "setup": [
         {
@@ -1273,7 +1273,7 @@
           "message": "request not permitted"
         }
       },
-      "implementation": "pending",
+      "implementation": "passing",
       "idempotency_key": "r21-replay-unauthorized-stored-channel",
       "setup": [
         {
@@ -1309,7 +1309,7 @@
           "message": "request not permitted"
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "bot-nonmember-send",
@@ -1327,7 +1327,7 @@
           "message": "request not permitted"
         }
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "bot-send-legacy-lounge",
@@ -1363,7 +1363,7 @@
           "channel_id"
         ]
       },
-      "implementation": "pending"
+      "implementation": "passing"
     },
     {
       "id": "bot-sync-legacy-lounge",
@@ -1397,7 +1397,7 @@
         ],
         "nonempty": true
       },
-      "implementation": "pending"
+      "implementation": "passing"
     }
   ]
 }

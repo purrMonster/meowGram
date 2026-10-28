@@ -22,6 +22,11 @@ earlier plan's row metadata and its bot prefix assumption based on sync-row
 member counts. Bots retain send/sync access only; no conversation-list or
 management access is added to obtain that metadata.
 
+Owner resolution, 2026-10-27: prefix always required in lounge and all groups,
+including two-member groups. Prefix-free replies need a future, owner-approved
+bot discovery mechanism (would widen the Basic Auth scope / AGENTS.md).
+See the [resolved contract log](log/2026-10-27-UST-2.1.1.1-prefix-resolution.md).
+
 Replay fixtures can perform successful setup sends with the same per-case
 idempotency key before the asserted request. Changed text or another readable
 channel must conflict with the stored request; authorization of both requested

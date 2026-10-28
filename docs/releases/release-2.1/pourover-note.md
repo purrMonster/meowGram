@@ -29,16 +29,12 @@ Group with no human members is unreadable/unwritable even to its remaining bots.
 
 ## Trigger policy
 
-In a two-member group containing this bot and one human, do not require the usual
-trigger prefix: ordinary human messages can trigger a reply. In lounge or groups
-of three or more, retain the existing trigger-prefix rule. Determine group size
-from current conversation_member_count on the sync row (specified in the API plan),
-not from number of distinct historical senders or a hardcoded label. Unknown/null
-count must NOT enable prefix-free behavior. Ignore own sender_kind+sender_id.
-
-Membership changes may occur after polling: the count is a page snapshot; sending
-always checks current membership. Changing group size affects the next fetched
-message's trigger policy, not rewriting a persisted pending reply's body/key.
+Owner resolution, 2026-10-27: prefix always required; prefix-free replies need a
+future, owner-approved bot discovery mechanism (would widen the Basic Auth scope /
+AGENTS.md). This applies to lounge, groups and two-member groups alike. Ignore own
+sender_kind+sender_id. Bots have no member-count discovery route, and message rows
+carry no conversation metadata. Sending always checks current membership; do not
+rewrite a persisted pending reply's body/key when membership changes.
 
 ## Membership backfill
 
@@ -50,8 +46,8 @@ Avoid a pilot flood: initialize processed baseline deliberately and keep process
 UUID state across restarts/replays. Reading history need not automatically reply
 to all history; document the operator's chosen starting point.
 
-Acceptance in the other repo: lounge and A/B routing, denied group 403, two-member
-prefix-free versus >=3 prefixed, group-size change, no-human group, identical retry,
+Acceptance in the other repo: lounge and A/B routing, denied group 403, prefix
+required in lounge and every group size, no-human group, identical retry,
 lost-response restart, same-key cross-channel conflict, revoked membership/LDAP,
 merged equal-time pagination/revision replay, and no duplicate historical replies.
 This repo only supplies API fixtures and this handoff, not an external implementation.

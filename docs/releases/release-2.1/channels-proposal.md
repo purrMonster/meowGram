@@ -131,13 +131,10 @@ Sync selectors (default and custom aliases identical):
 Send omission/null -> lounge; empty string, wrong type, malformed/duplicate field
 ->400. Accept only text_content and channel_id; spoofed fields remain rejected.
 
-For bot trigger policy without granting bots a conversation-list endpoint, sync
-rows additionally carry conversation_member_count (integer for group, null for
-lounge), from the current authorized page snapshot. This derived metadata is not
-persisted message identity and is not added to exact send replay bytes. Sync rows
-for human callers additionally carry conversation_muted boolean for background
-notification filtering. These explicit read-path fields avoid inferring membership
-size from observed senders and do not widen Basic beyond sync/send.
+Owner corrections (2026-10-23 and 2026-10-27): message rows contain message
+fields plus channel_id only. Member count, mute, unread and name belong to the
+human conversation routes. Bots retain only sync/send and require the trigger
+prefix in every conversation; there is no bot count-discovery endpoint.
 
 ## 4. Merged cursor, unread and idempotency
 
@@ -272,14 +269,17 @@ Reconnect captures completed cursor before 50-message burst, dedup by UUID and s
 UTC/time then UUID. Live/history cannot advance REST cursor past an unsynced gap.
 
 Android background uses scope=member with merged checkpoint and per-conversation
-secure-storage positions, separate from UI Hive. Filter own/muted alerts using
-page metadata; refresh membership revision on empty pages too. Clear account/server
+secure-storage positions, separate from UI Hive. Filter own alerts by sender and
+muted alerts using human conversation metadata; refresh membership revision on
+empty pages too. Clear account/server
 state on logout/switch. Legacy installs remain lounge-only. No iOS background poll.
 Preserve SafeArea/viewInsets and 800px behavior.
 
 [pourOver note](pourover-note.md): another repository, docs only. Poll scope=member,
-reply with triggering message channel_id, omit trigger prefix in two-member groups
-with the bot, and require a human to add it first. No bot initiation in R2.1.
+reply with triggering message channel_id, require the trigger prefix in every
+conversation (including two-member groups), and require a human to add it first.
+Owner resolution 2026-10-27: prefix-free behavior needs a future approved bot
+discovery mechanism; no bot initiation or wider Basic Auth scope in R2.1.
 
 ### Device and socket envelope details
 

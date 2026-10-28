@@ -1,5 +1,11 @@
 # R2.1 merge queue
 
+UST-2.1.1.4 published 2026-10-28:
+- [#59](https://github.com/purrMonster/meowGram/pull/59)
+  feat/ust-2.1.1.4-message-api → feat/r2.1-epic-1-channels | stacked on #58 |
+  merge after #58 and Claude review; completes epic1 task work, then doc-fold.
+  UTC533 / IST533, contracts78+actual-tag replay per timezone; see October28 log.
+
 Only the owner merges. Updated 2026-10-27 for approved fast-track sequencing.
 
 1. [#58](https://github.com/purrMonster/meowGram/pull/58)

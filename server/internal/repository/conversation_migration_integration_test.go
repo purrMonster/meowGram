@@ -140,7 +140,7 @@ func assertConversationSchema(t *testing.T, db *sql.DB) {
 
 func legacyReads(t *testing.T, db *sql.DB) []byte {
 	t.Helper()
-	repo := NewMessageRepository(db)
+	repo := &frozenR20MessageRepository{db: db}
 	recent, err := repo.GetRecent(context.Background(), 50)
 	if err != nil {
 		t.Fatal(err)

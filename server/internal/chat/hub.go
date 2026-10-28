@@ -196,6 +196,11 @@ func (h *Hub) Run(ctx context.Context) {
 
 		// 4. Message Fan-Out / Broadcast
 		case message := <-h.Broadcast:
+			// Existing sockets/devices are lounge-only. Epic 2 adds group-bound
+			// delivery; accepting a scoped HTTP send must never leak into this lane.
+			if message.ChannelID != nil {
+				continue
+			}
 			for client := range h.clients {
 				h.deliver(client, message)
 			}

@@ -17,8 +17,7 @@ import (
 	"time"
 )
 
-// EXPECTED TO FAIL until R2.1 implementation and the disposable seed adapter land.
-// Deliberately excluded from default suites/CI; never skip or claim it passed.
+// Activated by the dedicated real-binary harness; ordinary suites validate fixture integrity only.
 func TestHTTPContract(t *testing.T) {
 	if os.Getenv("MEOWGRAM_DISPOSABLE_R21_CONTRACT") != "1" {
 		t.Fatal("requires explicitly provisioned disposable R2.1 fixture")

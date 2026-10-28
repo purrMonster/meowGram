@@ -25,6 +25,21 @@ type SendResult struct {
 // CreateIdempotent commits the message and exact response together. authorizeWrite
 // runs only for a new operation under the transaction lock, never for a replay.
 func (r *MessageRepository) CreateIdempotent(ctx context.Context, p SendPrincipal, key, rawText, text string, retention time.Duration, authorizeWrite func() error) (*SendResult, error) {
+	return r.createIdempotent(ctx, p, key, rawText, text, nil, false, retention, authorizeWrite)
+}
+
+func (r *MessageRepository) CreateIdempotentChannel(ctx context.Context, p SendPrincipal, key, rawText, text string, channel *string, retention time.Duration, authorizeWrite func() error) (*SendResult, error) {
+	if channel != nil {
+		id, err := ParseChannel(*channel)
+		if err != nil {
+			return nil, err
+		}
+		channel = &id
+	}
+	return r.createIdempotent(ctx, p, key, rawText, text, channel, true, retention, authorizeWrite)
+}
+
+func (r *MessageRepository) createIdempotent(ctx context.Context, p SendPrincipal, key, rawText, text string, channel *string, scoped bool, retention time.Duration, authorizeWrite func() error) (*SendResult, error) {
 	if (p.Kind != "human" && p.Kind != "bot") || p.ID == "" || len(key) < 1 || len(key) > 255 || retention < 168*time.Hour {
 		return nil, errors.New("invalid send parameters")
 	}
@@ -33,15 +48,35 @@ func (r *MessageRepository) CreateIdempotent(ctx context.Context, p SendPrincipa
 		return nil, err
 	}
 	defer tx.Rollback()
+	if scoped {
+		if err = readableChannel(ctx, tx, p, channel, true); err != nil {
+			return nil, err
+		}
+	}
 	lock := fmt.Sprintf("send:%s:%d:%s:%s", p.Kind, len(p.ID), p.ID, key)
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, lock); err != nil {
 		return nil, err
 	}
 	hash := sha256.Sum256([]byte(rawText))
+	if channel != nil {
+		hash = sha256.Sum256([]byte(fmt.Sprintf("meowgram:r21:channel:%s\x00%d:%s", *channel, len(rawText), rawText)))
+	}
 	var oldHash, body []byte
 	var active bool
-	err = tx.QueryRowContext(ctx, `SELECT fingerprint,response_body,expires_at > clock_timestamp() FROM message_idempotency WHERE sender_kind=$1 AND sender_id=$2 AND operation_key=$3`, p.Kind, p.ID, key).Scan(&oldHash, &body, &active)
+	var storedChannel *string
+	if scoped {
+		err = tx.QueryRowContext(ctx, `SELECT i.fingerprint,i.response_body,i.expires_at > clock_timestamp(),m.channel_id
+		 FROM message_idempotency i JOIN messages m ON m.id=i.message_id
+		 WHERE i.sender_kind=$1 AND i.sender_id=$2 AND i.operation_key=$3`, p.Kind, p.ID, key).Scan(&oldHash, &body, &active, &storedChannel)
+	} else {
+		err = tx.QueryRowContext(ctx, `SELECT fingerprint,response_body,expires_at > clock_timestamp() FROM message_idempotency WHERE sender_kind=$1 AND sender_id=$2 AND operation_key=$3`, p.Kind, p.ID, key).Scan(&oldHash, &body, &active)
+	}
 	if err == nil && active {
+		if scoped {
+			if err = readableChannel(ctx, tx, p, storedChannel, true); err != nil {
+				return nil, err
+			}
+		}
 		if !bytes.Equal(hash[:], oldHash) {
 			return nil, ErrIdempotencyConflict
 		}
@@ -60,8 +95,16 @@ func (r *MessageRepository) CreateIdempotent(ctx context.Context, p SendPrincipa
 	if err := authorizeWrite(); err != nil {
 		return nil, err
 	}
-	message := &model.Message{SenderID: p.ID, SenderKind: p.Kind, Username: p.Username, TextContent: text}
-	if p.Kind == "bot" {
+	message := &model.Message{SenderID: p.ID, SenderKind: p.Kind, Username: p.Username, TextContent: text, ChannelID: channel}
+	if scoped {
+		var human, bot any
+		if p.Kind == "human" {
+			human = p.ID
+		} else {
+			bot = p.ID
+		}
+		err = tx.QueryRowContext(ctx, `INSERT INTO messages(sender_id,bot_principal_id,text_content,channel_id) VALUES($1,$2,$3,$4) RETURNING id,created_at`, human, bot, text, channel).Scan(&message.ID, &message.CreatedAt)
+	} else if p.Kind == "bot" {
 		err = tx.QueryRowContext(ctx, `INSERT INTO messages(bot_principal_id,text_content) VALUES($1,$2) RETURNING id,created_at`, p.ID, text).Scan(&message.ID, &message.CreatedAt)
 	} else {
 		err = tx.QueryRowContext(ctx, `INSERT INTO messages(sender_id,text_content) VALUES($1,$2) RETURNING id,created_at`, p.ID, text).Scan(&message.ID, &message.CreatedAt)
